@@ -326,11 +326,6 @@ function DetailSheet({ listing, detail, detailLoading, onClose, balance, onBuy, 
                 </div>
               </div>
 
-              {/* Supplier */}
-              <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, color: 'var(--text-muted)' }}>
-                <i className="ti ti-building-store" style={{ fontSize: 16 }} />
-                Supplied by <strong style={{ color: 'var(--text-secondary)' }}>ACCSZONE</strong> · Instant automated delivery
-              </div>
             </>
           )}
         </div>
@@ -462,7 +457,7 @@ function PurchaseModal({ listing, qty, balance, onClose, onSuccess, onAddFunds, 
           <div style={{ padding: 40, textAlign: 'center' }}>
             <i className="ti ti-loader-2" style={{ fontSize: 44, color: 'var(--accent)', display: 'block', marginBottom: 16, animation: 'pn-spin 1s linear infinite' }} />
             <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>Placing your order…</div>
-            <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Communicating with ACCSZONE — please wait.</div>
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Processing your order — please wait.</div>
           </div>
         )}
 
