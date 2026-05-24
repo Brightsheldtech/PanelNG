@@ -244,15 +244,13 @@ function FeaturePills() {
 
 // ─── PRODUCT CARD ─────────────────────────────────────────────────────────────
 function ProductCard({ listing, onClick, exchangeRate = 1600 }) {
-  const platform = listing._platform || guessPlatform(listing.title || listing.name || '');
+  const platform = listing._platform || 'Other';
   const qty = Number(listing.quantity || listing.stock || listing.available_stock || 50);
   const priceUSD = Number(listing.price || listing.unit_price || 0);
   const priceNGN = listing._sell_price_ngn != null ? listing._sell_price_ngn : priceUSD * exchangeRate;
   const title = listing.title || listing.name || 'Account';
   const desc = listing.short_description
     || (listing.description ? stripHtml(listing.description).slice(0, 80) : '')
-    || listing.subcategory?.title
-    || listing.category?.title
     || '';
 
   return (
@@ -331,7 +329,7 @@ function UseCaseRow({ icon, text }) {
 // ─── DETAIL SHEET ─────────────────────────────────────────────────────────────
 function DetailSheet({ listing, detail, detailLoading, onClose, balance, onBuy, exchangeRate = 1600 }) {
   const [qty, setQty] = useState(1);
-  const platform = listing._platform || guessPlatform(listing.title || listing.name || '');
+  const platform = listing._platform || 'Other';
   const priceUSD = Number(listing.price || listing.unit_price || 0);
   const priceNGN = listing._sell_price_ngn != null ? listing._sell_price_ngn : priceUSD * exchangeRate;
   const stock = Number(listing.quantity || listing.stock || listing.available_stock || 50);
@@ -534,7 +532,7 @@ function PurchaseModal({ listing, qty, balance, onClose, onSuccess, onAddFunds, 
   const [result, setResult] = useState(null);
   const [errMsg, setErrMsg] = useState('');
 
-  const platform = listing._platform || guessPlatform(listing.title || listing.name || '');
+  const platform = listing._platform || 'Other';
   const priceUSD = Number(listing.price || listing.unit_price || 0);
   const priceNGN = listing._sell_price_ngn != null ? listing._sell_price_ngn : priceUSD * exchangeRate;
   const total = priceNGN * qty;
@@ -745,7 +743,16 @@ export default function BuyAccounts({ balance = 0, token = '', onNavigate, onPur
     })];
 
   const filtered = [...(platform === 'All' ? listings : listings.filter(l => l._platform === platform))]
-    .sort((a, b) => Number(a.price || a.unit_price || 0) - Number(b.price || b.unit_price || 0));
+    .sort((a, b) => {
+      if (platform === 'All') {
+        const ai = CHIP_ORDER.indexOf(a._platform || 'Other');
+        const bi = CHIP_ORDER.indexOf(b._platform || 'Other');
+        const an = ai === -1 ? CHIP_ORDER.length : ai;
+        const bn = bi === -1 ? CHIP_ORDER.length : bi;
+        if (an !== bn) return an - bn;
+      }
+      return Number(a.price || a.unit_price || 0) - Number(b.price || b.unit_price || 0);
+    });
 
   const openDetail = useCallback((listing) => {
     setDetailListing(listing);
