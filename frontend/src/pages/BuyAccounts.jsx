@@ -59,6 +59,37 @@ function guessPlatform(str = '') {
   return 'Other';
 }
 
+function stripHtml(html = '') {
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<\/li>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&mdash;/g, '—')
+    .replace(/&bull;/g, '•')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function parseDuration(text = '') {
+  if (/lifetime/i.test(text)) return 'Lifetime';
+  const m = text.match(/(\d+)\s*(month|months|year|years|week|weeks|day|days)/i);
+  if (!m) return null;
+  const n = parseInt(m[1]);
+  const unit = m[2].toLowerCase().replace(/s$/, '');
+  return `${n} ${unit}${n !== 1 ? 's' : ''}`;
+}
+
+function extractFeatures(html = '') {
+  const text = html.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '');
+  return text.split('\n')
+    .map(l => l.trim().replace(/^[✔✓️✅\s]+/, '').trim())
+    .filter(l => l.length > 4 && /^[A-Z]/.test(l) && !l.startsWith('Step') && !l.startsWith('•'))
+    .slice(0, 8);
+}
+
 // ─── ICONS ────────────────────────────────────────────────────────────────────
 function AccIcon({ name, size = 24 }) {
   const s = size;
@@ -159,11 +190,15 @@ function FeaturePills() {
 // ─── PRODUCT CARD ─────────────────────────────────────────────────────────────
 function ProductCard({ listing, onClick, exchangeRate = 1600 }) {
   const platform = listing._platform || guessPlatform(listing.title || listing.name || '');
-  const qty = Number(listing.quantity || listing.stock || 50);
+  const qty = Number(listing.quantity || listing.stock || listing.available_stock || 50);
   const priceUSD = Number(listing.price || listing.unit_price || 0);
   const priceNGN = priceUSD * exchangeRate;
   const title = listing.title || listing.name || 'Account';
-  const desc = listing.short_description || listing.description?.replace(/<[^>]+>/g, '').slice(0, 80) || '';
+  const desc = listing.short_description
+    || (listing.description ? stripHtml(listing.description).slice(0, 80) : '')
+    || listing.subcategory?.title
+    || listing.category?.title
+    || '';
 
   return (
     <div
@@ -244,10 +279,16 @@ function DetailSheet({ listing, detail, detailLoading, onClose, balance, onBuy, 
   const platform = listing._platform || guessPlatform(listing.title || listing.name || '');
   const priceUSD = Number(listing.price || listing.unit_price || 0);
   const priceNGN = priceUSD * exchangeRate;
-  const stock = Number(listing.quantity || listing.stock || 50);
+  const stock = Number(listing.quantity || listing.stock || listing.available_stock || 50);
   const title = listing.title || listing.name || 'Account';
   const total = priceNGN * qty;
   const insufficient = balance < total;
+
+  const rawDesc = detail?.description || listing.description || '';
+  const cleanDesc = rawDesc ? stripHtml(rawDesc) : '';
+  const features = rawDesc ? extractFeatures(rawDesc) : [];
+  const duration = parseDuration(listing.title || listing.name || '') || parseDuration(cleanDesc);
+  const catLabel = detail?.category?.title || listing.category?.title || '';
 
   const isMobile = window.innerWidth <= 768;
 
@@ -290,20 +331,56 @@ function DetailSheet({ listing, detail, detailLoading, onClose, balance, onBuy, 
             </div>
           ) : (
             <>
-              {/* What's Included */}
+              {/* About This Product — real description from ACCSZONE */}
+              {cleanDesc ? (
+                <div style={{ padding: '18px 20px 0' }}>
+                  <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 10 }}>About This Product</div>
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7, whiteSpace: 'pre-line' }}>
+                    {cleanDesc.length > 600 ? cleanDesc.slice(0, 600) + '…' : cleanDesc}
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Duration badge */}
+              {duration && (
+                <div style={{ padding: '14px 20px 0' }}>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(20,184,166,.1)', border: '1px solid rgba(20,184,166,.3)', borderRadius: 8, padding: '7px 14px', fontSize: 13, fontWeight: 600, color: '#14B8A6' }}>
+                    <i className="ti ti-clock" style={{ fontSize: 14 }} />Duration: {duration}
+                  </div>
+                </div>
+              )}
+
+              {/* What's Included — from API features, or fallback */}
               <div style={{ padding: '18px 20px 0' }}>
                 <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 12 }}>What's Included</div>
-                {[
+                {(features.length > 0 ? features : [
                   `1 × ${platform} account per unit`,
-                  'Full login credentials (email + password)',
-                  'Account creation date included',
-                  'Profile picture set',
+                  'Full login credentials',
                   'Pre-login replacement guarantee',
-                ].map(item => (
-                  <div key={item} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 9, fontSize: 13, color: 'var(--text-secondary)' }}>
-                    <i className="ti ti-circle-check" style={{ color: 'var(--success)', fontSize: 15, flexShrink: 0 }} />{item}
+                ]).map(item => (
+                  <div key={item} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 9, fontSize: 13, color: 'var(--text-secondary)' }}>
+                    <i className="ti ti-circle-check" style={{ color: 'var(--success)', fontSize: 15, flexShrink: 0, marginTop: 1 }} />{item}
                   </div>
                 ))}
+              </div>
+
+              {/* Account Specs */}
+              <div style={{ padding: '18px 0 0' }}>
+                <div style={{ padding: '0 20px', fontSize: 10, fontWeight: 600, letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 10 }}>Account Details</div>
+                <div style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden', margin: '0 20px' }}>
+                  {[
+                    ['Platform', platform],
+                    catLabel && catLabel !== platform ? ['Category', catLabel] : null,
+                    ['Account Type', 'Personal'],
+                    duration ? ['Duration / Plan', duration] : null,
+                    ['Region', 'USA / UK / Global'],
+                    ['Verified', 'Email verified'],
+                    ['2FA Status', 'Off'],
+                    ['Email Access', 'Included'],
+                  ].filter(Boolean).map(([label, value], i) => (
+                    <SpecRow key={label} label={label} value={value} even={i % 2 === 0} />
+                  ))}
+                </div>
               </div>
 
               {/* Delivery Format */}
@@ -316,36 +393,9 @@ function DetailSheet({ listing, detail, detailLoading, onClose, balance, onBuy, 
                    platform === 'TikTok' ? 'email:password' :
                    platform === 'Discord' ? 'email:password:token' :
                    platform === 'Telegram' ? 'phone:session_string' :
+                   platform === 'Spotify' || platform === 'Netflix' || platform === 'Amazon' ? 'email:password (subscription active)' :
                    'login:password'}
                 </div>
-              </div>
-
-              {/* Account Specs */}
-              <div style={{ padding: '18px 0 0' }}>
-                <div style={{ padding: '0 20px', fontSize: 10, fontWeight: 600, letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 10 }}>Account Details</div>
-                <div style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden', margin: '0 20px' }}>
-                  {[
-                    ['Platform', platform],
-                    ['Account Type', 'Personal'],
-                    ['Region', detail?.region || 'USA / UK / Global'],
-                    ['Verified', 'Email verified'],
-                    ['Profile Photo', 'Yes'],
-                    ['2FA Status', 'Off'],
-                    ['Email Access', 'Included'],
-                    ['Format', 'login:password'],
-                  ].map(([label, value], i) => (
-                    <SpecRow key={label} label={label} value={value} even={i % 2 === 0} />
-                  ))}
-                </div>
-              </div>
-
-              {/* Use Cases */}
-              <div style={{ padding: '18px 20px 0' }}>
-                <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 12 }}>Good For</div>
-                <UseCaseRow icon="ti-speakerphone" text="Running ad campaigns" />
-                <UseCaseRow icon="ti-message-circle-2" text="Profile outreach and DMs" />
-                <UseCaseRow icon="ti-robot" text="Bot and automation workflows" />
-                <UseCaseRow icon="ti-test-pipe" text="Testing and QA environments" />
               </div>
 
               {/* Guarantee */}
@@ -372,6 +422,19 @@ function DetailSheet({ listing, detail, detailLoading, onClose, balance, onBuy, 
                       <i className="ti ti-point-filled" style={{ marginTop: 4, flexShrink: 0 }} />{note}
                     </div>
                   ))}
+                </div>
+              </div>
+
+              {/* Disclaimer */}
+              <div style={{ padding: '18px 20px 20px' }}>
+                <div style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', borderRadius: 12, padding: '14px 16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                    <i className="ti ti-info-circle" style={{ fontSize: 14, color: 'var(--text-muted)' }} />
+                    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Disclaimer</span>
+                  </div>
+                  <p style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.65, margin: 0 }}>
+                    PanelNG acts solely as a reseller of third-party digital accounts. We are not responsible for how purchased accounts are used after delivery. By completing this purchase you agree to use accounts only for lawful purposes. Any misuse, violation of platform terms, or illegal activity is the sole responsibility of the buyer. Accounts suspended due to policy violations after delivery are not eligible for replacement or refund.
+                  </p>
                 </div>
               </div>
 
@@ -532,9 +595,15 @@ function PurchaseModal({ listing, qty, balance, onClose, onSuccess, onAddFunds, 
                 : <div style={{ padding: '16px 0', textAlign: 'center', fontSize: 13, color: 'var(--text-muted)' }}>Account data delivered. Check your order history for details.</div>
               }
             </div>
-            <button onClick={copyAll} style={{ width: '100%', height: 44, background: 'var(--bg-raised)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: 12, fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif", marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+            <button onClick={copyAll} style={{ width: '100%', height: 44, background: 'var(--bg-raised)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: 12, fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif", marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
               <i className="ti ti-copy" />Copy All Accounts
             </button>
+            <div style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 14px', marginBottom: 12 }}>
+              <p style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.6, margin: 0 }}>
+                <i className="ti ti-info-circle" style={{ marginRight: 5 }} />
+                PanelNG is not liable for how these accounts are used. By receiving this purchase you agree to use them only for lawful purposes. Misuse, violation of platform terms, or any illegal activity is solely your responsibility.
+              </p>
+            </div>
             <button onClick={onClose} style={{ width: '100%', height: 40, background: 'var(--accent)', color: 'var(--accent-text)', border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>Done</button>
           </div>
         )}

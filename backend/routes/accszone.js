@@ -72,8 +72,10 @@ router.get('/listings/:slug', async (req, res) => {
     const cached = getCached(key);
     if (cached) return res.json(cached);
     const { data } = await az.get(`/listings/${req.params.slug}`);
-    setCached(key, data);
-    res.json(data);
+    // ACCSZONE wraps detail in { success: true, data: {...} }
+    const listing = data?.data || data;
+    setCached(key, listing);
+    res.json(listing);
   } catch (err) {
     console.error('[accszone] listing detail:', err.message);
     res.status(502).json({ error: 'Could not fetch product details' });
@@ -97,8 +99,14 @@ router.post('/order', auth, async (req, res) => {
       try {
         const key = `listing_${listing_slug}`;
         const cached = getCached(key);
-        const listing = cached || (await az.get(`/listings/${listing_slug}`)).data;
-        if (!cached) setCached(key, listing);
+        let listing;
+        if (cached) {
+          listing = cached;
+        } else {
+          const { data: raw } = await az.get(`/listings/${listing_slug}`);
+          listing = raw?.data || raw;
+          setCached(key, listing);
+        }
         unitPrice = Number(listing.price || listing.unit_price || unit_price);
         productName = listing.title || listing.name || product_name;
       } catch (_) {
