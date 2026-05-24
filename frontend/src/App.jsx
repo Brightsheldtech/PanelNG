@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 
+import PanelNG from './pages/PanelNG';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -39,6 +40,9 @@ export default function App() {
 
   return (
     <Routes>
+      {/* Standalone demo — no auth */}
+      <Route path="/demo" element={<PanelNG />} />
+
       {/* Public */}
       <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <Landing />} />
       <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <Login />} />
