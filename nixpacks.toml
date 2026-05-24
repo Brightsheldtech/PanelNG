@@ -1,8 +1,8 @@
 [phases.install]
-cmds = ["npm install --prefix backend"]
+cmds = ["cd backend && npm install"]
 
 [phases.build]
 cmds = ["echo 'Frontend already built'"]
 
 [start]
-cmd = "npm start --prefix backend"
+cmd = "cd backend && node server.js"
