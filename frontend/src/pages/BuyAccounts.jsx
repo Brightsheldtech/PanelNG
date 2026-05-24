@@ -4,58 +4,107 @@ import axios from 'axios';
 const API = '/api/accszone';
 const fmt = (n) => '₦' + Number(n || 0).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-// Preferred chip display order — Other is always injected last in the chip logic
+// Chip display order — matches actual ACCSZONE category structure
 const CHIP_ORDER = [
-  'Facebook','Instagram','TikTok','Twitter/X','YouTube','WhatsApp','Snapchat','Telegram',
-  'Discord','LinkedIn','Reddit','Pinterest','Twitch','Threads',
-  'Gmail','Apple ID',
-  'Netflix','Spotify','Amazon','Steam','Gaming',
-  'PayPal','Binance','Coinbase','Crypto',
-  'VPN',
-  'Tinder','Bumble','OnlyFans',
-  'Uber','Airbnb',
+  'Facebook','Instagram','TikTok','Twitter/X','YouTube',
+  'WhatsApp','Snapchat','Telegram','Discord',
+  'LinkedIn','Reddit','Pinterest','Threads','Bluesky',
+  'Gmail','Outlook','Email',
+  'Apple ID',
+  'Netflix','Spotify','Streaming','Amazon',
+  'Gaming','Crypto',
+  'VPN','Proxy',
+  'Dating',
   'Other',
 ];
 
-const PLATFORM_KEYWORDS = {
-  Facebook:    ['facebook', 'fb '],
-  Instagram:   ['instagram'],
-  TikTok:      ['tiktok', 'tik tok'],
-  'Twitter/X': ['twitter', 'x account', 'x.com'],
-  YouTube:     ['youtube'],
-  WhatsApp:    ['whatsapp'],
-  Snapchat:    ['snapchat'],
-  Telegram:    ['telegram'],
-  Discord:     ['discord'],
-  LinkedIn:    ['linkedin'],
-  Reddit:      ['reddit'],
-  Pinterest:   ['pinterest'],
-  Twitch:      ['twitch'],
-  Threads:     ['threads'],
-  Gmail:       ['gmail', 'google account'],
-  'Apple ID':  ['apple id', 'icloud', 'apple account'],
-  Netflix:     ['netflix'],
-  Spotify:     ['spotify'],
-  Amazon:      ['amazon'],
-  Steam:       ['steam'],
-  Gaming:      ['gaming', 'game account', 'roblox', 'pubg', 'valorant', 'fortnite', 'minecraft'],
-  PayPal:      ['paypal'],
-  Binance:     ['binance'],
-  Coinbase:    ['coinbase'],
-  Crypto:      ['crypto', 'bybit', 'okx', 'kucoin', 'kraken'],
-  VPN:         ['vpn', 'nordvpn', 'expressvpn', 'surfshark', 'cyberghost', 'protonvpn', 'private internet'],
-  Tinder:      ['tinder'],
-  Bumble:      ['bumble'],
-  OnlyFans:    ['onlyfans'],
-  Uber:        ['uber'],
-  Airbnb:      ['airbnb'],
+// Map ACCSZONE category.title (lowercase) → chip name
+const CATEGORY_CHIP_MAP = {
+  'facebook accounts':             'Facebook',
+  'instagram accounts':            'Instagram',
+  'tiktok':                        'TikTok',
+  'twitter/x accounts':            'Twitter/X',
+  'youtube accounts & channels':   'YouTube',
+  'whatsapp accounts':             'WhatsApp',
+  'snapchat accounts':             'Snapchat',
+  'telegram accounts':             'Telegram',
+  'discord accounts':              'Discord',
+  'linkedin accounts':             'LinkedIn',
+  'reddit accounts':               'Reddit',
+  'pinterest accounts':            'Pinterest',
+  'threads':                       'Threads',
+  'bluesky':                       'Bluesky',
+  'gmail accounts':                'Gmail',
+  'google voice accounts':         'Gmail',
+  'google ads accounts':           'Gmail',
+  'outlook email accounts':        'Outlook',
+  'gmx email accounts':            'Email',
+  'yahoo mail':                    'Email',
+  'zoho mail':                     'Email',
+  'aol mail':                      'Email',
+  'onet pl':                       'Email',
+  'protonmail accounts':           'Email',
+  'usa email & phone leads':       'Email',
+  'apple':                         'Apple ID',
+  'apple id & gift cards':         'Apple ID',
+  'netflix accounts & gift cards': 'Netflix',
+  'spotify premium':               'Spotify',
+  'streaming media':               'Streaming',
+  'amazon accounts':               'Amazon',
+  'amazon gift cards':             'Amazon',
+  'playstation gift cards':        'Gaming',
+  'steam gift cards':              'Gaming',
+  'google play gift cards':        'Gaming',
+  'binance verified account':      'Crypto',
+  'cashapp accounts':              'Crypto',
+  'vpn premium':                   'VPN',
+  'windows vps / rdp server':      'VPN',
+  'mobile proxies':                'Proxy',
+  'badoo dating accounts':         'Dating',
+  'bumble dating accounts':        'Dating',
+  'grindr dating accounts':        'Dating',
+  'meetme dating accounts':        'Dating',
+  'eharmony dating':               'Dating',
+  'taimi dating accounts':         'Dating',
+  'dating app accounts':           'Dating',
+  'craigslist':                    'Other',
+  'indeed accounts':               'Other',
+  'quora accounts':                'Other',
+  'etsy-accounts':                 'Other',
+  'trustpilot accounts':           'Other',
+  'truth social':                  'Other',
+  'walmart':                       'Other',
 };
 
-function guessPlatform(str = '') {
-  const s = str.toLowerCase();
-  for (const [name, kws] of Object.entries(PLATFORM_KEYWORDS)) {
-    if (kws.some(k => s.includes(k))) return name;
-  }
+function getCategoryChip(listing) {
+  const cat = (listing.category?.title || '').toLowerCase();
+  if (cat && CATEGORY_CHIP_MAP[cat]) return CATEGORY_CHIP_MAP[cat];
+  // Fallback: keyword scan on title
+  const t = (listing.title || listing.name || '').toLowerCase();
+  if (t.includes('facebook')) return 'Facebook';
+  if (t.includes('instagram')) return 'Instagram';
+  if (t.includes('tiktok')) return 'TikTok';
+  if (t.includes('twitter') || t.includes(' x ')) return 'Twitter/X';
+  if (t.includes('youtube')) return 'YouTube';
+  if (t.includes('whatsapp')) return 'WhatsApp';
+  if (t.includes('snapchat')) return 'Snapchat';
+  if (t.includes('telegram')) return 'Telegram';
+  if (t.includes('discord')) return 'Discord';
+  if (t.includes('linkedin')) return 'LinkedIn';
+  if (t.includes('reddit')) return 'Reddit';
+  if (t.includes('pinterest')) return 'Pinterest';
+  if (t.includes('threads')) return 'Threads';
+  if (t.includes('bluesky')) return 'Bluesky';
+  if (t.includes('gmail') || t.includes('google voice')) return 'Gmail';
+  if (t.includes('outlook')) return 'Outlook';
+  if (t.includes('vpn') || t.includes('nordvpn') || t.includes('expressvpn')) return 'VPN';
+  if (t.includes('proxy') || t.includes('proxies')) return 'Proxy';
+  if (t.includes('netflix')) return 'Netflix';
+  if (t.includes('spotify')) return 'Spotify';
+  if (t.includes('amazon')) return 'Amazon';
+  if (t.includes('apple id') || t.includes('icloud')) return 'Apple ID';
+  if (t.includes('binance') || t.includes('cashapp') || t.includes('crypto')) return 'Crypto';
+  if (t.includes('dating') || t.includes('bumble') || t.includes('tinder') || t.includes('grindr')) return 'Dating';
   return 'Other';
 }
 
@@ -125,6 +174,12 @@ function AccIcon({ name, size = 24 }) {
     Threads: <svg width={s} height={s} viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#000"/><path d="M16 9.5c-.3-.1-.7-.2-1-.3C14.7 7.4 13.4 6.5 12 6.5c-2.2 0-4 1.8-4 4 0 .8.3 1.6.7 2.2-.4.4-.7 1-.7 1.8 0 1.7 1.3 3 3 3 1.1 0 2.1-.6 2.6-1.5.3.1.5.1.8.1 1.4 0 2.6-1.1 2.6-2.5 0-.8-.4-1.5-.9-2 .5-.5.9-1.3.9-2.1z" fill="white"/></svg>,
     Uber: <svg width={s} height={s} viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#000"/><text x="5" y="16" fontSize="11" fontWeight="700" fill="white" fontFamily="sans-serif">Uber</text></svg>,
     Airbnb: <svg width={s} height={s} viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#FF5A5F"/><path d="M12 5c-1.5 0-2.5 1.2-2.5 2.5 0 1.7 2.5 5.5 2.5 5.5s2.5-3.8 2.5-5.5C14.5 6.2 13.5 5 12 5zm0 9.5c-2 0-6 1.8-6 3.5 0 .8.7 1.5 2 2h8c1.3-.5 2-1.2 2-2 0-1.7-4-3.5-6-3.5z" fill="white"/></svg>,
+    Bluesky: <svg width={s} height={s} viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#0085FF"/><path d="M12 8.5C10.5 6.5 7 5 5 6.5c-2.5 1.8-.5 5.5 2 6.5-1 .5-2 1.5-2 2.5 0 1.5 1.5 2.5 3 1.5 1-.5 2-1.5 4-4.5 2 3 3 4 4 4.5 1.5 1 3 0 3-1.5 0-1-1-2-2-2.5 2.5-1 4.5-4.7 2-6.5-2-1.5-5.5 0-7 2z" fill="white"/></svg>,
+    Outlook: <svg width={s} height={s} viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#0072C6"/><rect x="4" y="7" width="10" height="10" rx="2" fill="#fff"/><path d="M14 9l6-3v12l-6-3V9z" fill="#fff" opacity=".85"/><circle cx="9" cy="12" r="2.5" fill="#0072C6"/></svg>,
+    Email: <svg width={s} height={s} viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#6B7280"/><rect x="4" y="7" width="16" height="11" rx="2" fill="none" stroke="white" strokeWidth="1.5"/><path d="M4 9l8 5 8-5" stroke="white" strokeWidth="1.5" fill="none"/></svg>,
+    Dating: <svg width={s} height={s} viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#EC4899"/><path d="M12 18s-7-4.5-7-8.5C5 7 6.8 5.5 9 6c1.2.3 2.2 1 3 2 .8-1 1.8-1.7 3-2 2.2-.5 4 1 4 3.5 0 4-7 8.5-7 8.5z" fill="white"/></svg>,
+    Streaming: <svg width={s} height={s} viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#7C3AED"/><rect x="3" y="6" width="18" height="12" rx="2" fill="none" stroke="white" strokeWidth="1.5"/><polygon points="10,9.5 16,12 10,14.5" fill="white"/></svg>,
+    Proxy: <svg width={s} height={s} viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#6366F1"/><circle cx="6" cy="12" r="2" fill="white"/><circle cx="18" cy="7" r="2" fill="white"/><circle cx="18" cy="17" r="2" fill="white"/><path d="M8 12h4m0 0l-1-5h3m-2 5l-1 5h3" stroke="white" strokeWidth="1.3" fill="none" strokeLinecap="round"/></svg>,
     Other: <svg width={s} height={s} viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#6B6860"/><circle cx="8" cy="12" r="1.5" fill="white"/><circle cx="12" cy="12" r="1.5" fill="white"/><circle cx="16" cy="12" r="1.5" fill="white"/></svg>,
   };
   return map[name] || map['Other'];
@@ -673,7 +728,7 @@ export default function BuyAccounts({ balance = 0, token = '', onNavigate, onPur
     axios.get(`${API}/listings`)
       .then(({ data }) => {
         const raw = Array.isArray(data) ? data : (data.data || data.listings || []);
-        const tagged = raw.map(l => ({ ...l, _platform: guessPlatform(l.title || l.name || l.category?.title || '') }));
+        const tagged = raw.map(l => ({ ...l, _platform: l._platform || getCategoryChip(l) }));
         setListings(tagged);
       })
       .catch(() => setError('Could not load products. Please try again.'))

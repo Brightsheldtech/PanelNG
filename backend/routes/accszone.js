@@ -43,6 +43,34 @@ async function fetchAllListings() {
   return all;
 }
 
+// Map ACCSZONE category.title → chip name (mirrors frontend CATEGORY_CHIP_MAP)
+const CATEGORY_CHIP_MAP = {
+  'facebook accounts':'Facebook','instagram accounts':'Instagram','tiktok':'TikTok',
+  'twitter/x accounts':'Twitter/X','youtube accounts & channels':'YouTube',
+  'whatsapp accounts':'WhatsApp','snapchat accounts':'Snapchat','telegram accounts':'Telegram',
+  'discord accounts':'Discord','linkedin accounts':'LinkedIn','reddit accounts':'Reddit',
+  'pinterest accounts':'Pinterest','threads':'Threads','bluesky':'Bluesky',
+  'gmail accounts':'Gmail','google voice accounts':'Gmail','google ads accounts':'Gmail',
+  'outlook email accounts':'Outlook',
+  'gmx email accounts':'Email','yahoo mail':'Email','zoho mail':'Email',
+  'aol mail':'Email','onet pl':'Email','protonmail accounts':'Email','usa email & phone leads':'Email',
+  'apple':'Apple ID','apple id & gift cards':'Apple ID',
+  'netflix accounts & gift cards':'Netflix','spotify premium':'Spotify',
+  'streaming media':'Streaming',
+  'amazon accounts':'Amazon','amazon gift cards':'Amazon',
+  'playstation gift cards':'Gaming','steam gift cards':'Gaming','google play gift cards':'Gaming',
+  'binance verified account':'Crypto','cashapp accounts':'Crypto',
+  'vpn premium':'VPN','windows vps / rdp server':'VPN',
+  'mobile proxies':'Proxy',
+  'badoo dating accounts':'Dating','bumble dating accounts':'Dating',
+  'grindr dating accounts':'Dating','meetme dating accounts':'Dating',
+  'eharmony dating':'Dating','taimi dating accounts':'Dating','dating app accounts':'Dating',
+};
+
+function categoryToChip(catTitle = '') {
+  return CATEGORY_CHIP_MAP[(catTitle || '').toLowerCase()] || 'Other';
+}
+
 // Fetch price overrides map { slug -> custom_price_ngn }
 async function getPriceOverrides() {
   const cached = getCached('_price_overrides');
@@ -63,7 +91,8 @@ async function applyPrices(listings) {
     const slug = l.slug || l.ad_id || String(l.id || '');
     const autoNGN = parseFloat((Number(l.price || l.unit_price || 0) * rate).toFixed(2));
     const sellNGN = overrides[slug] != null ? overrides[slug] : autoNGN;
-    return { ...l, _auto_price_ngn: autoNGN, _sell_price_ngn: sellNGN };
+    const platform = categoryToChip(l.category?.title);
+    return { ...l, _auto_price_ngn: autoNGN, _sell_price_ngn: sellNGN, _platform: platform };
   };
   return Array.isArray(listings) ? listings.map(apply) : apply(listings);
 }
