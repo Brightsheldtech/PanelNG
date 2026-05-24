@@ -53,8 +53,19 @@ export function AuthProvider({ children }) {
     });
   }, []);
 
+  const refreshUser = useCallback(async () => {
+    try {
+      const res = await api.get('/auth/profile');
+      setUser((prev) => {
+        const next = { ...prev, ...res.data };
+        localStorage.setItem('panelng_user', JSON.stringify(next));
+        return next;
+      });
+    } catch (_) {}
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, updateUser }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, updateUser, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

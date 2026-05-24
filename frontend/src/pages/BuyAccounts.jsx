@@ -635,7 +635,7 @@ const EXTRA_CSS = `
 `;
 
 // ─── BUY ACCOUNTS PAGE ────────────────────────────────────────────────────────
-export default function BuyAccounts({ balance = 0, token = '', onNavigate }) {
+export default function BuyAccounts({ balance = 0, token = '', onNavigate, onPurchaseComplete }) {
   const [categories, setCategories] = useState([]);
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -821,7 +821,7 @@ export default function BuyAccounts({ balance = 0, token = '', onNavigate }) {
           balance={balance}
           token={token}
           onClose={() => setPurchaseListing(null)}
-          onSuccess={() => {}}
+          onSuccess={() => { onPurchaseComplete?.(); }}
           onAddFunds={() => { setPurchaseListing(null); onNavigate && onNavigate('funds'); }}
           exchangeRate={exchangeRate}
         />

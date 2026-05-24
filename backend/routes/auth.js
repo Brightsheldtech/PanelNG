@@ -83,6 +83,21 @@ router.post('/logout', (req, res) => {
   res.json({ message: 'Logged out successfully' });
 });
 
+// GET /api/auth/profile — returns fresh user data including wallet_balance
+router.get('/profile', auth, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, email, full_name, wallet_balance, role, created_at')
+      .eq('id', req.user.id)
+      .single();
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch profile' });
+  }
+});
+
 // PATCH /api/auth/profile
 router.patch('/profile', auth, async (req, res) => {
   const { full_name } = req.body;

@@ -573,10 +573,33 @@ function BottomNav({ page, setPage }) {
 // ─── PAGE: OVERVIEW ───────────────────────────────────────────────────────────
 function Overview({ setPage }) {
   const user = useContext(UserCtx) || MOCK.user;
+  const [recentOrders, setRecentOrders] = useState([]);
+  const [ordersLoading, setOrdersLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      api.get('/orders', { params: { limit: 5 } }).catch(() => ({ data: { orders: [] } })),
+      api.get('/accszone/orders').catch(() => ({ data: [] })),
+    ]).then(([stdRes, accRes]) => {
+      const std = (stdRes.data.orders || []).map(o => ({
+        ...o,
+        amount: o.amount_paid || o.total_cost || 0,
+        phone: o.phone_number,
+      }));
+      const accs = (Array.isArray(accRes.data) ? accRes.data : []).slice(0, 5).map(o => ({
+        ...o, type: 'accounts', amount: o.total_cost,
+      }));
+      const merged = [...std, ...accs]
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+        .slice(0, 6);
+      setRecentOrders(merged);
+    }).finally(() => setOrdersLoading(false));
+  }, []);
+
   return (
     <div>
       <div className="pn-greeting">
-        <div className="pn-greeting-title">{greet()}, {user.name.split(' ')[0]} 👋</div>
+        <div className="pn-greeting-title">{greet()}, {user.name.split(' ')[0]}</div>
         <div className="pn-greeting-sub">Here's what's happening on your account today.</div>
       </div>
       <div className="pn-stat-grid">
@@ -608,35 +631,28 @@ function Overview({ setPage }) {
           <button className="pn-btn pn-btn-ghost pn-btn-sm" onClick={()=>setPage('orders')}>View all <i className="ti ti-arrow-right"/></button>
         </div>
         <div className="pn-card" style={{padding:0,overflow:'hidden'}}>
-          {MOCK.orders.length === 0 ? (
-            <div className="pn-empty"><i className="ti ti-receipt pn-empty-icon"/><div className="pn-empty-title">No orders yet</div></div>
-          ) : MOCK.orders.map((o,i) => (
-            <div key={o.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'13px 18px',borderBottom:i<MOCK.orders.length-1?'0.5px solid var(--border)':'none',gap:12}}>
+          {ordersLoading ? (
+            <div style={{padding:'20px 0',textAlign:'center'}}><i className="ti ti-loader-2" style={{fontSize:20,color:'var(--accent)',animation:'pn-spin 1s linear infinite'}}/></div>
+          ) : recentOrders.length === 0 ? (
+            <div className="pn-empty"><i className="ti ti-receipt pn-empty-icon"/><div className="pn-empty-title">No orders yet</div><div className="pn-empty-sub">Place your first order to get started</div></div>
+          ) : recentOrders.map((o, i) => (
+            <div key={o.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'13px 18px',borderBottom:i<recentOrders.length-1?'0.5px solid var(--border)':'none',gap:12}}>
               <div style={{minWidth:0}}>
-                <div style={{fontSize:13,fontWeight:600,color:'var(--text-primary)',marginBottom:3}}>{o.type==='accounts'?(o.product_name||o.platform):`${o.platform} • ${o.country}`}</div>
-                <div className="pn-mono" style={{fontSize:11,color:'var(--text-muted)'}}>{o.type==='accounts'?`${o.quantity} account${o.quantity>1?'s':''}`:o.phone}</div>
+                <div style={{fontSize:13,fontWeight:600,color:'var(--text-primary)',marginBottom:3}}>
+                  {o.type==='accounts' ? (o.product_name||o.platform) :
+                   o.type==='sms' ? `${o.platform} • ${o.country||''}` :
+                   (o.service_name||o.platform||'—')}
+                </div>
+                <div className="pn-mono" style={{fontSize:11,color:'var(--text-muted)'}}>
+                  {o.type==='accounts' ? `${o.quantity||1} account${(o.quantity||1)>1?'s':''}` :
+                   o.type==='sms' ? (o.phone||o.phone_number||'') :
+                   new Date(o.created_at).toLocaleDateString('en-NG')}
+                </div>
               </div>
               <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
                 <div className="pn-mono" style={{fontSize:12,color:'var(--danger)'}}>{fmt(o.amount)}</div>
                 <Badge status={o.status}/>
               </div>
-            </div>
-          ))}
-        </div>
-      </div>
-      <div className="pn-section">
-        <div className="pn-hrow">
-          <span className="pn-section-label" style={{marginBottom:0}}>Recent Transactions</span>
-          <button className="pn-btn pn-btn-ghost pn-btn-sm" onClick={()=>setPage('funds')}>Add Funds <i className="ti ti-arrow-right"/></button>
-        </div>
-        <div className="pn-card" style={{padding:'0 20px'}}>
-          {MOCK.transactions.map((t,i) => (
-            <div key={i} className="pn-tx-row">
-              <div style={{minWidth:0}}>
-                <div className="pn-tx-desc">{t.desc}</div>
-                <div className="pn-tx-date">{t.date}</div>
-              </div>
-              <span className={t.amount>=0?'pn-tx-pos':'pn-tx-neg'}>{t.amount>=0?'+':''}{fmt(Math.abs(t.amount))}</span>
             </div>
           ))}
         </div>
@@ -655,15 +671,14 @@ function ServiceDropdown({ services, value, onChange }) {
     return () => document.removeEventListener('mousedown', h);
   }, []);
   const selected = services.find(s => s.id === value);
-  const platform = selected ? (selected.id.startsWith('fb')?'Facebook':selected.id.startsWith('ig')?'Instagram':selected.id.startsWith('tt')?'TikTok':selected.id.startsWith('yt')?'YouTube':selected.id.startsWith('tw')?'Twitter':selected.id.startsWith('tg')?'Telegram':'Spotify') : null;
   return (
     <div className="pn-dd-wrap" ref={ref}>
       <div className={`pn-dd-trigger${open?' open':''}`} onClick={()=>setOpen(!open)}>
         {selected ? (
           <>
-            {platform && <PlatformIcon name={platform} size={18}/>}
+            <PlatformIcon name={selected.platform || 'Other'} size={18}/>
             <span style={{flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{selected.name}</span>
-            <span className="pn-mono" style={{fontSize:12,color:'var(--accent)',flexShrink:0}}>₦{selected.rate}/1k</span>
+            <span className="pn-mono" style={{fontSize:12,color:'var(--accent)',flexShrink:0}}>₦{selected.sell_price}/1k</span>
           </>
         ) : (
           <span style={{color:'var(--text-muted)',flex:1}}>— Choose a service —</span>
@@ -672,21 +687,17 @@ function ServiceDropdown({ services, value, onChange }) {
       </div>
       {open && (
         <div className="pn-dd-panel">
-          {services.map(s => {
-            const plat = s.id.startsWith('fb')?'Facebook':s.id.startsWith('ig')?'Instagram':s.id.startsWith('tt')?'TikTok':s.id.startsWith('yt')?'YouTube':s.id.startsWith('tw')?'Twitter':s.id.startsWith('tg')?'Telegram':'Spotify';
-            return (
-              <div key={s.id} className={`pn-dd-item${value===s.id?' selected':''}`} onClick={()=>{onChange(s.id);setOpen(false);}}>
-                <PlatformIcon name={plat} size={20}/>
-                <div className="pn-dd-item-center">
-                  <div className="pn-dd-item-name">{s.name}</div>
-                  <div className="pn-dd-tags">{s.tags.map(t=><span key={t} className="pn-tag">{t}</span>)}</div>
-                </div>
-                <div className="pn-qdot" style={{marginRight:4}} data-q={s.quality}><div className={`pn-qdot ${s.quality}`}/></div>
-                <div className="pn-dd-price">₦{s.rate}/1k</div>
-                {value===s.id && <i className="ti ti-check" style={{color:'var(--accent)',fontSize:14}}/>}
+          {services.map(s => (
+            <div key={s.id} className={`pn-dd-item${value===s.id?' selected':''}`} onClick={()=>{onChange(s.id);setOpen(false);}}>
+              <PlatformIcon name={s.platform || 'Other'} size={20}/>
+              <div className="pn-dd-item-center">
+                <div className="pn-dd-item-name">{s.name}</div>
+                <div className="pn-dd-tags"><span className="pn-tag">{s.min_quantity?.toLocaleString()} – {s.max_quantity?.toLocaleString()}</span></div>
               </div>
-            );
-          })}
+              <div className="pn-dd-price">₦{s.sell_price}/1k</div>
+              {value===s.id && <i className="ti ti-check" style={{color:'var(--accent)',fontSize:14}}/>}
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -695,91 +706,184 @@ function ServiceDropdown({ services, value, onChange }) {
 
 // ─── PAGE: NEW ORDER ──────────────────────────────────────────────────────────
 function NewOrder() {
+  const user = useContext(UserCtx);
+  const [allServices, setAllServices] = useState([]);
+  const [loadingSvc, setLoadingSvc] = useState(true);
   const [platform, setPlatform] = useState('All');
   const [serviceId, setServiceId] = useState('');
   const [link, setLink] = useState('');
   const [qty, setQty] = useState(1000);
+  const [placing, setPlacing] = useState(false);
   const [placed, setPlaced] = useState(false);
-  const services = platform === 'All' ? ALL_SERVICES : (MOCK.services[platform] || []);
-  const selected = ALL_SERVICES.find(s => s.id === serviceId);
-  const cost = selected && qty > 0 ? (selected.rate * qty) / 1000 : 0;
-  const handlePlace = () => { if (!serviceId || !link || qty < 1) return; setPlaced(true); setTimeout(()=>setPlaced(false),3000); };
+  const [placeError, setPlaceError] = useState('');
+
+  useEffect(() => {
+    api.get('/smm/services')
+      .then(r => setAllServices(Array.isArray(r.data) ? r.data : []))
+      .catch(() => {})
+      .finally(() => setLoadingSvc(false));
+  }, []);
+
+  const platforms = ['All', ...Array.from(new Set(allServices.map(s => s.platform).filter(Boolean))).sort()];
+  const services = platform === 'All' ? allServices : allServices.filter(s => s.platform === platform);
+  const selected = allServices.find(s => s.id === serviceId);
+  const cost = selected && qty > 0 ? parseFloat(((selected.sell_price * qty) / 1000).toFixed(2)) : 0;
+
+  const handlePlace = async () => {
+    if (!serviceId || !link || qty < 1) return;
+    setPlacing(true); setPlaceError('');
+    try {
+      await api.post('/smm/order', { service_id: serviceId, link, quantity: qty });
+      setPlaced(true); setLink(''); setServiceId(''); setQty(1000);
+      user?.refreshUser?.();
+      setTimeout(() => setPlaced(false), 4000);
+    } catch (err) {
+      setPlaceError(err.response?.data?.error || 'Order failed. Check your balance and try again.');
+    } finally {
+      setPlacing(false);
+    }
+  };
+
   return (
     <div>
       <div className="pn-page-title">New SMM Order</div>
       <div className="pn-page-sub">Pick a platform, choose a service, and grow your reach.</div>
       {placed && (
         <div style={{background:'rgba(34,197,94,.08)',border:'1px solid rgba(34,197,94,.2)',borderRadius:12,padding:'12px 16px',marginBottom:16,display:'flex',alignItems:'center',gap:10,fontSize:13}}>
-          <i className="ti ti-circle-check" style={{color:'var(--success)',fontSize:18}}/><span style={{color:'var(--text-secondary)'}}>Order placed successfully! Check your Order History.</span>
+          <i className="ti ti-circle-check" style={{color:'var(--success)',fontSize:18}}/><span style={{color:'var(--text-secondary)'}}>Order placed! Check your Order History.</span>
         </div>
       )}
-      <div className="pn-chips-scroll">
-        {PLATFORMS.map(p => (
-          <button key={p} className={`pn-pchip${platform===p?' active':''}`} onClick={()=>{setPlatform(p);setServiceId('');}}>
-            {p!=='All'&&<PlatformIcon name={p} size={14}/>}{p}
-          </button>
-        ))}
-      </div>
-      <div className="pn-card">
-        <div className="pn-input-wrap">
-          <label className="pn-input-label">Service</label>
-          <ServiceDropdown services={services} value={serviceId} onChange={setServiceId}/>
+      {placeError && (
+        <div style={{background:'rgba(248,113,113,.08)',border:'1px solid rgba(248,113,113,.2)',borderRadius:12,padding:'12px 16px',marginBottom:16,display:'flex',alignItems:'center',gap:10,fontSize:13}}>
+          <i className="ti ti-alert-circle" style={{color:'var(--danger)',fontSize:18}}/><span style={{color:'var(--danger)'}}>{placeError}</span>
         </div>
-        <div className="pn-input-wrap">
-          <label className="pn-input-label">Target Link or Username</label>
-          <div className="pn-input-with-icon">
-            <i className="ti ti-link pn-input-icon"/>
-            <input className="pn-input" placeholder="https://instagram.com/yourpage" value={link} onChange={e=>setLink(e.target.value)}/>
+      )}
+      {loadingSvc ? (
+        <div style={{padding:'40px 0',textAlign:'center'}}><i className="ti ti-loader-2" style={{fontSize:28,color:'var(--accent)',animation:'pn-spin 1s linear infinite'}}/></div>
+      ) : (
+        <>
+          <div className="pn-chips-scroll">
+            {platforms.map(p => (
+              <button key={p} className={`pn-pchip${platform===p?' active':''}`} onClick={()=>{setPlatform(p);setServiceId('');}}>
+                {p!=='All'&&<PlatformIcon name={p} size={14}/>}{p}
+              </button>
+            ))}
           </div>
-        </div>
-        <div className="pn-input-wrap">
-          <label className="pn-input-label">
-            Quantity {selected && <span style={{color:'var(--text-muted)',fontWeight:400}}> ({selected.min.toLocaleString()} – {selected.max.toLocaleString()})</span>}
-          </label>
-          <div className="pn-qty">
-            <button className="pn-qty-btn" onClick={()=>setQty(q=>Math.max(1,q-100))}>−</button>
-            <input className="pn-qty-input" type="number" value={qty} onChange={e=>setQty(Number(e.target.value)||0)} min={selected?.min||1} max={selected?.max||9999999}/>
-            <button className="pn-qty-btn" onClick={()=>setQty(q=>q+100)}>+</button>
+          <div className="pn-card">
+            <div className="pn-input-wrap">
+              <label className="pn-input-label">Service</label>
+              <ServiceDropdown services={services} value={serviceId} onChange={setServiceId}/>
+            </div>
+            <div className="pn-input-wrap">
+              <label className="pn-input-label">Target Link or Username</label>
+              <div className="pn-input-with-icon">
+                <i className="ti ti-link pn-input-icon"/>
+                <input className="pn-input" placeholder="https://instagram.com/yourpage" value={link} onChange={e=>setLink(e.target.value)}/>
+              </div>
+            </div>
+            <div className="pn-input-wrap">
+              <label className="pn-input-label">
+                Quantity {selected && <span style={{color:'var(--text-muted)',fontWeight:400}}> ({selected.min_quantity?.toLocaleString()} – {selected.max_quantity?.toLocaleString()})</span>}
+              </label>
+              <div className="pn-qty">
+                <button className="pn-qty-btn" onClick={()=>setQty(q=>Math.max(selected?.min_quantity||1,q-100))}>−</button>
+                <input className="pn-qty-input" type="number" value={qty} onChange={e=>setQty(Number(e.target.value)||0)} min={selected?.min_quantity||1} max={selected?.max_quantity||9999999}/>
+                <button className="pn-qty-btn" onClick={()=>setQty(q=>Math.min(selected?.max_quantity||9999999,q+100))}>+</button>
+              </div>
+            </div>
+            {cost > 0 && (
+              <>
+                <div className="pn-cost-box">
+                  <div className="pn-cost-label">Estimated cost</div>
+                  <div className="pn-cost-value">{fmt(cost)}</div>
+                </div>
+                <div className="pn-summary">
+                  <div className="pn-summary-row"><span className="pn-summary-label">Service</span><span className="pn-summary-value" style={{maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{selected?.name}</span></div>
+                  <div className="pn-summary-row"><span className="pn-summary-label">Quantity</span><span className="pn-summary-value pn-mono">{qty.toLocaleString()}</span></div>
+                  <div className="pn-summary-row"><span className="pn-summary-label">Rate</span><span className="pn-summary-value pn-mono">₦{selected?.sell_price}/1k</span></div>
+                  <div className="pn-summary-row pn-summary-total"><span className="pn-summary-label">Total</span><span className="pn-summary-value">{fmt(cost)}</span></div>
+                </div>
+              </>
+            )}
+            <button className="pn-btn pn-btn-primary pn-btn-full" onClick={handlePlace} disabled={!serviceId||!link||qty<1||placing} style={{opacity:(!serviceId||!link||qty<1)?.5:1}}>
+              {placing ? <><i className="ti ti-loader-2" style={{animation:'pn-spin 1s linear infinite'}}/>Placing…</> : <><i className="ti ti-shopping-cart"/>Place Order →</>}
+            </button>
           </div>
-        </div>
-        {cost > 0 && (
-          <>
-            <div className="pn-cost-box">
-              <div className="pn-cost-label">Estimated cost</div>
-              <div className="pn-cost-value">{fmt(cost)}</div>
-            </div>
-            <div className="pn-summary">
-              <div className="pn-summary-row"><span className="pn-summary-label">Service</span><span className="pn-summary-value" style={{maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{selected?.name}</span></div>
-              <div className="pn-summary-row"><span className="pn-summary-label">Quantity</span><span className="pn-summary-value pn-mono">{qty.toLocaleString()}</span></div>
-              <div className="pn-summary-row"><span className="pn-summary-label">Rate</span><span className="pn-summary-value pn-mono">₦{selected?.rate}/1k</span></div>
-              <div className="pn-summary-row pn-summary-total"><span className="pn-summary-label">Total</span><span className="pn-summary-value">{fmt(cost)}</span></div>
-            </div>
-          </>
-        )}
-        <button className="pn-btn pn-btn-primary pn-btn-full" onClick={handlePlace} disabled={!serviceId||!link||qty<1} style={{opacity:(!serviceId||!link||qty<1)?.5:1}}>
-          <i className="ti ti-shopping-cart"/>Place Order →
-        </button>
-      </div>
+        </>
+      )}
     </div>
   );
 }
 
 // ─── PAGE: SMS VERIFY ─────────────────────────────────────────────────────────
 function SmsVerify() {
+  const user = useContext(UserCtx);
   const [app, setApp] = useState('');
+  const [prices, setPrices] = useState([]);
+  const [loadingPrices, setLoadingPrices] = useState(false);
   const [country, setCountry] = useState('');
+  const [buying, setBuying] = useState(false);
+  const [buyError, setBuyError] = useState('');
   const [active, setActive] = useState(null);
+  const [activeOrderId, setActiveOrderId] = useState(null);
   const [code, setCode] = useState('');
   const [polling, setPolling] = useState(false);
   const [copied, setCopied] = useState(false);
-  const COUNTRIES = ['Nigeria (+234)', 'United States (+1)', 'United Kingdom (+44)', 'South Africa (+27)', 'Canada (+1)', 'Ghana (+233)', 'Kenya (+254)', 'Russia (+7)', 'India (+91)', 'Germany (+49)'];
-  const handleGet = () => {
-    if (!app || !country) return;
-    setActive({ number: '+234' + Math.floor(7000000000 + Math.random()*999999999), app, country });
-    setCode('');
+  const pollRef = useRef(null);
+
+  useEffect(() => {
+    if (!app) { setPrices([]); setCountry(''); return; }
+    setLoadingPrices(true); setCountry(''); setPrices([]);
+    api.get(`/sms/prices/${encodeURIComponent(app.toLowerCase())}`)
+      .then(r => setPrices(Array.isArray(r.data) ? r.data : []))
+      .catch(() => setPrices([]))
+      .finally(() => setLoadingPrices(false));
+  }, [app]);
+
+  useEffect(() => {
+    if (!activeOrderId || code) return;
     setPolling(true);
-    setTimeout(() => { setCode(String(Math.floor(100000 + Math.random()*900000))); setPolling(false); }, 4000);
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await api.get(`/sms/check/${activeOrderId}`);
+        if (res.data.smsCode) {
+          setCode(res.data.smsCode);
+          setPolling(false);
+          clearInterval(pollRef.current);
+          user?.refreshUser?.();
+        }
+      } catch (_) {}
+    }, 5000);
+    return () => { clearInterval(pollRef.current); setPolling(false); };
+  }, [activeOrderId, code]);
+
+  const selectedCountry = prices.find(p => String(p.countryId ?? p.countryCode ?? p.country) === String(country));
+  const cost = selectedCountry ? Number(selectedCountry.price || selectedCountry.cost || 0) : 0;
+
+  const handleGet = async () => {
+    if (!app || !country) return;
+    setBuying(true); setBuyError('');
+    try {
+      const res = await api.post('/sms/buy-number', { product: app.toLowerCase(), country });
+      setActive({ number: res.data.number || res.data.phone, app, country });
+      setActiveOrderId(res.data.orderId || res.data.order_id);
+      setCode('');
+      user?.refreshUser?.();
+    } catch (err) {
+      setBuyError(err.response?.data?.error || 'Could not get a number. Try a different country.');
+    } finally {
+      setBuying(false);
+    }
   };
+
+  const handleFinish = async () => {
+    if (activeOrderId) {
+      try { await api.post(`/sms/finish/${activeOrderId}`); } catch (_) {}
+    }
+    setActive(null); setActiveOrderId(null); setCode(''); setPolling(false);
+    clearInterval(pollRef.current);
+  };
+
   const handleCopy = (text) => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(()=>setCopied(false),2000); };
   return (
     <div>
@@ -789,14 +893,15 @@ function SmsVerify() {
         <i className="ti ti-wallet" style={{color:'var(--accent)',fontSize:14}}/>
         <div>
           <div style={{fontFamily:'Geist Mono',fontSize:9,textTransform:'uppercase',letterSpacing:1,color:'var(--accent)',lineHeight:1}}>Balance</div>
-          <div className="pn-mono" style={{fontSize:14,color:'var(--accent)'}}>{fmt(MOCK.user.balance)}</div>
+          <div className="pn-mono" style={{fontSize:14,color:'var(--accent)'}}>{fmt(user?.balance || 0)}</div>
         </div>
       </div>
+
       {active && (
         <div style={{background:'rgba(34,197,94,.06)',border:'1px solid rgba(34,197,94,.2)',borderRadius:16,padding:20,marginBottom:20}}>
           <div style={{fontSize:10,fontWeight:600,letterSpacing:'1px',textTransform:'uppercase',color:'var(--success)',marginBottom:14}}>Active Number — {active.app}</div>
           <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16}}>
-            <div className="pn-mono" style={{fontSize:24,color:'var(--text-primary)',flex:1}}>{active.number}</div>
+            <div className="pn-mono" style={{fontSize:22,color:'var(--text-primary)',flex:1}}>{active.number}</div>
             <button onClick={()=>handleCopy(active.number)} style={{background:'rgba(34,197,94,.1)',border:'1px solid rgba(34,197,94,.2)',borderRadius:8,padding:'8px 12px',cursor:'pointer',color:'var(--success)',display:'flex',alignItems:'center'}}>
               <i className="ti ti-copy"/>
             </button>
@@ -811,16 +916,17 @@ function SmsVerify() {
             </div>
           ) : (
             <div style={{display:'flex',alignItems:'center',gap:10,color:'var(--text-secondary)',fontSize:13,marginBottom:16}}>
-              <i className="ti ti-loader-2" style={{color:'var(--success)',animation:'spin 1s linear infinite'}}/>
-              Waiting for SMS code…
+              <i className="ti ti-loader-2" style={{color:'var(--success)',animation:'pn-spin 1s linear infinite'}}/>
+              Waiting for SMS code… (checks every 5 seconds)
             </div>
           )}
           <div style={{display:'flex',gap:10}}>
-            <button className="pn-btn pn-btn-success" style={{flex:1}} onClick={()=>{setActive(null);setCode('');setPolling(false);}}><i className="ti ti-check"/>Done</button>
-            <button className="pn-btn pn-btn-secondary" style={{flex:1,color:'var(--danger)',borderColor:'rgba(248,113,113,.25)'}} onClick={()=>{setActive(null);setCode('');setPolling(false);}}><i className="ti ti-x"/>Cancel</button>
+            <button className="pn-btn pn-btn-success" style={{flex:1}} onClick={handleFinish}><i className="ti ti-check"/>Done</button>
+            <button className="pn-btn pn-btn-secondary" style={{flex:1,color:'var(--danger)',borderColor:'rgba(248,113,113,.25)'}} onClick={handleFinish}><i className="ti ti-x"/>Cancel</button>
           </div>
         </div>
       )}
+
       {!active && (
         <>
           <span className="pn-section-label">1 — Pick an App</span>
@@ -832,30 +938,53 @@ function SmsVerify() {
               </button>
             ))}
           </div>
+
           {app && (
             <div className="pn-card">
               <span className="pn-section-label">2 — Select Country</span>
-              <div className="pn-input-wrap">
-                <select className="pn-input" value={country} onChange={e=>setCountry(e.target.value)} style={{cursor:'pointer'}}>
-                  <option value="">— Select a country —</option>
-                  {COUNTRIES.map(c=><option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-              <button className="pn-btn pn-btn-primary pn-btn-full" onClick={handleGet} disabled={!country} style={{opacity:!country?.5:1}}>
-                <i className="ti ti-device-mobile"/>Get Number for {app}
+              {loadingPrices ? (
+                <div style={{padding:'20px 0',textAlign:'center'}}><i className="ti ti-loader-2" style={{fontSize:22,color:'var(--accent)',animation:'pn-spin 1s linear infinite'}}/></div>
+              ) : prices.length === 0 ? (
+                <div style={{fontSize:13,color:'var(--text-muted)',padding:'12px 0'}}>No countries available for {app}. Try another app.</div>
+              ) : (
+                <div className="pn-input-wrap">
+                  <select className="pn-input" value={country} onChange={e=>setCountry(e.target.value)} style={{cursor:'pointer'}}>
+                    <option value="">— Select a country —</option>
+                    {prices.map(p => {
+                      const id = String(p.countryId ?? p.countryCode ?? p.country ?? '');
+                      const label = p.countryName || p.country || id;
+                      const price = Number(p.price || p.cost || 0);
+                      return <option key={id} value={id}>{label} — {fmt(price)}</option>;
+                    })}
+                  </select>
+                </div>
+              )}
+              {buyError && (
+                <div style={{fontSize:12,color:'var(--danger)',marginBottom:10,display:'flex',alignItems:'center',gap:6}}>
+                  <i className="ti ti-alert-circle"/>{buyError}
+                </div>
+              )}
+              {cost > 0 && (
+                <div style={{fontSize:12,color:'var(--text-secondary)',marginBottom:12}}>
+                  Cost: <span style={{fontFamily:'monospace',color:'var(--accent)',fontWeight:600}}>{fmt(cost)}</span>
+                  {user?.balance < cost && <span style={{color:'var(--danger)',marginLeft:8}}>Insufficient balance</span>}
+                </div>
+              )}
+              <button className="pn-btn pn-btn-primary pn-btn-full" onClick={handleGet} disabled={!country||buying||user?.balance<cost} style={{opacity:(!country||buying)?.5:1}}>
+                {buying ? <><i className="ti ti-loader-2" style={{animation:'pn-spin 1s linear infinite'}}/>Getting number…</> : <><i className="ti ti-device-mobile"/>Get Number for {app}</>}
               </button>
             </div>
           )}
+
           {!app && (
             <div className="pn-empty">
               <i className="ti ti-message-circle pn-empty-icon"/>
               <div className="pn-empty-title">Pick an app above</div>
-              <div className="pn-empty-sub">Select a platform to see available numbers and prices</div>
+              <div className="pn-empty-sub">Select a platform to see available countries and prices</div>
             </div>
           )}
         </>
       )}
-      <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
     </div>
   );
 }
@@ -863,65 +992,86 @@ function SmsVerify() {
 // ─── PAGE: ORDER HISTORY ──────────────────────────────────────────────────────
 function OrderHistory() {
   const [tab, setTab] = useState('all');
-  const orders = tab === 'all' ? MOCK.orders : MOCK.orders.filter(o=>o.type===tab);
-  const [viewAccOrder, setViewAccOrder] = useState(null);
+  const [orders, setOrders] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const fmtDate = (d) => new Date(d).toLocaleDateString('en-NG', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+
+  const fetchOrders = async () => {
+    setLoading(true);
+    try {
+      const [stdRes, accRes] = await Promise.all([
+        api.get('/orders', { params: { limit: 50, ...(tab !== 'all' && tab !== 'accounts' ? { type: tab } : {}) } }),
+        (tab === 'all' || tab === 'accounts') ? api.get('/accszone/orders') : Promise.resolve({ data: [] }),
+      ]);
+      const std = (stdRes.data.orders || []).map(o => ({
+        ...o,
+        amount: o.amount_paid || o.total_cost || 0,
+        phone: o.phone_number,
+      }));
+      const accs = (Array.isArray(accRes.data) ? accRes.data : []).map(o => ({
+        ...o,
+        type: 'accounts',
+        platform: o.platform,
+        amount: o.total_cost,
+      }));
+      const merged = tab === 'accounts' ? accs
+        : tab !== 'all' ? std
+        : [...std, ...accs].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      setOrders(merged);
+      setTotal(merged.length);
+    } catch (_) {}
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchOrders(); }, [tab]);
+
   return (
     <div>
       <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:16,gap:12}}>
         <div>
           <div className="pn-page-title">Order History</div>
-          <div className="pn-page-sub" style={{marginBottom:0}}>{MOCK.orders.length} total orders</div>
+          <div className="pn-page-sub" style={{marginBottom:0}}>{total} total orders</div>
         </div>
-        <button className="pn-btn pn-btn-secondary pn-btn-sm"><i className="ti ti-refresh"/>Refresh</button>
+        <button className="pn-btn pn-btn-secondary pn-btn-sm" onClick={fetchOrders} disabled={loading}>
+          <i className="ti ti-refresh" style={{animation:loading?'pn-spin 1s linear infinite':''}}/>Refresh
+        </button>
       </div>
       <div className="pn-tabs">
         {[['all','All'],['smm','SMM'],['sms','SMS'],['accounts','Accounts']].map(([v,l])=>(
           <button key={v} className={`pn-tab${tab===v?' active':''}`} onClick={()=>setTab(v)}>{l}</button>
         ))}
       </div>
-      {orders.length === 0 ? (
+      {loading ? (
+        <div style={{padding:'40px 0',textAlign:'center'}}><i className="ti ti-loader-2" style={{fontSize:28,color:'var(--accent)',animation:'pn-spin 1s linear infinite'}}/></div>
+      ) : orders.length === 0 ? (
         <div className="pn-card"><div className="pn-empty"><i className="ti ti-receipt pn-empty-icon"/><div className="pn-empty-title">No orders found</div><div className="pn-empty-sub">Place your first order to see it here</div></div></div>
       ) : (
         <div className="pn-card" style={{padding:0,overflow:'hidden'}}>
           <div className="pn-order-header">
-            <span>Order ID</span><span>Type</span><span>Service / Platform</span><span style={{textAlign:'right'}}>Amount</span>
+            <span>Date</span><span>Type</span><span>Service / Platform</span><span style={{textAlign:'right'}}>Amount</span>
           </div>
           {orders.map(o => (
             <div key={o.id} className="pn-order-row">
-              <div className="pn-order-id">{o.id.slice(0,8)}</div>
+              <div className="pn-order-id" style={{fontSize:10}}>{fmtDate(o.created_at)}</div>
               <div><Badge type={o.type}/></div>
               <div>
-                <div className="pn-order-name" style={{display:'flex',alignItems:'center',gap:6}}><PlatformIcon name={o.platform} size={14}/>{o.type==='accounts'?(o.product_name||o.platform):o.platform}</div>
-                <div className="pn-order-sub">{o.type==='accounts'?`${o.quantity} account${(o.quantity||1)>1?'s':''}`:`${o.phone||''} · ${o.country||''}`}</div>
+                <div className="pn-order-name" style={{display:'flex',alignItems:'center',gap:6}}>
+                  <PlatformIcon name={o.platform} size={14}/>
+                  {o.type==='accounts' ? (o.product_name||o.platform) : o.type==='sms' ? o.platform : (o.service_name||o.platform||'—')}
+                </div>
+                <div className="pn-order-sub">
+                  {o.type==='accounts' ? `${o.quantity||1} account${(o.quantity||1)>1?'s':''}` :
+                   o.type==='sms' ? (o.phone||o.phone_number||'') :
+                   (o.link ? o.link.slice(0,30)+'…' : o.status||'')}
+                </div>
               </div>
               <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:4}}>
                 <div className="pn-order-qty">{fmt(o.amount)}</div>
-                {o.type==='accounts'
-                  ? <button className="pn-btn pn-btn-ghost pn-btn-sm" style={{fontSize:10,height:24,padding:'0 8px'}} onClick={()=>setViewAccOrder(o)}>View</button>
-                  : <Badge status={o.status}/>
-                }
+                <Badge status={o.status}/>
               </div>
             </div>
           ))}
-        </div>
-      )}
-      {viewAccOrder && (
-        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.6)',zIndex:400,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
-          <div style={{background:'var(--bg-surface)',border:'1px solid var(--border)',borderRadius:20,width:'100%',maxWidth:420,padding:24}}>
-            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
-              <div style={{fontSize:15,fontWeight:600,color:'var(--text-primary)'}}>Account Order Details</div>
-              <button onClick={()=>setViewAccOrder(null)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-muted)',fontSize:18}}><i className="ti ti-x"/></button>
-            </div>
-            <div style={{background:'var(--bg-raised)',border:'1px solid var(--border)',borderRadius:12,padding:'4px 16px',marginBottom:16}}>
-              {[['Product',viewAccOrder.product_name||viewAccOrder.platform],['Quantity',String(viewAccOrder.quantity||1)],['Total',fmt(viewAccOrder.amount)],['Status',viewAccOrder.status]].map(([l,v])=>(
-                <div key={l} style={{display:'flex',justifyContent:'space-between',padding:'8px 0',borderBottom:'0.5px solid var(--border)',fontSize:13}}>
-                  <span style={{color:'var(--text-muted)'}}>{l}</span>
-                  <span style={{fontWeight:500,color:'var(--text-primary)',fontFamily:l==='Total'?"'Geist Mono','Courier New',monospace":'inherit'}}>{v}</span>
-                </div>
-              ))}
-            </div>
-            <div style={{fontSize:12,color:'var(--text-muted)',textAlign:'center',lineHeight:1.6}}>Account credentials were shown at the time of purchase.<br/>Contact support if you need assistance.</div>
-          </div>
         </div>
       )}
     </div>
@@ -930,6 +1080,7 @@ function OrderHistory() {
 
 // ─── PAGE: ADD FUNDS ──────────────────────────────────────────────────────────
 function AddFunds() {
+  const user = useContext(UserCtx);
   const [tab, setTab] = useState('bank');
   const [step, setStep] = useState(1);
   const [amount, setAmount] = useState('');
@@ -946,7 +1097,7 @@ function AddFunds() {
       <div className="pn-page-sub">Fund your wallet to place orders instantly.</div>
       <div className="pn-balance-hero">
         <div className="pn-balance-hero-label">Current Balance</div>
-        <div className="pn-balance-hero-amount">{fmt(MOCK.user.balance)}</div>
+        <div className="pn-balance-hero-amount">{fmt(user?.balance || 0)}</div>
       </div>
       <div className="pn-tabs pn-tabs gold-active">
         {[['bank','Bank Transfer'],['paystack','Paystack']].map(([v,l])=>(
@@ -1141,7 +1292,7 @@ function App() {
   const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
   const navigate = (p) => { setPage(p); setSidebarOpen(false); };
   const user = useContext(UserCtx) || MOCK.user;
-  const PAGES = { overview: <Overview setPage={setPage}/>, neworder: <NewOrder/>, sms: <SmsVerify/>, accounts: <BuyAccounts balance={user.balance} token={localStorage.getItem('panelng_token')} onNavigate={navigate}/>, orders: <OrderHistory/>, funds: <AddFunds/>, profile: <ProfileSettings/> };
+  const PAGES = { overview: <Overview setPage={setPage}/>, neworder: <NewOrder/>, sms: <SmsVerify/>, accounts: <BuyAccounts balance={user.balance} token={localStorage.getItem('panelng_token')} onNavigate={navigate} onPurchaseComplete={user.refreshUser}/>, orders: <OrderHistory/>, funds: <AddFunds/>, profile: <ProfileSettings/> };
   return (
     <div className="pn-root" data-theme={resolved}>
       <div className="pn-shell">
@@ -1159,7 +1310,7 @@ function App() {
 
 // ─── ROOT ─────────────────────────────────────────────────────────────────────
 export default function PanelNG() {
-  const { user: authUser, logout } = useAuth();
+  const { user: authUser, logout, refreshUser } = useAuth();
 
   const user = authUser ? {
     name: authUser.full_name || authUser.email?.split('@')[0] || 'User',
@@ -1171,7 +1322,8 @@ export default function PanelNG() {
     initials: (authUser.full_name || authUser.email || 'U')
       .split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase(),
     logout: logout || (() => {}),
-  } : { ...MOCK.user, logout: () => {} };
+    refreshUser: refreshUser || (() => {}),
+  } : { ...MOCK.user, logout: () => {}, refreshUser: () => {} };
 
   useEffect(() => {
     const links = [
