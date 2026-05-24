@@ -4,21 +4,51 @@ import axios from 'axios';
 const API = '/api/accszone';
 const fmt = (n) => '₦' + Number(n || 0).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-const PLATFORM_NAMES = ['All','Facebook','Gmail','Instagram','TikTok','Twitter/X','LinkedIn','Telegram','Discord','Reddit','Snapchat','Apple ID','Tinder','Other'];
+// Preferred chip display order — Other is always injected last in the chip logic
+const CHIP_ORDER = [
+  'Facebook','Instagram','TikTok','Twitter/X','YouTube','WhatsApp','Snapchat','Telegram',
+  'Discord','LinkedIn','Reddit','Pinterest','Twitch','Threads',
+  'Gmail','Apple ID',
+  'Netflix','Spotify','Amazon','Steam','Gaming',
+  'PayPal','Binance','Coinbase','Crypto',
+  'VPN',
+  'Tinder','Bumble','OnlyFans',
+  'Uber','Airbnb',
+  'Other',
+];
 
 const PLATFORM_KEYWORDS = {
-  Facebook: ['facebook','fb'],
-  Gmail: ['gmail','google'],
-  Instagram: ['instagram','ig'],
-  TikTok: ['tiktok','tik tok'],
-  'Twitter/X': ['twitter','x.com'],
-  LinkedIn: ['linkedin'],
-  Telegram: ['telegram'],
-  Discord: ['discord'],
-  Reddit: ['reddit'],
-  Snapchat: ['snapchat'],
-  'Apple ID': ['apple','icloud'],
-  Tinder: ['tinder'],
+  Facebook:    ['facebook', 'fb '],
+  Instagram:   ['instagram'],
+  TikTok:      ['tiktok', 'tik tok'],
+  'Twitter/X': ['twitter', 'x account', 'x.com'],
+  YouTube:     ['youtube'],
+  WhatsApp:    ['whatsapp'],
+  Snapchat:    ['snapchat'],
+  Telegram:    ['telegram'],
+  Discord:     ['discord'],
+  LinkedIn:    ['linkedin'],
+  Reddit:      ['reddit'],
+  Pinterest:   ['pinterest'],
+  Twitch:      ['twitch'],
+  Threads:     ['threads'],
+  Gmail:       ['gmail', 'google account'],
+  'Apple ID':  ['apple id', 'icloud', 'apple account'],
+  Netflix:     ['netflix'],
+  Spotify:     ['spotify'],
+  Amazon:      ['amazon'],
+  Steam:       ['steam'],
+  Gaming:      ['gaming', 'game account', 'roblox', 'pubg', 'valorant', 'fortnite', 'minecraft'],
+  PayPal:      ['paypal'],
+  Binance:     ['binance'],
+  Coinbase:    ['coinbase'],
+  Crypto:      ['crypto', 'bybit', 'okx', 'kucoin', 'kraken'],
+  VPN:         ['vpn', 'nordvpn', 'expressvpn', 'surfshark', 'cyberghost', 'protonvpn', 'private internet'],
+  Tinder:      ['tinder'],
+  Bumble:      ['bumble'],
+  OnlyFans:    ['onlyfans'],
+  Uber:        ['uber'],
+  Airbnb:      ['airbnb'],
 };
 
 function guessPlatform(str = '') {
@@ -45,6 +75,25 @@ function AccIcon({ name, size = 24 }) {
     Snapchat: <svg width={s} height={s} viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#FFFC00"/><path d="M12 4.5c-2 0-3.5 1.5-3.5 3.5v2c-.3.1-.7.2-1 .3-.1.5.1.8.5.9.5.1.7.5.6 1-.1.4-.5.8-1.1 1.2.2.5.6.6 1.1.6.2 0 .5 0 .8-.1.5.7 1.3 1.1 2.6 1.1s2.1-.4 2.6-1.1c.3.1.6.1.8.1.5 0 .9-.1 1.1-.6-.6-.4-1-.8-1.1-1.2-.1-.5.1-.9.6-1 .4-.1.6-.4.5-.9-.3-.1-.7-.2-1-.3V8c0-2-1.5-3.5-3.5-3.5z" fill="#1A1917"/></svg>,
     'Apple ID': <svg width={s} height={s} viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#1A1917"/><path d="M15.5 6.5c-.8 1-2.1 1.7-3.3 1.6-.1-1.2.5-2.5 1.2-3.3.8-.9 2.1-1.6 3.2-1.6.1 1.3-.4 2.5-1.1 3.3zM16.8 8.2c-1.8-.1-3.3 1-4.2 1-.9 0-2.2-.9-3.7-.9-1.9 0-3.6 1.1-4.6 2.8-2 3.4-.5 8.4 1.4 11.2.9 1.4 2 2.9 3.5 2.8 1.4-.1 1.9-.9 3.5-.9s2.2.9 3.5.9 2.5-1.4 3.5-2.8c1.1-1.6 1.5-3.1 1.5-3.2-.1 0-2.9-1.1-2.9-4.3 0-2.7 2.2-4 2.3-4.1-.9-1.3-2.4-1.5-2.8-1.5z" fill="white"/></svg>,
     Tinder: <svg width={s} height={s} viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#FF6B6B"/><path d="M12 19.5c-3 0-5.5-2.5-5.5-5.5 0-2 1.5-4 3-5.5-.5 2.5 1.5 3.5 1.5 3.5s-.5-3.5 3-6c0 0-1 4.5 3 6.5 1 .5 1.5 1.5 1.5 2.5 0 2.5-2 4.5-4.5 4.5z" fill="white"/></svg>,
+    YouTube: <svg width={s} height={s} viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#FF0000"/><path d="M20 12s0-2.5-.3-3.7a2 2 0 00-1.4-1.4C17.2 6.6 12 6.6 12 6.6s-5.2 0-6.3.3a2 2 0 00-1.4 1.4C4 9.5 4 12 4 12s0 2.5.3 3.7a2 2 0 001.4 1.4C6.8 17.4 12 17.4 12 17.4s5.2 0 6.3-.3a2 2 0 001.4-1.4C20 14.5 20 12 20 12z" fill="white" fillOpacity=".9"/><polygon points="10,9.5 15.5,12 10,14.5" fill="#FF0000"/></svg>,
+    WhatsApp: <svg width={s} height={s} viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#25D366"/><path d="M12 4.5C7.9 4.5 4.5 7.9 4.5 12c0 1.5.4 3 1.2 4.2L4.5 19.5l3.3-1.2C9 19 10.5 19.5 12 19.5c4.1 0 7.5-3.4 7.5-7.5S16.1 4.5 12 4.5zm3.9 10.2c-.2.5-.9 1-1.4 1.1-.4.1-.9.1-2.7-.6-2.3-.9-3.7-3.2-3.8-3.4-.1-.2-.9-1.2-.9-2.3 0-1.1.6-1.6.8-1.8.2-.2.5-.3.7-.3h.5c.2 0 .4.1.6.5l.8 1.9c.1.2.1.4 0 .6l-.3.5c-.1.1-.2.3-.1.5.4.7.9 1.3 1.5 1.7.7.5 1.3.7 1.6.8.2.1.4 0 .5-.1l.5-.6c.1-.2.3-.3.6-.2l1.8.8c.2.1.4.2.5.4.1.5-.1 1.3-.4 1.9z" fill="white"/></svg>,
+    Netflix: <svg width={s} height={s} viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#141414"/><path d="M7 4h3l2 9 2-9h3l-3 8 3 8h-3l-2-9-2 9H7l3-8z" fill="#E50914"/></svg>,
+    Spotify: <svg width={s} height={s} viewBox="0 0 24 24"><rect width="24" height="24" rx="12" fill="#1DB954"/><path d="M16.7 15.1c-.2-.3-.6-.4-.9-.2-2.5 1.5-5.7 1.9-9.4 1-.3-.1-.7.1-.8.5-.1.3.1.7.5.8 4.1 1 7.7.5 10.5-1.1.3-.2.3-.6.1-1zm1.1-2.8c-.3-.4-.8-.5-1.2-.3-3 1.8-7.5 2.3-11 1.3-.4-.1-.9.1-1 .5-.1.4.1.9.5 1 4 1.1 9 .5 12.4-1.5.4-.2.5-.7.3-1zm.1-2.9c-3.5-2.1-9.4-2.3-12.7-1.3-.5.2-.8.7-.6 1.2.2.5.7.8 1.2.6 2.9-.9 8.1-.7 11.2 1.1.4.3.9.1 1.2-.3.2-.5.1-1-.3-1.3z" fill="white"/></svg>,
+    Amazon: <svg width={s} height={s} viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#FF9900"/><text x="12" y="16" fontSize="11" fontWeight="800" textAnchor="middle" fill="#1A1917" fontFamily="serif">amazon</text></svg>,
+    PayPal: <svg width={s} height={s} viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#003087"/><path d="M9 5h4c2 0 3.5 1 3.5 3s-1.5 4-4 4h-2l-1 5H7l2-12zm2 5.5h1.5c1.2 0 2-.6 2-1.5s-.8-1.5-2-1.5h-2l.5 3z" fill="white"/><path d="M13 7h4c2 0 3.5 1 3.5 3s-1.5 4-4 4h-2l-1 5h-2.5l2-12z" fill="#009CDE" opacity=".8"/></svg>,
+    Binance: <svg width={s} height={s} viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#1A1917"/><path d="M12 4l-2 2-3-3L5 5l3 3-3 3 2 2 3-3 3 3 2-2-3-3 3-3-2-2zm4 8l-2 2 2 2 2-2-2-2zM12 17l-3 3 2 2 3-3 3 3 2-2-3-3-2 2-2-2z" fill="#F3BA2F"/></svg>,
+    Coinbase: <svg width={s} height={s} viewBox="0 0 24 24"><rect width="24" height="24" rx="12" fill="#0052FF"/><circle cx="12" cy="12" r="6" fill="white"/><circle cx="12" cy="12" r="3.5" fill="#0052FF"/></svg>,
+    Crypto: <svg width={s} height={s} viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#1A1917"/><path d="M12 3L4 7v5c0 4.4 3.4 8.5 8 9.5 4.6-1 8-5.1 8-9.5V7L12 3zm-1 12.5l-3-3 1.4-1.4 1.6 1.6 4.2-4.2 1.4 1.4L11 15.5z" fill="#F3BA2F"/></svg>,
+    Steam: <svg width={s} height={s} viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#1B2838"/><path d="M12 3a9 9 0 00-9 8.4l4.8 2a2.5 2.5 0 011.3-.4h.3l2.2-3.1A3.5 3.5 0 0115 6.5a3.5 3.5 0 010 7 3.5 3.5 0 01-3.3-2.4l-3.1 2.2c0 .1 0 .2-.1.3a2.5 2.5 0 01-5 .1L3.1 12A9 9 0 1012 3zm-4.5 11.5a1.5 1.5 0 100 3 1.5 1.5 0 000-3z" fill="#C5C3C0"/></svg>,
+    Gaming: <svg width={s} height={s} viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#7C3AED"/><path d="M6 10h12a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2a2 2 0 012-2zm3 1.5v1h-1v1h1v1h1v-1h1v-1h-1v-1H9zm5.5 1.5a.75.75 0 110 1.5.75.75 0 010-1.5zm1.5-1.5a.75.75 0 110 1.5.75.75 0 010-1.5z" fill="white"/></svg>,
+    VPN: <svg width={s} height={s} viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#0EA5E9"/><path d="M12 3a9 9 0 100 18A9 9 0 0012 3zm0 2c.8 0 1.8.8 2.6 2.3H9.4C10.2 5.8 11.2 5 12 5zm-3.3 2.3H6.4a7 7 0 012.7-2 8.4 8.4 0 00-1.4 2zm5.3 0H9.9a10.4 10.4 0 012.1-3.2 10.4 10.4 0 012.1 3.2h-1zM17.6 7.3h-2.3a8.4 8.4 0 00-1.4-2 7 7 0 012.7 2zm-12 2h2.5a14 14 0 00-.1 1.3v.8H5.1a7 7 0 01.5-2.1zm3.5 0h1.8v2.1H8.1v-.8c0-.4 0-.9.1-1.3zm2.8 0h1.8c.1.4.1.9.1 1.3v.8h-1.9v-2.1zm2.8 0h2.5a7 7 0 01.5 2.1h-3v-.8c0-.4 0-.9-.1-1.3zM5.1 13.5h2.9v.8c0 .4 0 .9.1 1.3H5.6a7 7 0 01-.5-2.1zm3.9 0h1.9v2.1H9.1c-.1-.4-.1-.9-.1-1.3v-.8zm2.9 0H13v.8c0 .4 0 .9-.1 1.3h-1.9v-2.1zm3 0h2.9a7 7 0 01-.5 2.1h-2.5c.1-.4.1-.9.1-1.3v-.8zm-8 3.2h2.3a8.4 8.4 0 001.4 2 7 7 0 01-2.7-2zm3.3 2.3h1.5a10.4 10.4 0 01-2.1 3.2 10.4 10.4 0 01-2.1-3.2h2.7zm2.5 0h2.3a7 7 0 01-2.7 2 8.4 8.4 0 001.4-2z" fill="white"/></svg>,
+    Bumble: <svg width={s} height={s} viewBox="0 0 24 24"><rect width="24" height="24" rx="12" fill="#FFC629"/><path d="M12 5a7 7 0 100 14A7 7 0 0012 5zm-1 9v-2H9v-2h2V8h2v2h2v2h-2v2h-2z" fill="#1A1917"/></svg>,
+    OnlyFans: <svg width={s} height={s} viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#00AFF0"/><path d="M12 6a6 6 0 100 12A6 6 0 0012 6zm0 2a4 4 0 110 8 4 4 0 010-8zm0 2a2 2 0 100 4 2 2 0 000-4z" fill="white"/></svg>,
+    Pinterest: <svg width={s} height={s} viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#E60023"/><path d="M12 3C7 3 3 7 3 12c0 3.8 2.3 7.1 5.6 8.5-.1-.7-.1-1.7.1-2.5l1-4.2s-.3-.5-.3-1.3c0-1.2.7-2.1 1.6-2.1.8 0 1.1.6 1.1 1.3 0 .8-.5 2-.8 3.1-.2.9.4 1.6 1.3 1.6 1.6 0 2.7-2 2.7-4.5 0-1.8-1.2-3.2-3.3-3.2-2.4 0-3.9 1.8-3.9 3.8 0 .7.2 1.2.5 1.6.1.2.1.3.1.5l-.2.9c-.1.2-.2.3-.4.2-1.4-.5-2-2-2-3.6 0-2.7 2.3-5.9 6.8-5.9 3.6 0 6 2.6 6 5.4 0 3.7-2 6.5-5 6.5-1 0-1.9-.5-2.2-1.1l-.6 2.3c-.2.8-.7 1.7-1 2.3.8.2 1.6.3 2.4.3 5 0 9-4 9-9s-4-9-9-9z" fill="white"/></svg>,
+    Twitch: <svg width={s} height={s} viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#9146FF"/><path d="M5 3L3 7v13h5v3h3l3-3h4l5-5V3H5zm15 11l-3 3h-4l-3 3v-3H6V5h14v9z" fill="white"/><path d="M10 8h2v5h-2zm5 0h2v5h-2z" fill="#9146FF"/></svg>,
+    Threads: <svg width={s} height={s} viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#000"/><path d="M16 9.5c-.3-.1-.7-.2-1-.3C14.7 7.4 13.4 6.5 12 6.5c-2.2 0-4 1.8-4 4 0 .8.3 1.6.7 2.2-.4.4-.7 1-.7 1.8 0 1.7 1.3 3 3 3 1.1 0 2.1-.6 2.6-1.5.3.1.5.1.8.1 1.4 0 2.6-1.1 2.6-2.5 0-.8-.4-1.5-.9-2 .5-.5.9-1.3.9-2.1z" fill="white"/></svg>,
+    Uber: <svg width={s} height={s} viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#000"/><text x="5" y="16" fontSize="11" fontWeight="700" fill="white" fontFamily="sans-serif">Uber</text></svg>,
+    Airbnb: <svg width={s} height={s} viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#FF5A5F"/><path d="M12 5c-1.5 0-2.5 1.2-2.5 2.5 0 1.7 2.5 5.5 2.5 5.5s2.5-3.8 2.5-5.5C14.5 6.2 13.5 5 12 5zm0 9.5c-2 0-6 1.8-6 3.5 0 .8.7 1.5 2 2h8c1.3-.5 2-1.2 2-2 0-1.7-4-3.5-6-3.5z" fill="white"/></svg>,
     Other: <svg width={s} height={s} viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#6B6860"/><circle cx="8" cy="12" r="1.5" fill="white"/><circle cx="12" cy="12" r="1.5" fill="white"/><circle cx="16" cy="12" r="1.5" fill="white"/></svg>,
   };
   return map[name] || map['Other'];
@@ -119,7 +168,7 @@ function ProductCard({ listing, onClick, exchangeRate = 1600 }) {
   return (
     <div
       onClick={() => onClick(listing)}
-      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 16, padding: 18, cursor: 'pointer', transition: 'box-shadow 150ms ease, border-color 150ms ease', display: 'flex', flexDirection: 'column' }}
+      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 16, padding: 18, cursor: 'pointer', transition: 'box-shadow 150ms ease, border-color 150ms ease', display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}
       onMouseEnter={e => { e.currentTarget.style.boxShadow = 'var(--shadow-md)'; e.currentTarget.style.borderColor = 'var(--border-strong)'; }}
       onMouseLeave={e => { e.currentTarget.style.boxShadow = ''; e.currentTarget.style.borderColor = 'var(--border)'; }}
     >
@@ -512,10 +561,8 @@ const EXTRA_CSS = `
 .acc-root { width:100%; max-width:100%; overflow-x:hidden; box-sizing:border-box; }
 .acc-chips { display:flex; gap:8px; overflow-x:auto; overflow-y:visible; padding-bottom:4px; margin-bottom:20px; scrollbar-width:none; -webkit-overflow-scrolling:touch; flex-wrap:nowrap; }
 .acc-chips::-webkit-scrollbar { display:none; }
-.acc-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; width:100%; box-sizing:border-box; }
-@media(max-width:900px){ .acc-grid{ grid-template-columns:repeat(2,1fr); gap:12px; } }
-@media(max-width:600px){ .acc-grid{ grid-template-columns:1fr 1fr; gap:10px; } }
-@media(max-width:400px){ .acc-grid{ grid-template-columns:1fr; gap:10px; } }
+.acc-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,200px),1fr)); gap:14px; width:100%; box-sizing:border-box; }
+@media(max-width:600px){ .acc-grid{ gap:10px; } }
 `;
 
 // ─── BUY ACCOUNTS PAGE ────────────────────────────────────────────────────────
@@ -564,8 +611,14 @@ export default function BuyAccounts({ balance = 0, token = '', onNavigate }) {
       .finally(() => setLoading(false));
   }, []);
 
-  // Chips: unique platforms present in actual listings data
-  const availablePlatforms = ['All', ...Array.from(new Set(listings.map(l => l._platform).filter(Boolean)))];
+  // Chips: unique platforms present in actual listings, ordered by CHIP_ORDER with Other always last
+  const availablePlatforms = ['All', ...[...new Set(listings.map(l => l._platform).filter(Boolean))]
+    .sort((a, b) => {
+      const ai = CHIP_ORDER.indexOf(a), bi = CHIP_ORDER.indexOf(b);
+      const an = ai === -1 ? CHIP_ORDER.length - 1 : ai;
+      const bn = bi === -1 ? CHIP_ORDER.length - 1 : bi;
+      return an - bn;
+    })];
 
   const filtered = [...(platform === 'All' ? listings : listings.filter(l => l._platform === platform))]
     .sort((a, b) => Number(a.price || a.unit_price || 0) - Number(b.price || b.unit_price || 0));
