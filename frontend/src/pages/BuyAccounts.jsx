@@ -192,7 +192,7 @@ function ProductCard({ listing, onClick, exchangeRate = 1600 }) {
   const platform = listing._platform || guessPlatform(listing.title || listing.name || '');
   const qty = Number(listing.quantity || listing.stock || listing.available_stock || 50);
   const priceUSD = Number(listing.price || listing.unit_price || 0);
-  const priceNGN = priceUSD * exchangeRate;
+  const priceNGN = listing._sell_price_ngn != null ? listing._sell_price_ngn : priceUSD * exchangeRate;
   const title = listing.title || listing.name || 'Account';
   const desc = listing.short_description
     || (listing.description ? stripHtml(listing.description).slice(0, 80) : '')
@@ -278,7 +278,7 @@ function DetailSheet({ listing, detail, detailLoading, onClose, balance, onBuy, 
   const [qty, setQty] = useState(1);
   const platform = listing._platform || guessPlatform(listing.title || listing.name || '');
   const priceUSD = Number(listing.price || listing.unit_price || 0);
-  const priceNGN = priceUSD * exchangeRate;
+  const priceNGN = listing._sell_price_ngn != null ? listing._sell_price_ngn : priceUSD * exchangeRate;
   const stock = Number(listing.quantity || listing.stock || listing.available_stock || 50);
   const title = listing.title || listing.name || 'Account';
   const total = priceNGN * qty;
@@ -481,7 +481,7 @@ function PurchaseModal({ listing, qty, balance, onClose, onSuccess, onAddFunds, 
 
   const platform = listing._platform || guessPlatform(listing.title || listing.name || '');
   const priceUSD = Number(listing.price || listing.unit_price || 0);
-  const priceNGN = priceUSD * exchangeRate;
+  const priceNGN = listing._sell_price_ngn != null ? listing._sell_price_ngn : priceUSD * exchangeRate;
   const total = priceNGN * qty;
   const afterBalance = balance - total;
   const insufficient = balance < total;
@@ -494,7 +494,7 @@ function PurchaseModal({ listing, qty, balance, onClose, onSuccess, onAddFunds, 
         ad_id: listing.id || listing.ad_id,
         quantity: qty,
         listing_slug: listing.slug,
-        unit_price: priceUSD, // backend receives USD and applies rate from DB
+        unit_price: priceUSD, // backend re-verifies and applies any custom override
         product_name: title,
         platform,
       }, { headers: { Authorization: `Bearer ${token}` } });

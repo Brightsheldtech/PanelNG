@@ -2,6 +2,7 @@ const express = require('express');
 const axios = require('axios');
 const supabase = require('../lib/supabase');
 const auth = require('../middleware/auth');
+const adminOnly = require('../middleware/admin');
 const { getExchangeRate } = require('../lib/exchangeRate');
 
 const router = express.Router();
@@ -20,6 +21,31 @@ const cache = new Map();
 const TTL = 5 * 60 * 1000;
 const getCached = (k) => { const e = cache.get(k); return e && Date.now() - e.ts < TTL ? e.data : null; };
 const setCached = (k, d) => cache.set(k, { data: d, ts: Date.now() });
+
+// Fetch price overrides map { slug -> custom_price_ngn }
+async function getPriceOverrides() {
+  const cached = getCached('_price_overrides');
+  if (cached) return cached;
+  const { data, error } = await supabase.from('accszone_price_overrides').select('slug, custom_price_ngn');
+  if (error) return {};
+  const map = {};
+  (data || []).forEach((r) => { map[r.slug] = Number(r.custom_price_ngn); });
+  setCached('_price_overrides', map);
+  return map;
+}
+
+// Apply sell price to a listing array or single listing
+async function applyPrices(listings) {
+  const rate = await getExchangeRate();
+  const overrides = await getPriceOverrides();
+  const apply = (l) => {
+    const slug = l.slug || l.ad_id || String(l.id || '');
+    const autoNGN = parseFloat((Number(l.price || l.unit_price || 0) * rate).toFixed(2));
+    const sellNGN = overrides[slug] != null ? overrides[slug] : autoNGN;
+    return { ...l, _auto_price_ngn: autoNGN, _sell_price_ngn: sellNGN };
+  };
+  return Array.isArray(listings) ? listings.map(apply) : apply(listings);
+}
 
 // ── GET /api/accszone/categories ─────────────────────────────────────────────
 router.get('/categories', async (req, res) => {
@@ -55,10 +81,17 @@ router.get('/listings', async (req, res) => {
   try {
     const key = `listings_${JSON.stringify(req.query)}`;
     const cached = getCached(key);
-    if (cached) return res.json(cached);
-    const { data } = await az.get('/listings', { params: req.query });
-    setCached(key, data);
-    res.json(data);
+    const raw = cached || await az.get('/listings', { params: req.query }).then((r) => r.data);
+    if (!cached) setCached(key, raw);
+
+    // Apply price overrides — wrap list or paginated response
+    let result = raw;
+    if (Array.isArray(raw)) {
+      result = await applyPrices(raw);
+    } else if (Array.isArray(raw?.data)) {
+      result = { ...raw, data: await applyPrices(raw.data) };
+    }
+    res.json(result);
   } catch (err) {
     console.error('[accszone] listings:', err.message);
     res.status(502).json({ error: 'Could not fetch listings' });
@@ -91,12 +124,19 @@ router.post('/order', auth, async (req, res) => {
   }
 
   try {
-    // Verify price server-side
     let unitPrice = Number(unit_price);
     let productName = product_name || 'Account Order';
+    let usedCustomPrice = false;
 
     if (listing_slug) {
       try {
+        // Check for admin price override first
+        const overrides = await getPriceOverrides();
+        if (overrides[listing_slug] != null) {
+          unitPrice = overrides[listing_slug];
+          usedCustomPrice = true;
+        }
+
         const key = `listing_${listing_slug}`;
         const cached = getCached(key);
         let listing;
@@ -107,7 +147,12 @@ router.post('/order', auth, async (req, res) => {
           listing = raw?.data || raw;
           setCached(key, listing);
         }
-        unitPrice = Number(listing.price || listing.unit_price || unit_price);
+
+        if (!usedCustomPrice) {
+          const rate = await getExchangeRate();
+          const rawUSD = Number(listing.price || listing.unit_price || unit_price);
+          unitPrice = parseFloat((rawUSD * rate).toFixed(2));
+        }
         productName = listing.title || listing.name || product_name;
       } catch (_) {
         // fall through to provided price
@@ -118,11 +163,7 @@ router.post('/order', auth, async (req, res) => {
       return res.status(400).json({ error: 'Could not determine product price' });
     }
 
-    const exchangeRate = await getExchangeRate();
-
-    // All wallet amounts are in NGN; ACCSZONE prices are in USD
-    const unitPriceNGN = parseFloat((unitPrice * exchangeRate).toFixed(2));
-    const totalCostNGN = parseFloat((unitPriceNGN * quantity).toFixed(2));
+    const totalCostNGN = parseFloat((unitPrice * quantity).toFixed(2));
 
     // Check wallet balance (NGN)
     const { data: user, error: userErr } = await supabase
@@ -160,7 +201,7 @@ router.post('/order', auth, async (req, res) => {
         product_name: productName,
         platform: platform || 'Other',
         quantity: Number(quantity),
-        unit_price: unitPriceNGN,
+        unit_price: unitPrice,
         total_cost: totalCostNGN,
         status: 'completed',
         delivered_data: orderResult?.accounts || orderResult?.data || orderResult || null,
@@ -213,6 +254,92 @@ router.get('/orders/:id', auth, async (req, res) => {
   } catch (err) {
     console.error('[accszone] fetch order:', err.message);
     res.status(500).json({ error: 'Could not fetch order' });
+  }
+});
+
+// ── ADMIN ROUTES ──────────────────────────────────────────────────────────────
+
+// GET /api/accszone/admin/prices — all listings with auto + custom prices
+router.get('/admin/prices', auth, adminOnly, async (req, res) => {
+  try {
+    const rate = await getExchangeRate();
+
+    // Fetch all listings (page through if needed)
+    const key = `listings_{}`;
+    const cached = getCached(key);
+    let raw;
+    if (cached) {
+      raw = cached;
+    } else {
+      const { data } = await az.get('/listings');
+      raw = data;
+      setCached(key, raw);
+    }
+
+    const listings = Array.isArray(raw) ? raw : (raw?.data || []);
+
+    const { data: overrideRows } = await supabase.from('accszone_price_overrides').select('*');
+    const overrideMap = {};
+    (overrideRows || []).forEach((r) => { overrideMap[r.slug] = r; });
+
+    const result = listings.map((l) => {
+      const slug = l.slug || String(l.id || '');
+      const usd = Number(l.price || l.unit_price || 0);
+      const autoNGN = parseFloat((usd * rate).toFixed(2));
+      const override = overrideMap[slug];
+      return {
+        slug,
+        title: l.title || l.name || slug,
+        platform: l._platform || l.platform || '',
+        category: l.category?.title || '',
+        usd_price: usd,
+        auto_price_ngn: autoNGN,
+        custom_price_ngn: override ? Number(override.custom_price_ngn) : null,
+        has_override: !!override,
+        updated_at: override?.updated_at || null,
+      };
+    });
+
+    res.json({ rate, products: result });
+  } catch (err) {
+    console.error('[accszone] admin/prices:', err.message);
+    res.status(500).json({ error: 'Could not fetch prices' });
+  }
+});
+
+// PUT /api/accszone/admin/price/:slug — set custom price
+router.put('/admin/price/:slug', auth, adminOnly, async (req, res) => {
+  const { slug } = req.params;
+  const { custom_price_ngn, title } = req.body;
+  if (custom_price_ngn == null || isNaN(Number(custom_price_ngn)) || Number(custom_price_ngn) <= 0) {
+    return res.status(400).json({ error: 'custom_price_ngn must be a positive number' });
+  }
+  try {
+    const { data, error } = await supabase
+      .from('accszone_price_overrides')
+      .upsert({ slug, title: title || slug, custom_price_ngn: Number(custom_price_ngn), updated_at: new Date().toISOString() }, { onConflict: 'slug' })
+      .select()
+      .single();
+    if (error) throw error;
+    // Bust the overrides cache so next request re-fetches
+    cache.delete('_price_overrides');
+    res.json(data);
+  } catch (err) {
+    console.error('[accszone] admin/price PUT:', err.message);
+    res.status(500).json({ error: 'Failed to save price override' });
+  }
+});
+
+// DELETE /api/accszone/admin/price/:slug — remove override (revert to auto)
+router.delete('/admin/price/:slug', auth, adminOnly, async (req, res) => {
+  const { slug } = req.params;
+  try {
+    await supabase.from('accszone_price_overrides').delete().eq('slug', slug);
+    cache.delete('_price_overrides');
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[accszone] admin/price DELETE:', err.message);
+    res.status(500).json({ error: 'Failed to remove override' });
   }
 });
 

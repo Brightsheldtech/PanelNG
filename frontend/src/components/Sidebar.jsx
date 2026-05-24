@@ -2,7 +2,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, PlusCircle, MessageSquare, Clock,
   Wallet, User, Users, ShoppingCart, ArrowLeftRight,
-  Settings, LogOut, Shield, X, Banknote, Building2, Phone,
+  Settings, LogOut, Shield, X, Banknote, Building2, Phone, ShoppingBag,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useEffect, useState } from 'react';
@@ -41,6 +41,7 @@ export default function Sidebar({ isOpen, onClose }) {
     { to: '/admin/payment-requests',  icon: Banknote,        label: 'Payment Requests' },
     { to: '/admin/services',          icon: Settings,        label: 'Services Manager' },
     { to: '/admin/sms-manager',       icon: Phone,           label: 'SMS Manager' },
+    { to: '/admin/accszone',          icon: ShoppingBag,     label: 'Accounts Manager' },
     { to: '/admin/bank-settings',     icon: Building2,       label: 'Bank Settings' },
   ];
 

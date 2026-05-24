@@ -95,7 +95,13 @@ const MOCK = {
 
 const ALL_SERVICES = Object.values(MOCK.services).flat();
 const PLATFORMS = ['All', 'Facebook', 'Instagram', 'TikTok', 'YouTube', 'Twitter', 'Telegram', 'WhatsApp', 'Snapchat', 'Spotify', 'Threads', 'LinkedIn'];
-const SMS_APPS = ['WhatsApp', 'Telegram', 'Instagram', 'TikTok', 'Facebook', 'Twitter', 'Gmail', 'Snapchat', 'Viber', 'Tinder', 'Netflix', 'Uber', 'Airbnb', 'PayPal', 'Binance', 'Discord', 'Other'];
+const SMS_APPS = [
+  'WhatsApp', 'Telegram', 'Instagram', 'TikTok', 'Facebook', 'Twitter',
+  'Gmail', 'Microsoft', 'Snapchat', 'Viber', 'Discord', 'Spotify',
+  'Netflix', 'Amazon', 'PayPal', 'Binance', 'Tinder', 'Uber', 'Airbnb',
+  'VPN', 'NordVPN', 'ExpressVPN', 'Proxy',
+  'Other',
+];
 
 // ─── UTILS ────────────────────────────────────────────────────────────────────
 const fmt = (n) => '₦' + Number(n || 0).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -125,6 +131,12 @@ function PlatformIcon({ name, size = 20 }) {
     Spotify: <svg width={s} height={s} viewBox="0 0 24 24"><rect width="24" height="24" rx="12" fill="#1DB954"/><path d="M16.7 15.1c-.2-.3-.6-.4-.9-.2-2.5 1.5-5.7 1.9-9.4 1-.3-.1-.7.1-.8.5-.1.3.1.7.5.8 4.1 1 7.7.5 10.5-1.1.3-.2.3-.6.1-1zm1.1-2.8c-.3-.4-.8-.5-1.2-.3-3 1.8-7.5 2.3-11 1.3-.4-.1-.9.1-1 .5-.1.4.1.9.5 1 4 1.1 9 .5 12.4-1.5.4-.2.5-.7.3-1zm.1-2.9c-3.5-2.1-9.4-2.3-12.7-1.3-.5.2-.8.7-.6 1.2.2.5.7.8 1.2.6 2.9-.9 8.1-.7 11.2 1.1.4.3.9.1 1.2-.3.2-.5.1-1-.3-1.3z" fill="white"/></svg>,
     Threads: <svg width={s} height={s} viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#000"/><path d="M16 9.5c-.3-.1-.7-.2-1-.3C14.7 7.4 13.4 6.5 12 6.5c-2.2 0-4 1.8-4 4 0 .8.3 1.6.7 2.2-.4.4-.7 1-.7 1.8 0 1.7 1.3 3 3 3 1.1 0 2.1-.6 2.6-1.5.3.1.5.1.8.1 1.4 0 2.6-1.1 2.6-2.5 0-.8-.4-1.5-.9-2 .5-.5.9-1.3.9-2.1z" fill="white"/></svg>,
     LinkedIn: <svg width={s} height={s} viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#0A66C2"/><path d="M7 9h2v8H7zm1-1.5a1.25 1.25 0 110-2.5 1.25 1.25 0 010 2.5zM11 9h2v1.1c.3-.6 1-1.1 2.2-1.1C17 9 18 10.1 18 12v5h-2v-4.5c0-1-.6-1.5-1.4-1.5-.9 0-1.6.6-1.6 1.7V17H11V9z" fill="white"/></svg>,
+    Microsoft: <svg width={s} height={s} viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#fff" stroke="#E2E0D8"/><rect x="4" y="4" width="7" height="7" fill="#F25022"/><rect x="13" y="4" width="7" height="7" fill="#7FBA00"/><rect x="4" y="13" width="7" height="7" fill="#00A4EF"/><rect x="13" y="13" width="7" height="7" fill="#FFB900"/></svg>,
+    Amazon: <svg width={s} height={s} viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#FF9900"/><text x="12" y="15" fontSize="8" fontWeight="800" textAnchor="middle" fill="#1A1917" fontFamily="serif">amazon</text></svg>,
+    VPN: <svg width={s} height={s} viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#0EA5E9"/><path d="M12 3a9 9 0 100 18A9 9 0 0012 3zm-1 13.5l-3-3 1.5-1.5 1.5 1.5 4-4 1.5 1.5L11 16.5z" fill="white"/><circle cx="12" cy="12" r="4" fill="none" stroke="rgba(255,255,255,.4)" strokeWidth="1"/></svg>,
+    NordVPN: <svg width={s} height={s} viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#4169E1"/><path d="M12 4L5 19h14L12 4zm0 3.5l4.5 9h-9L12 7.5z" fill="white"/></svg>,
+    ExpressVPN: <svg width={s} height={s} viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#DA3940"/><path d="M12 5a7 7 0 100 14A7 7 0 0012 5zm0 2a5 5 0 110 10A5 5 0 0112 7zm0 2a3 3 0 100 6 3 3 0 000-6z" fill="white"/></svg>,
+    Proxy: <svg width={s} height={s} viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#6366F1"/><path d="M4 8h7v2H4zm9 0h7v2h-7zM8 12h8v2H8zm-4 4h7v2H4zm9 0h7v2h-7z" fill="white" opacity=".8"/><path d="M11 7l2 2-2 2M13 15l-2 2 2 2" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round"/></svg>,
     Other: <svg width={s} height={s} viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#6B6860"/><circle cx="8" cy="12" r="1.5" fill="white"/><circle cx="12" cy="12" r="1.5" fill="white"/><circle cx="16" cy="12" r="1.5" fill="white"/></svg>,
   };
   return icons[name] || icons['Other'];
