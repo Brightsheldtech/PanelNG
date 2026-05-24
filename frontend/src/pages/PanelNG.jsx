@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useContext, createContext, useRef } from 'react';
+import BuyAccounts from './BuyAccounts';
 
 // ─── THEME ────────────────────────────────────────────────────────────────────
 const ThemeCtx = createContext({ theme: 'system', setTheme: () => {}, resolved: 'dark' });
@@ -26,6 +27,8 @@ const MOCK = {
   orders: [
     { id: '233d5234', type: 'sms', platform: 'WhatsApp', phone: '+27833980213', country: 'South Africa', status: 'finished', amount: 0.15 },
     { id: '9d6486ab', type: 'sms', platform: 'WhatsApp', phone: '+14386665757', country: 'Canada', status: 'completed', amount: 0.00 },
+    { id: 'ac7823ef', type: 'accounts', platform: 'Facebook', product_name: 'Facebook USA Aged Account', quantity: 2, status: 'completed', amount: 1800 },
+    { id: 'ac3391bc', type: 'accounts', platform: 'Gmail', product_name: 'Gmail Account + Recovery', quantity: 1, status: 'completed', amount: 650 },
   ],
   transactions: [
     { desc: 'SMS number — whatsapp (South Africa)', date: '23/05/2026', amount: -0.15 },
@@ -128,6 +131,7 @@ function PlatformIcon({ name, size = 20 }) {
 function Badge({ status, type }) {
   if (type === 'sms') return <span className="pn-badge pn-badge-sms">SMS</span>;
   if (type === 'smm') return <span className="pn-badge pn-badge-smm">SMM</span>;
+  if (type === 'accounts') return <span className="pn-badge pn-badge-accounts">ACCOUNTS</span>;
   const s = (status || '').toLowerCase();
   const cls = ['finished','completed'].includes(s) ? 'success' : s === 'pending' ? 'accent' : 'danger';
   return <span className={`pn-badge pn-badge-${cls}`}>{status}</span>;
@@ -250,6 +254,7 @@ const CSS = `
 .pn-badge-danger{background:rgba(248,113,113,.1);color:var(--danger);border:1px solid rgba(248,113,113,.2)}
 .pn-badge-sms{background:rgba(139,92,246,.1);color:#8B5CF6;border:1px solid rgba(139,92,246,.2)}
 .pn-badge-smm{background:rgba(96,165,250,.1);color:var(--info);border:1px solid rgba(96,165,250,.2)}
+.pn-badge-accounts{background:rgba(20,184,166,.1);color:#14B8A6;border:1px solid rgba(20,184,166,.2)}
 .pn-badge-role{background:rgba(245,158,11,.12);color:var(--accent);border:1px solid rgba(245,158,11,.2);font-size:11px;font-weight:600;padding:2px 10px;border-radius:100px;text-transform:capitalize}
 .pn-root[data-theme="light"] .pn-badge-success{background:rgba(22,163,74,.1);border-color:rgba(22,163,74,.2)}
 .pn-root[data-theme="light"] .pn-badge-accent{background:rgba(217,119,6,.1);border-color:rgba(217,119,6,.2)}
@@ -477,6 +482,7 @@ function Sidebar({ page, setPage, isOpen, onClose, isMobile }) {
     { id:'overview', icon:'ti-home', label:'Overview' },
     { id:'neworder', icon:'ti-circle-plus', label:'New SMM Order' },
     { id:'sms', icon:'ti-device-mobile', label:'SMS Verify' },
+    { id:'accounts', icon:'ti-shopping-bag', label:'Buy Accounts' },
     { id:'orders', icon:'ti-receipt', label:'Order History' },
     { id:'funds', icon:'ti-wallet', label:'Add Funds' },
     { id:'profile', icon:'ti-user-circle', label:'Profile' },
@@ -519,8 +525,8 @@ function BottomNav({ page, setPage }) {
   const items = [
     { id:'overview', icon:'ti-home', label:'Home' },
     { id:'neworder', icon:'ti-circle-plus', label:'Order' },
+    { id:'accounts', icon:'ti-shopping-bag', label:'Accounts' },
     { id:'sms', icon:'ti-device-mobile', label:'SMS' },
-    { id:'orders', icon:'ti-receipt', label:'History' },
     { id:'funds', icon:'ti-wallet', label:'Funds' },
   ];
   return (
@@ -564,6 +570,7 @@ function Overview({ setPage }) {
       <div className="pn-actions">
         <button className="pn-action-pill" onClick={()=>setPage('neworder')}><i className="ti ti-circle-plus"/>New SMM Order</button>
         <button className="pn-action-pill" onClick={()=>setPage('sms')}><i className="ti ti-device-mobile"/>Buy SMS Number</button>
+        <button className="pn-action-pill" onClick={()=>setPage('accounts')}><i className="ti ti-shopping-bag"/>Buy Accounts</button>
         <button className="pn-action-pill" onClick={()=>setPage('funds')}><i className="ti ti-wallet"/>Add Funds</button>
       </div>
       <div className="pn-section">
@@ -577,8 +584,8 @@ function Overview({ setPage }) {
           ) : MOCK.orders.map((o,i) => (
             <div key={o.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'13px 18px',borderBottom:i<MOCK.orders.length-1?'0.5px solid var(--border)':'none',gap:12}}>
               <div style={{minWidth:0}}>
-                <div style={{fontSize:13,fontWeight:600,color:'var(--text-primary)',marginBottom:3}}>{o.platform} • {o.country}</div>
-                <div className="pn-mono" style={{fontSize:11,color:'var(--text-muted)'}}>{o.phone}</div>
+                <div style={{fontSize:13,fontWeight:600,color:'var(--text-primary)',marginBottom:3}}>{o.type==='accounts'?(o.product_name||o.platform):`${o.platform} • ${o.country}`}</div>
+                <div className="pn-mono" style={{fontSize:11,color:'var(--text-muted)'}}>{o.type==='accounts'?`${o.quantity} account${o.quantity>1?'s':''}`:o.phone}</div>
               </div>
               <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
                 <div className="pn-mono" style={{fontSize:12,color:'var(--danger)'}}>{fmt(o.amount)}</div>
@@ -828,6 +835,7 @@ function SmsVerify() {
 function OrderHistory() {
   const [tab, setTab] = useState('all');
   const orders = tab === 'all' ? MOCK.orders : MOCK.orders.filter(o=>o.type===tab);
+  const [viewAccOrder, setViewAccOrder] = useState(null);
   return (
     <div>
       <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:16,gap:12}}>
@@ -838,7 +846,7 @@ function OrderHistory() {
         <button className="pn-btn pn-btn-secondary pn-btn-sm"><i className="ti ti-refresh"/>Refresh</button>
       </div>
       <div className="pn-tabs">
-        {[['all','All Orders'],['smm','SMM Orders'],['sms','SMS Orders']].map(([v,l])=>(
+        {[['all','All'],['smm','SMM'],['sms','SMS'],['accounts','Accounts']].map(([v,l])=>(
           <button key={v} className={`pn-tab${tab===v?' active':''}`} onClick={()=>setTab(v)}>{l}</button>
         ))}
       </div>
@@ -854,15 +862,37 @@ function OrderHistory() {
               <div className="pn-order-id">{o.id.slice(0,8)}</div>
               <div><Badge type={o.type}/></div>
               <div>
-                <div className="pn-order-name" style={{display:'flex',alignItems:'center',gap:6}}><PlatformIcon name={o.platform} size={14}/>{o.platform}</div>
-                <div className="pn-order-sub">{o.phone} · {o.country}</div>
+                <div className="pn-order-name" style={{display:'flex',alignItems:'center',gap:6}}><PlatformIcon name={o.platform} size={14}/>{o.type==='accounts'?(o.product_name||o.platform):o.platform}</div>
+                <div className="pn-order-sub">{o.type==='accounts'?`${o.quantity} account${(o.quantity||1)>1?'s':''}`:`${o.phone||''} · ${o.country||''}`}</div>
               </div>
               <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:4}}>
                 <div className="pn-order-qty">{fmt(o.amount)}</div>
-                <Badge status={o.status}/>
+                {o.type==='accounts'
+                  ? <button className="pn-btn pn-btn-ghost pn-btn-sm" style={{fontSize:10,height:24,padding:'0 8px'}} onClick={()=>setViewAccOrder(o)}>View</button>
+                  : <Badge status={o.status}/>
+                }
               </div>
             </div>
           ))}
+        </div>
+      )}
+      {viewAccOrder && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.6)',zIndex:400,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
+          <div style={{background:'var(--bg-surface)',border:'1px solid var(--border)',borderRadius:20,width:'100%',maxWidth:420,padding:24}}>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
+              <div style={{fontSize:15,fontWeight:600,color:'var(--text-primary)'}}>Account Order Details</div>
+              <button onClick={()=>setViewAccOrder(null)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-muted)',fontSize:18}}><i className="ti ti-x"/></button>
+            </div>
+            <div style={{background:'var(--bg-raised)',border:'1px solid var(--border)',borderRadius:12,padding:'4px 16px',marginBottom:16}}>
+              {[['Product',viewAccOrder.product_name||viewAccOrder.platform],['Quantity',String(viewAccOrder.quantity||1)],['Total',fmt(viewAccOrder.amount)],['Status',viewAccOrder.status]].map(([l,v])=>(
+                <div key={l} style={{display:'flex',justifyContent:'space-between',padding:'8px 0',borderBottom:'0.5px solid var(--border)',fontSize:13}}>
+                  <span style={{color:'var(--text-muted)'}}>{l}</span>
+                  <span style={{fontWeight:500,color:'var(--text-primary)',fontFamily:l==='Total'?"'Geist Mono','Courier New',monospace":'inherit'}}>{v}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{fontSize:12,color:'var(--text-muted)',textAlign:'center',lineHeight:1.6}}>Account credentials were shown at the time of purchase.<br/>Contact support if you need assistance.</div>
+          </div>
         </div>
       )}
     </div>
@@ -1077,7 +1107,7 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
   const navigate = (p) => { setPage(p); setSidebarOpen(false); };
-  const PAGES = { overview: <Overview setPage={setPage}/>, neworder: <NewOrder/>, sms: <SmsVerify/>, orders: <OrderHistory/>, funds: <AddFunds/>, profile: <ProfileSettings/> };
+  const PAGES = { overview: <Overview setPage={setPage}/>, neworder: <NewOrder/>, sms: <SmsVerify/>, accounts: <BuyAccounts balance={MOCK.user.balance} onNavigate={navigate}/>, orders: <OrderHistory/>, funds: <AddFunds/>, profile: <ProfileSettings/> };
   return (
     <div className="pn-root" data-theme={resolved}>
       <div className="pn-shell">
