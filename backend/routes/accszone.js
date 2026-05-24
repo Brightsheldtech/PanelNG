@@ -2,6 +2,7 @@ const express = require('express');
 const axios = require('axios');
 const supabase = require('../lib/supabase');
 const auth = require('../middleware/auth');
+const { getExchangeRate } = require('../lib/exchangeRate');
 
 const router = express.Router();
 
@@ -109,9 +110,13 @@ router.post('/order', auth, async (req, res) => {
       return res.status(400).json({ error: 'Could not determine product price' });
     }
 
-    const totalCost = parseFloat((unitPrice * quantity).toFixed(2));
+    const exchangeRate = await getExchangeRate();
 
-    // Check wallet balance
+    // All wallet amounts are in NGN; ACCSZONE prices are in USD
+    const unitPriceNGN = parseFloat((unitPrice * exchangeRate).toFixed(2));
+    const totalCostNGN = parseFloat((unitPriceNGN * quantity).toFixed(2));
+
+    // Check wallet balance (NGN)
     const { data: user, error: userErr } = await supabase
       .from('users')
       .select('wallet_balance')
@@ -120,10 +125,10 @@ router.post('/order', auth, async (req, res) => {
 
     if (userErr || !user) return res.status(400).json({ error: 'Could not verify wallet balance' });
 
-    if (Number(user.wallet_balance) < totalCost) {
+    if (Number(user.wallet_balance) < totalCostNGN) {
       return res.status(402).json({
         error: 'Insufficient wallet balance',
-        required: totalCost,
+        required: totalCostNGN,
         available: Number(user.wallet_balance),
       });
     }
@@ -131,13 +136,13 @@ router.post('/order', auth, async (req, res) => {
     // Place order with ACCSZONE
     const { data: orderResult } = await az.post('/purchase', { ad_id: Number(ad_id), quantity: Number(quantity) });
 
-    // Deduct wallet
+    // Deduct wallet (NGN)
     await supabase
       .from('users')
-      .update({ wallet_balance: Number(user.wallet_balance) - totalCost })
+      .update({ wallet_balance: Number(user.wallet_balance) - totalCostNGN })
       .eq('id', req.user.id);
 
-    // Save order to Supabase
+    // Save order to Supabase (prices stored in NGN)
     const { data: savedOrder } = await supabase
       .from('accszone_orders')
       .insert({
@@ -147,8 +152,8 @@ router.post('/order', auth, async (req, res) => {
         product_name: productName,
         platform: platform || 'Other',
         quantity: Number(quantity),
-        unit_price: unitPrice,
-        total_cost: totalCost,
+        unit_price: unitPriceNGN,
+        total_cost: totalCostNGN,
         status: 'completed',
         delivered_data: orderResult?.accounts || orderResult?.data || orderResult || null,
       })
@@ -159,7 +164,7 @@ router.post('/order', auth, async (req, res) => {
       success: true,
       order: savedOrder,
       accounts: orderResult?.accounts || orderResult?.data || [],
-      new_balance: Number(user.wallet_balance) - totalCost,
+      new_balance: Number(user.wallet_balance) - totalCostNGN,
     });
   } catch (err) {
     console.error('[accszone] order:', err.response?.data || err.message);

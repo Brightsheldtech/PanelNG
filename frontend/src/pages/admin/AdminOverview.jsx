@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Users, ShoppingCart, TrendingUp, MessageSquare, RefreshCw, Zap, AlertCircle } from 'lucide-react';
+import { Users, ShoppingCart, TrendingUp, MessageSquare, RefreshCw, Zap, AlertCircle, DollarSign } from 'lucide-react';
 import api from '../../lib/api';
 
 export default function AdminOverview() {
@@ -10,6 +10,10 @@ export default function AdminOverview() {
   const [loading, setLoading] = useState(true);
   const [apiBalances, setApiBalances] = useState({ jap: null, herosms: null });
   const [balancesLoading, setBalancesLoading] = useState(true);
+  const [rate, setRate] = useState('');
+  const [rateSaved, setRateSaved] = useState(false);
+  const [rateSaving, setRateSaving] = useState(false);
+  const [rateError, setRateError] = useState('');
 
   const loadBalances = async () => {
     setBalancesLoading(true);
@@ -44,7 +48,27 @@ export default function AdminOverview() {
     }
   };
 
-  useEffect(() => { load(); loadBalances(); }, []);
+  const loadRate = async () => {
+    try {
+      const { data } = await api.get('/settings/exchange-rate');
+      setRate(String(data.value || '1600'));
+    } catch { setRate('1600'); }
+  };
+
+  const saveRate = async () => {
+    const val = Number(rate);
+    if (!val || val <= 0) { setRateError('Enter a valid rate greater than 0'); return; }
+    setRateSaving(true); setRateError('');
+    try {
+      await api.put('/settings/exchange-rate', { value: String(val) });
+      setRateSaved(true);
+      setTimeout(() => setRateSaved(false), 2500);
+    } catch (err) {
+      setRateError(err.response?.data?.error || 'Failed to save rate');
+    } finally { setRateSaving(false); }
+  };
+
+  useEffect(() => { load(); loadBalances(); loadRate(); }, []);
 
   const fmt = (n) => Number(n || 0).toLocaleString('en-NG', { minimumFractionDigits: 2 });
 
@@ -134,6 +158,48 @@ export default function AdminOverview() {
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>hero-sms.com</div>
           </div>
         </div>
+      </div>
+
+      {/* Exchange Rate */}
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '20px', marginBottom: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+          <div style={{ width: 36, height: 36, borderRadius: 8, background: 'rgba(245,158,11,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <DollarSign size={17} color="#F5A623" />
+          </div>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>Today's USD → NGN Rate</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Used to convert ACCSZONE prices for buyers</div>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: 160 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-dim)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Rate (₦ per $1)</div>
+            <input
+              type="number"
+              min="1"
+              step="1"
+              value={rate}
+              onChange={e => { setRate(e.target.value); setRateError(''); setRateSaved(false); }}
+              placeholder="e.g. 1600"
+              style={{ height: 40, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '0 12px', fontSize: 15, fontFamily: 'var(--font-mono)', color: 'var(--text)', outline: 'none', width: '100%' }}
+            />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', paddingBottom: 0, marginTop: 22 }}>
+            <button
+              onClick={saveRate}
+              disabled={rateSaving}
+              style={{ height: 40, padding: '0 20px', background: rateSaved ? 'rgba(16,185,129,0.12)' : 'var(--accent, #F5A623)', color: rateSaved ? '#10B981' : '#fff', border: rateSaved ? '1px solid rgba(16,185,129,0.3)' : 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: rateSaving ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6, opacity: rateSaving ? 0.7 : 1 }}
+            >
+              {rateSaving ? <span className="spinner" style={{ width: 14, height: 14 }} /> : rateSaved ? <><span>✓</span> Saved</> : 'Save Rate'}
+            </button>
+          </div>
+        </div>
+        {rateError && <div style={{ fontSize: 12, color: 'var(--red)', marginTop: 8 }}>{rateError}</div>}
+        {rate && Number(rate) > 0 && (
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 10 }}>
+            Example: $5 account → <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text)', fontWeight: 600 }}>₦{(5 * Number(rate)).toLocaleString('en-NG')}</span>
+          </div>
+        )}
       </div>
 
       {/* Recent tables */}

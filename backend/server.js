@@ -15,6 +15,7 @@ const orderRoutes = require('./routes/orders');
 const adminRoutes = require('./routes/admin');
 const bankRoutes = require('./routes/bankDeposit');
 const accszoneRoutes = require('./routes/accszone');
+const settingsRoutes = require('./routes/settings');
 
 const app = express();
 
@@ -50,6 +51,7 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/bank', bankRoutes);
 app.use('/api/accszone', accszoneRoutes);
+app.use('/api/settings', settingsRoutes);
 
 app.get('/api/health', (req, res) =>
   res.json({ status: 'OK', service: 'PanelNG API', timestamp: new Date().toISOString() })

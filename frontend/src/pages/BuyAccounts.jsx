@@ -610,13 +610,6 @@ export default function BuyAccounts({ balance = 0, token = '', onNavigate }) {
             </div>
           </div>
         </div>
-        {/* Exchange rate notice */}
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'var(--bg-raised)', border: '1px solid var(--border)', borderRadius: 8, padding: '5px 10px' }}>
-          <i className="ti ti-currency-dollar" style={{ fontSize: 13, color: 'var(--text-muted)' }} />
-          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-            Today's rate: <span style={{ fontFamily: "'Geist Mono','Courier New',monospace", fontWeight: 600, color: 'var(--text-primary)' }}>₦{Number(exchangeRate).toLocaleString()}</span> / $1
-          </span>
-        </div>
       </div>
 
 

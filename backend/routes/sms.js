@@ -2,6 +2,7 @@ const express = require('express');
 const supabase = require('../lib/supabase');
 const herosms = require('../lib/herosms');
 const auth = require('../middleware/auth');
+const { getExchangeRate } = require('../lib/exchangeRate');
 const router = express.Router();
 
 // GET /api/sms/balance
@@ -24,13 +25,14 @@ router.get('/products', auth, async (req, res) => {
   }
 });
 
-// GET /api/sms/prices/:product — prices by country for a product
+// GET /api/sms/prices/:product — prices by country for a product (converted to NGN)
 router.get('/prices/:product', auth, async (req, res) => {
   try {
     const serviceCode = herosms.toServiceCode(req.params.product);
-    const [rawPrices, settingsRes] = await Promise.all([
+    const [rawPrices, settingsRes, exchangeRate] = await Promise.all([
       herosms.getPrices(req.params.product),
       supabase.from('sms_country_settings').select('*').eq('service_code', serviceCode),
+      getExchangeRate(),
     ]);
 
     const settings = {};
@@ -40,9 +42,11 @@ router.get('/prices/:product', auth, async (req, res) => {
       .filter((p) => !settings[p.countryId]?.is_hidden)
       .map((p) => {
         const s = settings[p.countryId];
+        // custom_price is admin-set in USD; raw p.price is also USD — both multiply by rate
+        const baseUSD = s?.custom_price != null ? parseFloat(s.custom_price) : p.price;
         return {
           ...p,
-          price: s?.custom_price != null ? parseFloat(s.custom_price) : p.price,
+          price: parseFloat((baseUSD * exchangeRate).toFixed(2)),
           _sortOrder: s?.sort_order ?? 999,
         };
       });
@@ -62,16 +66,34 @@ router.get('/prices/:product', auth, async (req, res) => {
 
 // POST /api/sms/buy-number
 router.post('/buy-number', auth, async (req, res) => {
-  const { product, country, price } = req.body;
+  const { product, country } = req.body; // price from client is ignored — computed server-side
   const userId = req.user.id;
 
-  if (!product || !country || !price) {
-    return res.status(400).json({ error: 'product, country, and price are required' });
+  if (!product || !country) {
+    return res.status(400).json({ error: 'product and country are required' });
   }
 
-  const cost = parseFloat(price);
-
   try {
+    // Compute the authoritative NGN cost server-side
+    const serviceCode = herosms.toServiceCode(product);
+    const [rawPrices, settingsRes, exchangeRate] = await Promise.all([
+      herosms.getPrices(product),
+      supabase.from('sms_country_settings').select('*').eq('service_code', serviceCode),
+      getExchangeRate(),
+    ]);
+
+    const settings = {};
+    (settingsRes.data || []).forEach((s) => { settings[s.country_id] = s; });
+
+    const countryEntry = rawPrices.find(
+      (p) => p.countryId === parseInt(country) || p.country.toLowerCase() === String(country).toLowerCase()
+    );
+    if (!countryEntry) return res.status(400).json({ error: 'Country not available for this service' });
+
+    const s = settings[countryEntry.countryId];
+    const baseUSD = s?.custom_price != null ? parseFloat(s.custom_price) : countryEntry.price;
+    const cost = parseFloat((baseUSD * exchangeRate).toFixed(2));
+
     const { data: userData } = await supabase
       .from('users')
       .select('wallet_balance')
