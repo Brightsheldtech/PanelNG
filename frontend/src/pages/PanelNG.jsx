@@ -142,16 +142,17 @@ function Badge({ status, type }) {
 
 // ─── CSS ──────────────────────────────────────────────────────────────────────
 const CSS = `
+html,body{overflow-x:hidden;max-width:100vw}
 .pn-root*,.pn-root *::before,.pn-root *::after{box-sizing:border-box;margin:0;padding:0}
-.pn-root{font-family:'Plus Jakarta Sans',system-ui,sans-serif;-webkit-font-smoothing:antialiased;letter-spacing:-0.01em;background:var(--bg-base);color:var(--text-primary);min-height:100vh;font-size:15px;line-height:1.5}
+.pn-root{font-family:'Plus Jakarta Sans',system-ui,sans-serif;-webkit-font-smoothing:antialiased;letter-spacing:-0.01em;background:var(--bg-base);color:var(--text-primary);min-height:100vh;font-size:15px;line-height:1.5;overflow-x:hidden;width:100%;max-width:100vw}
 .pn-root[data-theme="light"]{--bg-base:#F6F5F2;--bg-surface:#FFFFFF;--bg-raised:#F0EEE9;--bg-input:#FAFAF8;--border:#E2E0D8;--border-strong:#C8C5BC;--text-primary:#1A1917;--text-secondary:#6B6860;--text-muted:#9E9B94;--accent:#D97706;--accent-hover:#B45309;--accent-text:#FFFFFF;--success:#16A34A;--danger:#DC2626;--info:#2563EB;--tag-bg:#EDE9DC;--tag-text:#78716C;--chip-active-bg:#1A1917;--chip-active-text:#FFFFFF;--shadow-sm:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);--shadow-md:0 4px 16px rgba(0,0,0,.08)}
 .pn-root[data-theme="dark"]{--bg-base:#0F0F0D;--bg-surface:#1A1917;--bg-raised:#242320;--bg-input:#18181B;--border:#2C2B27;--border-strong:#3D3C37;--text-primary:#F0EEE9;--text-secondary:#A8A49C;--text-muted:#6B6860;--accent:#F59E0B;--accent-hover:#FBBF24;--accent-text:#1A1917;--success:#22C55E;--danger:#F87171;--info:#60A5FA;--tag-bg:#2C2B27;--tag-text:#A8A49C;--chip-active-bg:#F0EEE9;--chip-active-text:#1A1917;--shadow-sm:0 1px 3px rgba(0,0,0,.25);--shadow-md:0 4px 16px rgba(0,0,0,.4)}
 
 /* Layout */
-.pn-shell{display:flex;min-height:100vh}
+.pn-shell{display:flex;min-height:100vh;overflow-x:hidden;width:100%}
 .pn-sidebar{width:240px;flex-shrink:0;background:var(--bg-surface);border-right:1px solid var(--border);display:flex;flex-direction:column;position:fixed;top:0;left:0;height:100vh;z-index:200;overflow-y:auto}
-.pn-main{flex:1;margin-left:240px;display:flex;flex-direction:column;min-height:100vh}
-.pn-content{flex:1;overflow-y:auto;padding:24px 24px 100px;scrollbar-width:none}
+.pn-main{flex:1;margin-left:240px;display:flex;flex-direction:column;min-height:100vh;min-width:0;overflow-x:hidden}
+.pn-content{flex:1;overflow-y:auto;overflow-x:hidden;padding:24px 24px 100px;scrollbar-width:none}
 .pn-content::-webkit-scrollbar{display:none}
 
 /* Topbar */
@@ -439,14 +440,36 @@ const CSS = `
 @media (max-width:768px){
   .pn-sidebar{display:none}
   .pn-sidebar.show,.pn-sidebar.drawer{display:flex}
-  .pn-main{margin-left:0}
+  .pn-main{margin-left:0;overflow-x:hidden;width:100%}
   .pn-bottom-nav{display:block}
-  .pn-content{padding:16px 16px 80px}
-  .pn-topbar{padding:0 16px}
+  .pn-content{padding:16px 12px 90px;overflow-x:hidden;width:100%;max-width:100%}
+  .pn-topbar{padding:0 12px;gap:8px;overflow:hidden}
+  .pn-topbar-brand{min-width:0;flex:1}
+  .pn-brand-name{font-size:14px}
+  .pn-balance-chip{padding:4px 8px}
+  .pn-balance-chip-amount{font-size:12px}
+  .pn-balance-chip-label{font-size:8px}
   .pn-hamburger{display:flex!important}
-  .pn-stat-grid{grid-template-columns:1fr 1fr}
+  .pn-greeting-title{font-size:20px}
+  .pn-stat-grid{grid-template-columns:1fr 1fr;gap:10px}
+  .pn-stat-value{font-size:18px}
+  .pn-stat-card{padding:14px}
   .pn-sms-grid{grid-template-columns:repeat(3,1fr)}
-  .pn-order-header,.pn-order-row{grid-template-columns:70px 55px 1fr 60px;gap:6px;padding:10px 12px}
+  .pn-order-header,.pn-order-row{grid-template-columns:68px 48px 1fr 56px;gap:6px;padding:10px 12px;font-size:11px}
+  .pn-actions{gap:6px;flex-wrap:wrap}
+  .pn-action-pill{height:32px;padding:0 12px;font-size:12px}
+  .pn-chips-scroll{margin-bottom:14px}
+  .pn-page-title{font-size:18px}
+  .pn-balance-hero-amount{font-size:26px}
+  .pn-dd-panel{max-height:240px}
+  .pn-card{padding:16px}
+}
+@media (max-width:480px){
+  .pn-sms-grid{grid-template-columns:repeat(2,1fr)}
+  .pn-order-header,.pn-order-row{grid-template-columns:58px 40px 1fr 52px;gap:4px;padding:9px 10px}
+  .pn-stat-value{font-size:16px}
+  .pn-balance-hero-amount{font-size:22px}
+  .pn-content{padding:12px 10px 90px}
 }
 @media (min-width:769px){
   .pn-hamburger{display:none!important}
@@ -1136,9 +1159,7 @@ function App() {
 
 // ─── ROOT ─────────────────────────────────────────────────────────────────────
 export default function PanelNG() {
-  const auth = useAuth?.();
-  const authUser = auth?.user;
-  const logout = auth?.logout;
+  const { user: authUser, logout } = useAuth();
 
   const user = authUser ? {
     name: authUser.full_name || authUser.email?.split('@')[0] || 'User',

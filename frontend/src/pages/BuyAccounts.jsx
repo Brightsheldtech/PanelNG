@@ -108,10 +108,11 @@ function FeaturePills() {
 }
 
 // ─── PRODUCT CARD ─────────────────────────────────────────────────────────────
-function ProductCard({ listing, onClick }) {
+function ProductCard({ listing, onClick, exchangeRate = 1600 }) {
   const platform = listing._platform || guessPlatform(listing.title || listing.name || '');
   const qty = Number(listing.quantity || listing.stock || 50);
-  const price = Number(listing.price || listing.unit_price || 0);
+  const priceUSD = Number(listing.price || listing.unit_price || 0);
+  const priceNGN = priceUSD * exchangeRate;
   const title = listing.title || listing.name || 'Account';
   const desc = listing.short_description || listing.description?.replace(/<[^>]+>/g, '').slice(0, 80) || '';
 
@@ -132,7 +133,7 @@ function ProductCard({ listing, onClick }) {
       <FeaturePills />
       <StockBar qty={qty} max={200} />
       <div style={{ fontFamily: "'Geist Mono','Courier New',monospace", fontSize: 16, fontWeight: 500, color: 'var(--accent)', marginBottom: 12 }}>
-        {fmt(price)} <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'inherit' }}>/ account</span>
+        {fmt(priceNGN)} <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'inherit' }}>/ account</span>
       </div>
       <button
         style={{ width: '100%', height: 44, background: 'var(--accent)', color: 'var(--accent-text)', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
@@ -189,13 +190,14 @@ function UseCaseRow({ icon, text }) {
 }
 
 // ─── DETAIL SHEET ─────────────────────────────────────────────────────────────
-function DetailSheet({ listing, detail, detailLoading, onClose, balance, onBuy }) {
+function DetailSheet({ listing, detail, detailLoading, onClose, balance, onBuy, exchangeRate = 1600 }) {
   const [qty, setQty] = useState(1);
   const platform = listing._platform || guessPlatform(listing.title || listing.name || '');
-  const price = Number(listing.price || listing.unit_price || 0);
+  const priceUSD = Number(listing.price || listing.unit_price || 0);
+  const priceNGN = priceUSD * exchangeRate;
   const stock = Number(listing.quantity || listing.stock || 50);
   const title = listing.title || listing.name || 'Account';
-  const total = price * qty;
+  const total = priceNGN * qty;
   const insufficient = balance < total;
 
   const isMobile = window.innerWidth <= 768;
@@ -218,7 +220,7 @@ function DetailSheet({ listing, detail, detailLoading, onClose, balance, onBuy }
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 3 }}>{title}</div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>{platform} · Account</div>
-              <div style={{ fontFamily: "'Geist Mono','Courier New',monospace", fontSize: 20, fontWeight: 500, color: 'var(--accent)' }}>{fmt(price)} <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>/ account</span></div>
+              <div style={{ fontFamily: "'Geist Mono','Courier New',monospace", fontSize: 20, fontWeight: 500, color: 'var(--accent)' }}>{fmt(priceNGN)} <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>/ account</span></div>
             </div>
             <button onClick={onClose} style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 16 }}>
               <i className="ti ti-x" />
@@ -340,6 +342,7 @@ function DetailSheet({ listing, detail, detailLoading, onClose, balance, onBuy }
               You need {fmt(total - balance)} more. Balance: {fmt(balance)}
             </div>
           )}
+
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', height: 48, flexShrink: 0 }}>
               <button onClick={() => setQty(q => Math.max(1, q - 1))} style={{ width: 40, height: '100%', background: 'var(--bg-raised)', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
@@ -364,14 +367,15 @@ function DetailSheet({ listing, detail, detailLoading, onClose, balance, onBuy }
 }
 
 // ─── PURCHASE MODAL ───────────────────────────────────────────────────────────
-function PurchaseModal({ listing, qty, balance, onClose, onSuccess, onAddFunds, token }) {
+function PurchaseModal({ listing, qty, balance, onClose, onSuccess, onAddFunds, token, exchangeRate = 1600 }) {
   const [step, setStep] = useState('confirm'); // confirm | processing | success | error
   const [result, setResult] = useState(null);
   const [errMsg, setErrMsg] = useState('');
 
   const platform = listing._platform || guessPlatform(listing.title || listing.name || '');
-  const price = Number(listing.price || listing.unit_price || 0);
-  const total = price * qty;
+  const priceUSD = Number(listing.price || listing.unit_price || 0);
+  const priceNGN = priceUSD * exchangeRate;
+  const total = priceNGN * qty;
   const afterBalance = balance - total;
   const insufficient = balance < total;
   const title = listing.title || listing.name || 'Account';
@@ -383,7 +387,7 @@ function PurchaseModal({ listing, qty, balance, onClose, onSuccess, onAddFunds, 
         ad_id: listing.id || listing.ad_id,
         quantity: qty,
         listing_slug: listing.slug,
-        unit_price: price,
+        unit_price: priceUSD, // backend receives USD and applies rate from DB
         product_name: title,
         platform,
       }, { headers: { Authorization: `Bearer ${token}` } });
@@ -420,7 +424,7 @@ function PurchaseModal({ listing, qty, balance, onClose, onSuccess, onAddFunds, 
             </div>
             <div style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', borderRadius: 14, padding: 16, marginBottom: 16 }}>
               {[
-                ['Price per account', fmt(price)],
+                ['Price per account', fmt(priceNGN)],
                 ['Quantity', String(qty)],
                 ['Your balance', fmt(balance)],
                 ['After purchase', fmt(afterBalance)],
@@ -510,9 +514,13 @@ function PurchaseModal({ listing, qty, balance, onClose, onSuccess, onAddFunds, 
 const EXTRA_CSS = `
 @keyframes pn-pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
 @keyframes pn-spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
-.acc-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px }
-@media(max-width:900px){ .acc-grid{ grid-template-columns:repeat(2,1fr) } }
-@media(max-width:420px){ .acc-grid{ grid-template-columns:1fr } }
+.acc-root { width:100%; max-width:100%; overflow-x:hidden; box-sizing:border-box; }
+.acc-chips { display:flex; gap:8px; overflow-x:auto; overflow-y:visible; padding-bottom:4px; margin-bottom:20px; scrollbar-width:none; -webkit-overflow-scrolling:touch; flex-wrap:nowrap; }
+.acc-chips::-webkit-scrollbar { display:none; }
+.acc-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; width:100%; box-sizing:border-box; }
+@media(max-width:900px){ .acc-grid{ grid-template-columns:repeat(2,1fr); gap:12px; } }
+@media(max-width:600px){ .acc-grid{ grid-template-columns:1fr 1fr; gap:10px; } }
+@media(max-width:400px){ .acc-grid{ grid-template-columns:1fr; gap:10px; } }
 `;
 
 // ─── BUY ACCOUNTS PAGE ────────────────────────────────────────────────────────
@@ -527,6 +535,7 @@ export default function BuyAccounts({ balance = 0, token = '', onNavigate }) {
   const [detailLoading, setDetailLoading] = useState(false);
   const [purchaseListing, setPurchaseListing] = useState(null);
   const [purchaseQty, setPurchaseQty] = useState(1);
+  const [exchangeRate, setExchangeRate] = useState(1600);
 
   // Inject extra CSS once
   useEffect(() => {
@@ -539,11 +548,18 @@ export default function BuyAccounts({ balance = 0, token = '', onNavigate }) {
     }
   }, []);
 
+  // Load exchange rate
+  useEffect(() => {
+    axios.get('/api/settings/exchange-rate')
+      .then(({ data }) => { if (data?.value) setExchangeRate(Number(data.value)); })
+      .catch(() => {}); // keep default 1600
+  }, []);
+
   // Load listings
   useEffect(() => {
     setLoading(true);
     setError('');
-    axios.get(`${API}/listings`, { params: { per_page: 48 } })
+    axios.get(`${API}/listings`, { params: { per_page: 100 } })
       .then(({ data }) => {
         const raw = Array.isArray(data) ? data : (data.data || data.listings || []);
         const tagged = raw.map(l => ({ ...l, _platform: guessPlatform(l.title || l.name || l.category?.title || '') }));
@@ -553,7 +569,11 @@ export default function BuyAccounts({ balance = 0, token = '', onNavigate }) {
       .finally(() => setLoading(false));
   }, []);
 
-  const filtered = platform === 'All' ? listings : listings.filter(l => l._platform === platform);
+  // Chips: unique platforms present in actual listings data
+  const availablePlatforms = ['All', ...Array.from(new Set(listings.map(l => l._platform).filter(Boolean)))];
+
+  const filtered = [...(platform === 'All' ? listings : listings.filter(l => l._platform === platform))]
+    .sort((a, b) => Number(a.price || a.unit_price || 0) - Number(b.price || b.unit_price || 0));
 
   const openDetail = useCallback((listing) => {
     setDetailListing(listing);
@@ -574,34 +594,57 @@ export default function BuyAccounts({ balance = 0, token = '', onNavigate }) {
   };
 
   return (
-    <div>
+    <div className="acc-root">
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
-        <div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.5px', marginBottom: 4 }}>Buy Accounts</div>
-          <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Instant delivery. Pre-verified. Ready to use.</div>
-        </div>
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: 'rgba(245,158,11,.08)', border: '1px solid rgba(245,158,11,.25)', borderRadius: 10, padding: '6px 12px' }}>
-          <i className="ti ti-wallet" style={{ color: 'var(--accent)', fontSize: 14 }} />
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 10 }}>
           <div>
-            <div style={{ fontFamily: 'Geist Mono', fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--accent)', lineHeight: 1 }}>Balance</div>
-            <div style={{ fontFamily: "'Geist Mono','Courier New',monospace", fontSize: 14, color: 'var(--accent)' }}>{fmt(balance)}</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.5px', marginBottom: 4 }}>Buy Accounts</div>
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Instant delivery. Pre-verified. Ready to use.</div>
           </div>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: 'rgba(245,158,11,.08)', border: '1px solid rgba(245,158,11,.25)', borderRadius: 10, padding: '6px 12px' }}>
+            <i className="ti ti-wallet" style={{ color: 'var(--accent)', fontSize: 14 }} />
+            <div>
+              <div style={{ fontFamily: 'Geist Mono', fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--accent)', lineHeight: 1 }}>Balance</div>
+              <div style={{ fontFamily: "'Geist Mono','Courier New',monospace", fontSize: 14, color: 'var(--accent)' }}>{fmt(balance)}</div>
+            </div>
+          </div>
+        </div>
+        {/* Exchange rate notice */}
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'var(--bg-raised)', border: '1px solid var(--border)', borderRadius: 8, padding: '5px 10px' }}>
+          <i className="ti ti-currency-dollar" style={{ fontSize: 13, color: 'var(--text-muted)' }} />
+          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+            Today's rate: <span style={{ fontFamily: "'Geist Mono','Courier New',monospace", fontWeight: 600, color: 'var(--text-primary)' }}>₦{Number(exchangeRate).toLocaleString()}</span> / $1
+          </span>
         </div>
       </div>
 
-      {/* Platform chips */}
-      <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4, marginBottom: 20, scrollbarWidth: 'none' }}>
-        {PLATFORM_NAMES.map(p => (
-          <button
-            key={p}
-            onClick={() => setPlatform(p)}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 34, padding: '0 14px', borderRadius: 100, fontSize: 13, fontWeight: 500, cursor: 'pointer', transition: 'all 150ms ease', background: platform === p ? 'var(--chip-active-bg)' : 'var(--bg-raised)', color: platform === p ? 'var(--chip-active-text)' : 'var(--text-secondary)', border: platform === p ? '1px solid var(--chip-active-bg)' : '1px solid var(--border)', whiteSpace: 'nowrap', fontFamily: "'Plus Jakarta Sans',sans-serif" }}
-          >
-            {p !== 'All' && <AccIcon name={p} size={14} />}{p}
-          </button>
-        ))}
-      </div>
+
+      {/* Platform chips — derived from real listings */}
+      {availablePlatforms.length > 1 && (
+        <div className="acc-chips">
+          {availablePlatforms.map(p => (
+            <button
+              key={p}
+              onClick={() => setPlatform(p)}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                height: 34, padding: '0 14px', borderRadius: 100,
+                fontSize: 13, fontWeight: 500, cursor: 'pointer',
+                transition: 'all 150ms ease',
+                background: platform === p ? 'var(--chip-active-bg)' : 'var(--bg-raised)',
+                color: platform === p ? 'var(--chip-active-text)' : 'var(--text-secondary)',
+                border: platform === p ? '1px solid var(--chip-active-bg)' : '1px solid var(--border)',
+                whiteSpace: 'nowrap', fontFamily: "'Plus Jakarta Sans',sans-serif",
+                flexShrink: 0,
+              }}
+            >
+              {p !== 'All' && <AccIcon name={p} size={16} />}
+              {p}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Error */}
       {error && (
@@ -624,17 +667,27 @@ export default function BuyAccounts({ balance = 0, token = '', onNavigate }) {
         <div style={{ textAlign: 'center', padding: '48px 24px' }}>
           <i className="ti ti-package" style={{ fontSize: 36, color: 'var(--text-muted)', display: 'block', marginBottom: 12 }} />
           <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>No products available</div>
-          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No products available in this category right now.</div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Check back soon — new accounts are added regularly.</div>
         </div>
       )}
 
       {/* Grid */}
       {!loading && !error && filtered.length > 0 && (
-        <div className="acc-grid">
-          {filtered.map(l => (
-            <ProductCard key={l.id || l.slug} listing={l} onClick={openDetail} />
-          ))}
-        </div>
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <span style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500 }}>
+              {filtered.length} product{filtered.length !== 1 ? 's' : ''} available
+            </span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--text-muted)' }}>
+              <i className="ti ti-sort-ascending" style={{ fontSize: 13 }} /> Price: low to high
+            </span>
+          </div>
+          <div className="acc-grid">
+            {filtered.map(l => (
+              <ProductCard key={l.id || l.slug} listing={l} onClick={openDetail} exchangeRate={exchangeRate} />
+            ))}
+          </div>
+        </>
       )}
 
       {/* Detail sheet */}
@@ -646,6 +699,7 @@ export default function BuyAccounts({ balance = 0, token = '', onNavigate }) {
           balance={balance}
           onClose={() => setDetailListing(null)}
           onBuy={openPurchase}
+          exchangeRate={exchangeRate}
         />
       )}
 
@@ -659,6 +713,7 @@ export default function BuyAccounts({ balance = 0, token = '', onNavigate }) {
           onClose={() => setPurchaseListing(null)}
           onSuccess={() => {}}
           onAddFunds={() => { setPurchaseListing(null); onNavigate && onNavigate('funds'); }}
+          exchangeRate={exchangeRate}
         />
       )}
     </div>
