@@ -11,13 +11,6 @@ import DashboardLayout from './components/DashboardLayout';
 import PrivateRoute from './components/PrivateRoute';
 import AdminRoute from './components/AdminRoute';
 
-import Overview from './pages/dashboard/Overview';
-import NewOrder from './pages/dashboard/NewOrder';
-import SmsVerification from './pages/dashboard/SmsVerification';
-import OrderHistory from './pages/dashboard/OrderHistory';
-import AddFunds from './pages/dashboard/AddFunds';
-import Profile from './pages/dashboard/Profile';
-
 import AdminOverview from './pages/admin/AdminOverview';
 import AdminUsers from './pages/admin/AdminUsers';
 import AdminOrders from './pages/admin/AdminOrders';
@@ -40,9 +33,6 @@ export default function App() {
 
   return (
     <Routes>
-      {/* Standalone demo — no auth */}
-      <Route path="/demo" element={<PanelNG />} />
-
       {/* Public */}
       <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <Landing />} />
       <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <Login />} />
@@ -51,21 +41,13 @@ export default function App() {
 
       {/* User Dashboard */}
       <Route
-        path="/dashboard"
+        path="/dashboard/*"
         element={
           <PrivateRoute>
-            <DashboardLayout />
+            <PanelNG />
           </PrivateRoute>
         }
-      >
-        <Route index element={<Navigate to="/dashboard/overview" replace />} />
-        <Route path="overview" element={<Overview />} />
-        <Route path="new-order" element={<NewOrder />} />
-        <Route path="sms" element={<SmsVerification />} />
-        <Route path="orders" element={<OrderHistory />} />
-        <Route path="add-funds" element={<AddFunds />} />
-        <Route path="profile" element={<Profile />} />
-      </Route>
+      />
 
       {/* Admin */}
       <Route

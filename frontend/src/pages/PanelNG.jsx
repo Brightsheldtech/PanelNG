@@ -1,8 +1,11 @@
 import React, { useState, useEffect, useContext, createContext, useRef } from 'react';
 import BuyAccounts from './BuyAccounts';
+import { useAuth } from '../context/AuthContext';
+import api from '../lib/api';
 
-// ─── THEME ────────────────────────────────────────────────────────────────────
+// ─── CONTEXTS ─────────────────────────────────────────────────────────────────
 const ThemeCtx = createContext({ theme: 'system', setTheme: () => {}, resolved: 'dark' });
+const UserCtx = createContext(null);
 
 function ThemeProvider({ children }) {
   const [theme, setRaw] = useState(() => localStorage.getItem('panelng-theme') || 'system');
@@ -453,6 +456,7 @@ const CSS = `
 // ─── TOPBAR ───────────────────────────────────────────────────────────────────
 function Topbar({ onMenuClick }) {
   const { theme, setTheme } = useContext(ThemeCtx);
+  const user = useContext(UserCtx) || MOCK.user;
   const [showTip, setShowTip] = useState(false);
   const cycle = () => { const m = ['light','dark','system']; setTheme(m[(m.indexOf(theme)+1)%3]); };
   const icons = { light: 'ti-sun', dark: 'ti-moon', system: 'ti-device-laptop' };
@@ -470,7 +474,7 @@ function Topbar({ onMenuClick }) {
       </div>
       <div className="pn-balance-chip">
         <span className="pn-balance-chip-label">Balance</span>
-        <span className="pn-balance-chip-amount">{fmt(MOCK.user.balance)}</span>
+        <span className="pn-balance-chip-amount">{fmt(user.balance)}</span>
       </div>
     </header>
   );
@@ -478,6 +482,7 @@ function Topbar({ onMenuClick }) {
 
 // ─── SIDEBAR ──────────────────────────────────────────────────────────────────
 function Sidebar({ page, setPage, isOpen, onClose, isMobile }) {
+  const user = useContext(UserCtx) || MOCK.user;
   const NAV = [
     { id:'overview', icon:'ti-home', label:'Overview' },
     { id:'neworder', icon:'ti-circle-plus', label:'New SMM Order' },
@@ -496,7 +501,7 @@ function Sidebar({ page, setPage, isOpen, onClose, isMobile }) {
       </div>
       <div className="pn-sidebar-wallet">
         <div className="pn-wallet-label">Wallet Balance</div>
-        <div className="pn-wallet-amount">{fmt(MOCK.user.balance)}</div>
+        <div className="pn-wallet-amount">{fmt(user.balance)}</div>
       </div>
       <nav className="pn-sidebar-nav">
         <div className="pn-nav-label">Menu</div>
@@ -508,13 +513,13 @@ function Sidebar({ page, setPage, isOpen, onClose, isMobile }) {
       </nav>
       <div className="pn-sidebar-footer">
         <div className="pn-user-card">
-          <div className="pn-avatar">{MOCK.user.initials}</div>
+          <div className="pn-avatar">{user.initials}</div>
           <div>
-            <div className="pn-user-name">{MOCK.user.name}</div>
-            <div className="pn-user-role">{MOCK.user.role}</div>
+            <div className="pn-user-name">{user.name}</div>
+            <div className="pn-user-role">{user.role}</div>
           </div>
         </div>
-        <button className="pn-btn-signout"><i className="ti ti-logout"/>Sign Out</button>
+        <button className="pn-btn-signout" onClick={user.logout}><i className="ti ti-logout"/>Sign Out</button>
       </div>
     </aside>
   );
@@ -544,27 +549,28 @@ function BottomNav({ page, setPage }) {
 
 // ─── PAGE: OVERVIEW ───────────────────────────────────────────────────────────
 function Overview({ setPage }) {
+  const user = useContext(UserCtx) || MOCK.user;
   return (
     <div>
       <div className="pn-greeting">
-        <div className="pn-greeting-title">{greet()}, {MOCK.user.name.split(' ')[0]} 👋</div>
+        <div className="pn-greeting-title">{greet()}, {user.name.split(' ')[0]} 👋</div>
         <div className="pn-greeting-sub">Here's what's happening on your account today.</div>
       </div>
       <div className="pn-stat-grid">
         <div className="pn-stat-card full">
           <div className="pn-stat-icon accent"><i className="ti ti-wallet"/></div>
           <div className="pn-stat-label">Wallet Balance</div>
-          <div className="pn-stat-value accent">{fmt(MOCK.user.balance)}</div>
+          <div className="pn-stat-value accent">{fmt(user.balance)}</div>
         </div>
         <div className="pn-stat-card">
           <div className="pn-stat-icon success"><i className="ti ti-shopping-cart"/></div>
           <div className="pn-stat-label">Total Orders</div>
-          <div className="pn-stat-value">{MOCK.user.totalOrders}</div>
+          <div className="pn-stat-value">{user.totalOrders}</div>
         </div>
         <div className="pn-stat-card">
           <div className="pn-stat-icon info"><i className="ti ti-trending-down"/></div>
           <div className="pn-stat-label">Total Spent</div>
-          <div className="pn-stat-value">{fmt(MOCK.user.totalSpent)}</div>
+          <div className="pn-stat-value">{fmt(user.totalSpent)}</div>
         </div>
       </div>
       <div className="pn-actions">
@@ -1040,23 +1046,27 @@ function AddFunds() {
 // ─── PAGE: PROFILE ────────────────────────────────────────────────────────────
 function ProfileSettings() {
   const { theme, setTheme } = useContext(ThemeCtx);
-  const [name, setName] = useState(MOCK.user.name);
+  const user = useContext(UserCtx) || MOCK.user;
+  const [name, setName] = useState(user.name);
   const [showPw, setShowPw] = useState({ cur:false, nw:false, cf:false });
   const [pw, setPw] = useState({ cur:'', nw:'', cf:'' });
   const [saved, setSaved] = useState(false);
-  const handleSave = () => { setSaved(true); setTimeout(()=>setSaved(false),2500); };
+  const handleSave = async () => {
+    try { await api.put('/auth/profile', { full_name: name }); } catch (_) {}
+    setSaved(true); setTimeout(()=>setSaved(false),2500);
+  };
   return (
     <div>
       <div className="pn-page-title">Profile Settings</div>
       <div className="pn-page-sub">Manage your account and preferences.</div>
       <div className="pn-card" style={{marginBottom:16}}>
         <div className="pn-profile-head">
-          <div className="pn-avatar-lg">{MOCK.user.initials}</div>
-          <div className="pn-profile-name">{MOCK.user.name}</div>
-          <div className="pn-profile-email">{MOCK.user.email}</div>
+          <div className="pn-avatar-lg">{user.initials}</div>
+          <div className="pn-profile-name">{user.name}</div>
+          <div className="pn-profile-email">{user.email}</div>
           <div className="pn-meta-badges">
-            <span className="pn-badge-role">{MOCK.user.role}</span>
-            <span className="pn-balance-badge">{fmt(MOCK.user.balance)}</span>
+            <span className="pn-badge-role">{user.role}</span>
+            <span className="pn-balance-badge">{fmt(user.balance)}</span>
           </div>
         </div>
         <span className="pn-section-label">Personal Information</span>
@@ -1066,7 +1076,7 @@ function ProfileSettings() {
         </div>
         <div className="pn-input-wrap">
           <label className="pn-input-label">Email Address</label>
-          <input className="pn-input" value={MOCK.user.email} disabled/>
+          <input className="pn-input" value={user.email} disabled/>
           <div style={{fontSize:11,color:'var(--text-muted)',marginTop:4}}>Email cannot be changed</div>
         </div>
         {saved && <div style={{background:'rgba(34,197,94,.08)',border:'1px solid rgba(34,197,94,.2)',borderRadius:10,padding:'10px 14px',fontSize:13,color:'var(--success)',marginBottom:12,display:'flex',alignItems:'center',gap:8}}><i className="ti ti-circle-check"/>Changes saved successfully</div>}
@@ -1107,7 +1117,8 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
   const navigate = (p) => { setPage(p); setSidebarOpen(false); };
-  const PAGES = { overview: <Overview setPage={setPage}/>, neworder: <NewOrder/>, sms: <SmsVerify/>, accounts: <BuyAccounts balance={MOCK.user.balance} onNavigate={navigate}/>, orders: <OrderHistory/>, funds: <AddFunds/>, profile: <ProfileSettings/> };
+  const user = useContext(UserCtx) || MOCK.user;
+  const PAGES = { overview: <Overview setPage={setPage}/>, neworder: <NewOrder/>, sms: <SmsVerify/>, accounts: <BuyAccounts balance={user.balance} token={localStorage.getItem('panelng_token')} onNavigate={navigate}/>, orders: <OrderHistory/>, funds: <AddFunds/>, profile: <ProfileSettings/> };
   return (
     <div className="pn-root" data-theme={resolved}>
       <div className="pn-shell">
@@ -1125,6 +1136,22 @@ function App() {
 
 // ─── ROOT ─────────────────────────────────────────────────────────────────────
 export default function PanelNG() {
+  const auth = useAuth?.();
+  const authUser = auth?.user;
+  const logout = auth?.logout;
+
+  const user = authUser ? {
+    name: authUser.full_name || authUser.email?.split('@')[0] || 'User',
+    email: authUser.email || '',
+    role: authUser.role || 'user',
+    balance: Number(authUser.wallet_balance || 0),
+    totalOrders: Number(authUser.total_orders || 0),
+    totalSpent: Number(authUser.total_spent || 0),
+    initials: (authUser.full_name || authUser.email || 'U')
+      .split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase(),
+    logout: logout || (() => {}),
+  } : { ...MOCK.user, logout: () => {} };
+
   useEffect(() => {
     const links = [
       ['stylesheet','https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap'],
@@ -1135,5 +1162,10 @@ export default function PanelNG() {
     document.head.appendChild(style);
     return () => { links.forEach(l=>document.head.removeChild(l)); document.head.removeChild(style); };
   }, []);
-  return <ThemeProvider><App/></ThemeProvider>;
+
+  return (
+    <UserCtx.Provider value={user}>
+      <ThemeProvider><App/></ThemeProvider>
+    </UserCtx.Provider>
+  );
 }
