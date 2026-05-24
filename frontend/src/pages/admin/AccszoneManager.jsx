@@ -73,10 +73,13 @@ function PriceRow({ product, onSave, onReset }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{
               fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 700,
-              color: product.has_override ? 'var(--primary)' : 'var(--text-muted)',
+              color: product.has_override ? 'var(--primary)' : 'var(--text-secondary)',
             }}>
-              {product.has_override ? `₦${fmt(product.custom_price_ngn)}` : <span style={{ fontSize: 12, fontStyle: 'italic' }}>auto</span>}
+              ₦{fmt(product.has_override ? product.custom_price_ngn : product.auto_price_ngn)}
             </span>
+            {product.has_override && (
+              <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: 'var(--primary-muted)', color: 'var(--primary)', fontWeight: 600 }}>CUSTOM</span>
+            )}
             {product.has_override && product.auto_price_ngn > 0 && (
               <span style={{ fontSize: 10, color: 'var(--green)' }}>
                 +{(((product.custom_price_ngn - product.auto_price_ngn) / product.auto_price_ngn) * 100).toFixed(0)}%
@@ -89,7 +92,7 @@ function PriceRow({ product, onSave, onReset }) {
         <div style={{ display: 'flex', gap: 6 }}>
           {!editing && (
             <button className="btn btn-outline btn-sm" onClick={startEdit}>
-              <Edit2 size={12} /> {product.has_override ? 'Edit' : 'Set Price'}
+              <Edit2 size={12} /> {product.has_override ? 'Edit' : 'Override'}
             </button>
           )}
           {product.has_override && !editing && (

@@ -22,6 +22,27 @@ const TTL = 5 * 60 * 1000;
 const getCached = (k) => { const e = cache.get(k); return e && Date.now() - e.ts < TTL ? e.data : null; };
 const setCached = (k, d) => cache.set(k, { data: d, ts: Date.now() });
 
+// Fetch ALL listings across all pages and cache the combined array
+async function fetchAllListings() {
+  const cached = getCached('_all_listings');
+  if (cached) return cached;
+
+  let all = [];
+  let page = 1;
+  let lastPage = 1;
+
+  do {
+    const { data } = await az.get('/listings', { params: { page, per_page: 100 } });
+    const items = Array.isArray(data) ? data : (data?.data || []);
+    all = all.concat(items);
+    lastPage = data?.meta?.last_page || 1;
+    page++;
+  } while (page <= lastPage && all.length < 5000); // safety cap
+
+  setCached('_all_listings', all);
+  return all;
+}
+
 // Fetch price overrides map { slug -> custom_price_ngn }
 async function getPriceOverrides() {
   const cached = getCached('_price_overrides');
@@ -79,18 +100,9 @@ router.get('/categories/:id/subcategories', async (req, res) => {
 // ── GET /api/accszone/listings ───────────────────────────────────────────────
 router.get('/listings', async (req, res) => {
   try {
-    const key = `listings_${JSON.stringify(req.query)}`;
-    const cached = getCached(key);
-    const raw = cached || await az.get('/listings', { params: req.query }).then((r) => r.data);
-    if (!cached) setCached(key, raw);
-
-    // Apply price overrides — wrap list or paginated response
-    let result = raw;
-    if (Array.isArray(raw)) {
-      result = await applyPrices(raw);
-    } else if (Array.isArray(raw?.data)) {
-      result = { ...raw, data: await applyPrices(raw.data) };
-    }
+    // Always return all listings (all pages combined) with prices applied
+    const all = await fetchAllListings();
+    const result = await applyPrices(all);
     res.json(result);
   } catch (err) {
     console.error('[accszone] listings:', err.message);
@@ -262,25 +274,14 @@ router.get('/orders/:id', auth, async (req, res) => {
 // GET /api/accszone/admin/prices — all listings with auto + custom prices
 router.get('/admin/prices', auth, adminOnly, async (req, res) => {
   try {
-    const rate = await getExchangeRate();
+    const [rate, listings, overrideRows] = await Promise.all([
+      getExchangeRate(),
+      fetchAllListings(),
+      supabase.from('accszone_price_overrides').select('*').then((r) => r.data || []),
+    ]);
 
-    // Fetch all listings (page through if needed)
-    const key = `listings_{}`;
-    const cached = getCached(key);
-    let raw;
-    if (cached) {
-      raw = cached;
-    } else {
-      const { data } = await az.get('/listings');
-      raw = data;
-      setCached(key, raw);
-    }
-
-    const listings = Array.isArray(raw) ? raw : (raw?.data || []);
-
-    const { data: overrideRows } = await supabase.from('accszone_price_overrides').select('*');
     const overrideMap = {};
-    (overrideRows || []).forEach((r) => { overrideMap[r.slug] = r; });
+    overrideRows.forEach((r) => { overrideMap[r.slug] = r; });
 
     const result = listings.map((l) => {
       const slug = l.slug || String(l.id || '');

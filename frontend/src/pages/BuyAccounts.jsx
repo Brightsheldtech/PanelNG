@@ -670,7 +670,7 @@ export default function BuyAccounts({ balance = 0, token = '', onNavigate, onPur
   useEffect(() => {
     setLoading(true);
     setError('');
-    axios.get(`${API}/listings`, { params: { per_page: 100 } })
+    axios.get(`${API}/listings`)
       .then(({ data }) => {
         const raw = Array.isArray(data) ? data : (data.data || data.listings || []);
         const tagged = raw.map(l => ({ ...l, _platform: guessPlatform(l.title || l.name || l.category?.title || '') }));
