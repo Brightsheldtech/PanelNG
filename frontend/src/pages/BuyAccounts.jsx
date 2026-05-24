@@ -78,34 +78,7 @@ const CATEGORY_CHIP_MAP = {
 
 function getCategoryChip(listing) {
   const cat = (listing.category?.title || '').toLowerCase();
-  if (cat && CATEGORY_CHIP_MAP[cat]) return CATEGORY_CHIP_MAP[cat];
-  // Fallback: keyword scan on title
-  const t = (listing.title || listing.name || '').toLowerCase();
-  if (t.includes('facebook')) return 'Facebook';
-  if (t.includes('instagram')) return 'Instagram';
-  if (t.includes('tiktok')) return 'TikTok';
-  if (t.includes('twitter') || t.includes(' x ')) return 'Twitter/X';
-  if (t.includes('youtube')) return 'YouTube';
-  if (t.includes('whatsapp')) return 'WhatsApp';
-  if (t.includes('snapchat')) return 'Snapchat';
-  if (t.includes('telegram')) return 'Telegram';
-  if (t.includes('discord')) return 'Discord';
-  if (t.includes('linkedin')) return 'LinkedIn';
-  if (t.includes('reddit')) return 'Reddit';
-  if (t.includes('pinterest')) return 'Pinterest';
-  if (t.includes('threads')) return 'Threads';
-  if (t.includes('bluesky')) return 'Bluesky';
-  if (t.includes('gmail') || t.includes('google voice')) return 'Gmail';
-  if (t.includes('outlook')) return 'Outlook';
-  if (t.includes('vpn') || t.includes('nordvpn') || t.includes('expressvpn')) return 'VPN';
-  if (t.includes('proxy') || t.includes('proxies')) return 'Proxy';
-  if (t.includes('netflix')) return 'Netflix';
-  if (t.includes('spotify')) return 'Spotify';
-  if (t.includes('amazon')) return 'Amazon';
-  if (t.includes('apple id') || t.includes('icloud')) return 'Apple ID';
-  if (t.includes('binance') || t.includes('cashapp') || t.includes('crypto')) return 'Crypto';
-  if (t.includes('dating') || t.includes('bumble') || t.includes('tinder') || t.includes('grindr')) return 'Dating';
-  return 'Other';
+  return CATEGORY_CHIP_MAP[cat] || 'Other';
 }
 
 function stripHtml(html = '') {
@@ -726,7 +699,7 @@ export default function BuyAccounts({ balance = 0, token = '', onNavigate, onPur
     axios.get(`${API}/listings`)
       .then(({ data }) => {
         const raw = Array.isArray(data) ? data : (data.data || data.listings || []);
-        const tagged = raw.map(l => ({ ...l, _platform: l._platform || getCategoryChip(l) }));
+        const tagged = raw.map(l => ({ ...l, _platform: l._platform || getCategoryChip(l) || 'Other' }));
         setListings(tagged);
       })
       .catch(() => setError('Could not load products. Please try again.'))
