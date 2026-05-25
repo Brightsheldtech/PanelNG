@@ -1248,8 +1248,8 @@ function AddFunds() {
   const [ref, setRef] = useState('');
   const [bankDetails, setBankDetails] = useState([]);
   const [bankLoading, setBankLoading] = useState(true);
-  const [myRequests, setMyRequests] = useState([]);
-  const [reqLoading, setReqLoading] = useState(true);
+  const [transactions, setTransactions] = useState([]);
+  const [txLoading, setTxLoading] = useState(true);
   const QUICK = [500, 1000, 2000, 5000, 10000, 20000];
 
   useEffect(() => {
@@ -1257,10 +1257,10 @@ function AddFunds() {
       .then(r => setBankDetails(Array.isArray(r.data) ? r.data : []))
       .catch(() => setBankDetails([]))
       .finally(() => setBankLoading(false));
-    api.get('/bank/my-requests')
-      .then(r => setMyRequests(Array.isArray(r.data) ? r.data : []))
-      .catch(() => setMyRequests([]))
-      .finally(() => setReqLoading(false));
+    api.get('/wallet/transactions')
+      .then(r => setTransactions(Array.isArray(r.data?.transactions) ? r.data.transactions : []))
+      .catch(() => setTransactions([]))
+      .finally(() => setTxLoading(false));
   }, [submitted]);
 
   const generateRef = () => {
@@ -1291,7 +1291,6 @@ function AddFunds() {
   const reset = () => { setStep(1); setAmount(''); setSelectedAmt(null); setSubmitted(false); setRef(''); setSubmitError(''); };
 
   const fmtDate = (d) => new Date(d).toLocaleDateString('en-NG', { day:'2-digit', month:'short', year:'numeric' });
-  const statusColor = (s) => s==='confirmed'?'var(--success)':s==='rejected'?'var(--danger)':'var(--accent)';
 
   return (
     <div>
@@ -1413,21 +1412,25 @@ function AddFunds() {
         </div>
       )}
       <div style={{marginTop:20}}>
-        <span className="pn-section-label">My Payment Requests</span>
+        <span className="pn-section-label">Wallet History</span>
         <div className="pn-card" style={{padding:'0 20px'}}>
-          {reqLoading ? (
+          {txLoading ? (
             <div style={{padding:'16px 0',textAlign:'center'}}><i className="ti ti-loader-2" style={{animation:'pn-spin 1s linear infinite',fontSize:18,color:'var(--accent)'}}/></div>
-          ) : myRequests.length === 0 ? (
-            <div style={{padding:'16px 0',textAlign:'center',fontSize:13,color:'var(--text-muted)'}}>No payment requests yet.</div>
-          ) : myRequests.map((r,i)=>(
-            <div key={r.id} className="pn-tx-row">
-              <div style={{minWidth:0}}>
-                <div className="pn-tx-desc pn-mono">{r.reference}</div>
-                <div className="pn-tx-date">{fmtDate(r.created_at)}</div>
+          ) : transactions.length === 0 ? (
+            <div style={{padding:'16px 0',textAlign:'center',fontSize:13,color:'var(--text-muted)'}}>No transactions yet.</div>
+          ) : transactions.map((tx)=>(
+            <div key={tx.id} className="pn-tx-row">
+              <div style={{display:'flex',alignItems:'center',gap:10,minWidth:0}}>
+                <div style={{width:30,height:30,borderRadius:'50%',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',background:tx.type==='credit'?'rgba(14,201,127,.1)':'rgba(248,113,113,.1)'}}>
+                  <i className={`ti ${tx.type==='credit'?'ti-arrow-down-left':'ti-arrow-up-right'}`} style={{fontSize:13,color:tx.type==='credit'?'var(--success)':'var(--danger)'}}/>
+                </div>
+                <div style={{minWidth:0}}>
+                  <div className="pn-tx-desc" style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{tx.description || tx.reference}</div>
+                  <div className="pn-tx-date">{fmtDate(tx.created_at)}</div>
+                </div>
               </div>
-              <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:3}}>
-                <span style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:700,fontVariantNumeric:'tabular-nums',fontSize:13,color:'var(--text-primary)'}}>+{fmt(r.amount)}</span>
-                <span style={{fontSize:10,fontWeight:600,textTransform:'uppercase',color:statusColor(r.status)}}>{r.status}</span>
+              <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:700,fontVariantNumeric:'tabular-nums',fontSize:13,flexShrink:0,color:tx.type==='credit'?'var(--success)':'var(--danger)'}}>
+                {tx.type==='credit'?'+':'-'}{fmt(tx.amount)}
               </div>
             </div>
           ))}

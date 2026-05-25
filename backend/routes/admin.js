@@ -4,6 +4,7 @@ const jap = require('../lib/jap');
 const herosms = require('../lib/herosms');
 const auth = require('../middleware/auth');
 const adminOnly = require('../middleware/admin');
+const { sendPaymentConfirmed, sendPaymentRejected } = require('../lib/mailer');
 const router = express.Router();
 
 router.use(auth, adminOnly);
@@ -247,7 +248,7 @@ router.patch('/payment-requests/:id/confirm', async (req, res) => {
     if (!alreadyCredited) {
       const { data: userRow, error: userErr } = await supabase
         .from('users')
-        .select('wallet_balance')
+        .select('wallet_balance, email, full_name')
         .eq('id', pr.user_id)
         .single();
       if (userErr) throw userErr;
@@ -268,6 +269,15 @@ router.patch('/payment-requests/:id/confirm', async (req, res) => {
         description: `Bank deposit confirmed — ${pr.reference}`,
       });
       if (txErr) throw txErr;
+
+      // Notify user their wallet has been credited (non-blocking)
+      sendPaymentConfirmed({
+        toEmail: userRow.email,
+        toName: userRow.full_name,
+        amount: pr.amount,
+        reference: pr.reference,
+        confirmedAt: new Date().toISOString(),
+      });
     }
 
     // Mark confirmed — try with optional columns first, fall back if they don't exist yet
@@ -304,7 +314,7 @@ router.patch('/payment-requests/:id/reject', async (req, res) => {
   try {
     const { data: pr, error: prErr } = await supabase
       .from('payment_requests')
-      .select('id, status')
+      .select('id, status, amount, reference, user_id')
       .eq('id', id)
       .single();
     if (prErr || !pr) return res.status(404).json({ error: 'Request not found' });
@@ -328,9 +338,23 @@ router.patch('/payment-requests/:id/reject', async (req, res) => {
         .select()
         .single();
       if (e2) throw e2;
+
+      // Notify user (non-blocking)
+      supabase.from('users').select('email, full_name').eq('id', pr.user_id).single()
+        .then(({ data: usr }) => {
+          if (usr) sendPaymentRejected({ toEmail: usr.email, toName: usr.full_name, amount: pr.amount, reference: pr.reference, reason });
+        });
+
       return res.json({ success: true, request: u2 });
     }
     if (error) throw error;
+
+    // Notify user (non-blocking)
+    supabase.from('users').select('email, full_name').eq('id', pr.user_id).single()
+      .then(({ data: usr }) => {
+        if (usr) sendPaymentRejected({ toEmail: usr.email, toName: usr.full_name, amount: pr.amount, reference: pr.reference, reason });
+      });
+
     res.json({ success: true, request: updated });
   } catch (err) { console.error(err.message);
     res.status(500).json({ error: 'Failed to reject request' });

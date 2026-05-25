@@ -170,4 +170,90 @@ async function sendOrderDelivery({ toEmail, toName, productName, quantity, total
   }
 }
 
-module.exports = { sendPaymentNotification, sendOrderDelivery };
+async function sendPaymentConfirmed({ toEmail, toName, amount, reference, confirmedAt }) {
+  try {
+    const cfg = await getEmailConfig();
+    if (!cfg.gmailUser || !cfg.gmailPass) return;
+
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: { user: cfg.gmailUser, pass: cfg.gmailPass },
+    });
+
+    const amountFmt = Number(amount).toLocaleString('en-NG', { minimumFractionDigits: 2 });
+    const timeStr = new Date(confirmedAt).toLocaleString('en-NG', {
+      dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Lagos',
+    });
+
+    await transporter.sendMail({
+      from: `PanelNG <${cfg.gmailUser}>`,
+      to: toEmail,
+      subject: `Wallet Credited — ₦${amountFmt} | PanelNG`,
+      html: `
+        <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;background:#06080F;color:#E8E8F0;padding:32px;border-radius:10px;">
+          <div style="border-bottom:2px solid #F0A500;padding-bottom:14px;margin-bottom:24px;">
+            <span style="font-size:20px;font-weight:800;color:#F0A500;letter-spacing:-0.02em;">PanelNG</span>
+            <span style="font-size:13px;color:#A0A0B8;margin-left:10px;">Payment Confirmed</span>
+          </div>
+          <p style="font-size:15px;margin:0 0 20px;">Hi <strong>${toName || 'there'}</strong>, your wallet has been credited!</p>
+          <table style="width:100%;border-collapse:collapse;font-size:14px;">
+            <tr><td style="padding:10px 0;color:#A0A0B8;width:150px;">Reference</td><td style="padding:10px 0;font-family:monospace;font-size:15px;font-weight:700;color:#0EC97F;">${reference}</td></tr>
+            <tr>
+              <td style="padding:10px 0;color:#A0A0B8;">Amount Credited</td>
+              <td style="padding:10px 0;font-family:monospace;font-size:22px;font-weight:800;color:#0EC97F;">₦${amountFmt}</td>
+            </tr>
+            <tr><td style="padding:10px 0;color:#A0A0B8;">Confirmed At</td><td style="padding:10px 0;">${timeStr}</td></tr>
+          </table>
+          <div style="margin-top:20px;padding:14px 18px;background:#0B0E18;border-radius:6px;font-size:13px;color:#A0A0B8;border:1px solid #1A1D2E;">
+            Your wallet balance has been updated. Log in to start placing orders.
+          </div>
+        </div>
+      `,
+    });
+    console.log(`[mailer] Payment confirmed email sent to ${toEmail} for ${reference}`);
+  } catch (err) {
+    console.error('[mailer] Failed to send payment confirmed email:', err.message);
+  }
+}
+
+async function sendPaymentRejected({ toEmail, toName, amount, reference, reason }) {
+  try {
+    const cfg = await getEmailConfig();
+    if (!cfg.gmailUser || !cfg.gmailPass) return;
+
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: { user: cfg.gmailUser, pass: cfg.gmailPass },
+    });
+
+    const amountFmt = Number(amount).toLocaleString('en-NG', { minimumFractionDigits: 2 });
+
+    await transporter.sendMail({
+      from: `PanelNG <${cfg.gmailUser}>`,
+      to: toEmail,
+      subject: `Payment Request Rejected — ${reference} | PanelNG`,
+      html: `
+        <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;background:#06080F;color:#E8E8F0;padding:32px;border-radius:10px;">
+          <div style="border-bottom:2px solid #F87171;padding-bottom:14px;margin-bottom:24px;">
+            <span style="font-size:20px;font-weight:800;color:#F0A500;letter-spacing:-0.02em;">PanelNG</span>
+            <span style="font-size:13px;color:#A0A0B8;margin-left:10px;">Payment Not Confirmed</span>
+          </div>
+          <p style="font-size:15px;margin:0 0 20px;">Hi <strong>${toName || 'there'}</strong>, your payment request could not be confirmed.</p>
+          <table style="width:100%;border-collapse:collapse;font-size:14px;">
+            <tr><td style="padding:10px 0;color:#A0A0B8;width:150px;">Reference</td><td style="padding:10px 0;font-family:monospace;font-size:15px;font-weight:700;color:#F87171;">${reference}</td></tr>
+            <tr><td style="padding:10px 0;color:#A0A0B8;">Amount</td><td style="padding:10px 0;font-family:monospace;font-size:18px;font-weight:700;color:#E8E8F0;">₦${amountFmt}</td></tr>
+            ${reason ? `<tr><td style="padding:10px 0;color:#A0A0B8;vertical-align:top;">Reason</td><td style="padding:10px 0;color:#F87171;">${reason}</td></tr>` : ''}
+          </table>
+          <div style="margin-top:20px;padding:14px 18px;background:#2A0A0A;border-radius:6px;font-size:13px;color:#F87171;border:1px solid rgba(248,113,113,.2);">
+            If you believe this is an error, contact support with your transfer receipt and reference code.
+          </div>
+        </div>
+      `,
+    });
+    console.log(`[mailer] Payment rejected email sent to ${toEmail} for ${reference}`);
+  } catch (err) {
+    console.error('[mailer] Failed to send payment rejected email:', err.message);
+  }
+}
+
+module.exports = { sendPaymentNotification, sendOrderDelivery, sendPaymentConfirmed, sendPaymentRejected };
