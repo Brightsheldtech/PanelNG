@@ -13,31 +13,40 @@ export default function PaymentCallback() {
   const [message, setMessage] = useState('');
 
   useEffect(() => {
-    const reference = params.get('reference') || params.get('trxref');
-    if (!reference) {
-      setStatus('failed');
-      setMessage('No payment reference found in the URL.');
+    // Flutterwave redirect params: transaction_id, tx_ref, status
+    const transactionId = params.get('transaction_id');
+    const txRef = params.get('tx_ref');
+    const flwStatus = params.get('status');
+
+    if (transactionId) {
+      if (flwStatus !== 'successful') {
+        setStatus('failed');
+        setMessage('Payment was cancelled or not completed.');
+        return;
+      }
+      api
+        .post('/payment/flutterwave/verify', { transaction_id: transactionId, tx_ref: txRef })
+        .then((res) => {
+          setStatus('success');
+          setAmount(res.data.amount);
+          setNewBalance(res.data.new_balance);
+          if (res.data.new_balance != null) updateUser({ wallet_balance: res.data.new_balance });
+        })
+        .catch((err) => {
+          const msg = err.response?.data?.error;
+          if (msg?.includes('Already')) {
+            setStatus('success');
+            setMessage('Payment already processed.');
+          } else {
+            setStatus('failed');
+            setMessage(msg || 'Could not verify payment. Contact support.');
+          }
+        });
       return;
     }
 
-    api
-      .get(`/payment/verify/${reference}`)
-      .then((res) => {
-        setStatus('success');
-        setAmount(res.data.amount);
-        setNewBalance(res.data.new_balance);
-        updateUser({ wallet_balance: res.data.new_balance });
-      })
-      .catch((err) => {
-        const msg = err.response?.data?.error;
-        if (msg?.includes('already')) {
-          setStatus('success');
-          setMessage('This payment was already processed.');
-        } else {
-          setStatus('failed');
-          setMessage(msg || 'Could not verify payment. Please contact support.');
-        }
-      });
+    setStatus('failed');
+    setMessage('No payment reference found.');
   }, []);
 
   return (
@@ -49,7 +58,7 @@ export default function PaymentCallback() {
               <Loader size={40} color="var(--primary)" style={{ animation: 'spin 1s linear infinite' }} />
             </div>
             <h2 style={{ fontFamily: 'var(--font-brand)', fontSize: 20, marginBottom: 8 }}>Verifying payment…</h2>
-            <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>Checking with Paystack. Please wait.</p>
+            <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>Verifying your payment. Please wait.</p>
           </>
         )}
 

@@ -1,117 +1,182 @@
 const express = require('express');
 const supabase = require('../lib/supabase');
-const paystack = require('../lib/paystack');
+const flutterwave = require('../lib/flutterwave');
 const auth = require('../middleware/auth');
 const router = express.Router();
 
-// POST /api/payment/initialize
-router.post('/initialize', auth, async (req, res) => {
-  const { amount } = req.body;
-  const userId = req.user.id;
+// ─── FLUTTERWAVE ──────────────────────────────────────────────────────────────
 
+// POST /api/payment/flutterwave/init
+// Returns config for the inline SDK — no money moves here yet
+router.post('/flutterwave/init', auth, async (req, res) => {
+  const { amount } = req.body;
   const naira = parseFloat(amount);
+
   if (!naira || naira < 100) {
-    return res.status(400).json({ error: 'Minimum funding amount is ₦100' });
+    return res.status(400).json({ error: 'Minimum deposit is ₦100' });
+  }
+  if (!process.env.FLW_PUBLIC_KEY || !process.env.FLW_SECRET_KEY) {
+    return res.status(503).json({ error: 'Payment not configured. Contact support.' });
   }
 
   try {
-    const { data: userData } = await supabase
+    const { data: user } = await supabase
       .from('users')
       .select('email, full_name')
-      .eq('id', userId)
+      .eq('id', req.user.id)
       .single();
 
-    const reference = `PNG-${userId.slice(0, 8).toUpperCase()}-${Date.now()}`;
-    const callback_url = `${process.env.FRONTEND_URL}/payment/callback`;
-
-    const result = await paystack.initializeTransaction({
-      email: userData.email,
-      amount: naira,
-      reference,
-      callback_url,
-      metadata: { user_id: userId, full_name: userData.full_name },
-    });
-
-    if (!result.status) {
-      return res.status(400).json({ error: 'Failed to initialize payment with Paystack' });
-    }
-
-    // Record pending transaction
-    await supabase.from('transactions').insert({
-      user_id: userId,
-      type: 'credit',
-      amount: naira,
-      reference,
-      description: `Wallet funding — ₦${naira.toLocaleString('en-NG')}`,
-    });
+    const txRef = `FLW-PNG-${req.user.id.slice(0, 8).toUpperCase()}-${Date.now()}`;
 
     res.json({
-      authorization_url: result.data.authorization_url,
-      access_code: result.data.access_code,
-      reference,
+      public_key: process.env.FLW_PUBLIC_KEY,
+      tx_ref: txRef,
+      amount: naira,
+      customer_email: user.email,
+      customer_name: user.full_name || 'Customer',
     });
   } catch (err) {
-    console.error('Payment init error:', err.message);
-    res.status(500).json({ error: 'Payment initialization failed' });
+    console.error('FLW init error:', err.message);
+    res.status(500).json({ error: 'Failed to initialize payment' });
   }
 });
 
-// GET /api/payment/verify/:reference
-router.get('/verify/:reference', auth, async (req, res) => {
-  const { reference } = req.params;
-  const userId = req.user.id;
+// POST /api/payment/flutterwave/verify
+// Called by frontend after inline payment succeeds
+router.post('/flutterwave/verify', auth, async (req, res) => {
+  const { transaction_id, tx_ref } = req.body;
+  if (!transaction_id) return res.status(400).json({ error: 'transaction_id is required' });
 
   try {
-    // Check idempotency — don't credit twice
-    const { data: existingTx } = await supabase
+    // Idempotency — don't credit twice
+    const { data: existing } = await supabase
       .from('transactions')
-      .select('id, description, amount')
-      .eq('reference', reference)
-      .eq('user_id', userId)
+      .select('id, amount')
+      .eq('reference', String(transaction_id))
       .maybeSingle();
 
-    if (existingTx?.description?.includes('(Confirmed)')) {
-      return res.json({
-        message: 'Payment already confirmed',
-        amount: existingTx.amount,
-        already_processed: true,
-      });
+    if (existing) {
+      return res.json({ message: 'Already processed', amount: existing.amount, already_processed: true });
     }
 
-    const verification = await paystack.verifyTransaction(reference);
-
-    if (!verification.status || verification.data.status !== 'success') {
-      return res.status(400).json({ error: 'Payment not successful or still pending' });
+    // Verify with Flutterwave
+    const result = await flutterwave.verifyById(transaction_id);
+    if (!result || result.status !== 'success' || result.data?.status !== 'successful') {
+      return res.status(400).json({ error: 'Payment not successful' });
     }
 
-    const amount = verification.data.amount / 100; // kobo → naira
+    const flwData = result.data;
+
+    // Confirm tx_ref belongs to this user
+    if (tx_ref && !flwData.tx_ref.includes(req.user.id.slice(0, 8).toUpperCase())) {
+      return res.status(403).json({ error: 'Reference mismatch' });
+    }
+
+    const amount = parseFloat(flwData.amount);
 
     // Credit wallet
-    const { data: userData } = await supabase
+    const { data: userRow } = await supabase
       .from('users')
       .select('wallet_balance')
-      .eq('id', userId)
+      .eq('id', req.user.id)
       .single();
 
-    const newBalance = parseFloat((userData.wallet_balance + amount).toFixed(2));
-    await supabase.from('users').update({ wallet_balance: newBalance }).eq('id', userId);
+    const newBalance = parseFloat((parseFloat(userRow.wallet_balance || 0) + amount).toFixed(2));
 
-    // Mark transaction as confirmed
-    await supabase
-      .from('transactions')
-      .update({ description: `Wallet funding — ₦${amount.toLocaleString('en-NG')} (Confirmed)` })
-      .eq('reference', reference)
-      .eq('user_id', userId);
+    await supabase.from('users').update({ wallet_balance: newBalance }).eq('id', req.user.id);
 
-    res.json({
-      message: 'Payment verified. Wallet credited.',
+    await supabase.from('transactions').insert({
+      user_id: req.user.id,
+      type: 'credit',
       amount,
-      new_balance: newBalance,
+      reference: String(transaction_id),
+      description: `Wallet funding via card — ₦${amount.toLocaleString('en-NG')}`,
     });
+
+    res.json({ message: 'Payment verified. Wallet credited.', amount, new_balance: newBalance });
   } catch (err) {
-    console.error('Payment verify error:', err.message);
+    console.error('FLW verify error:', err.message);
     res.status(500).json({ error: 'Payment verification failed' });
   }
 });
+
+// POST /api/payment/flutterwave/webhook
+// Flutterwave calls this after every completed payment — catches cases where
+// the user closed the browser before the frontend verify call completed
+router.post('/flutterwave/webhook', express.raw({ type: '*/*' }), async (req, res) => {
+  const hash = req.headers['verif-hash'];
+  if (!process.env.FLW_SECRET_HASH || hash !== process.env.FLW_SECRET_HASH) {
+    return res.status(401).end();
+  }
+
+  let payload;
+  try {
+    payload = JSON.parse(req.body.toString());
+  } catch {
+    return res.status(400).end();
+  }
+
+  if (payload.event !== 'charge.completed' || payload.data?.status !== 'successful') {
+    return res.sendStatus(200);
+  }
+
+  const flwData = payload.data;
+  const transactionId = String(flwData.id);
+  const amount = parseFloat(flwData.amount);
+
+  try {
+    // Idempotency — skip if already credited
+    const { data: existing } = await supabase
+      .from('transactions')
+      .select('id')
+      .eq('reference', transactionId)
+      .maybeSingle();
+
+    if (existing) return res.sendStatus(200);
+
+    // Extract user_id from tx_ref: FLW-PNG-{USER_ID_SLICE}-{timestamp}
+    const txRef = flwData.tx_ref || '';
+    const refParts = txRef.split('-');
+    // refParts: ['FLW', 'PNG', '{userId8chars}', '{timestamp}']
+    if (refParts.length < 3 || refParts[0] !== 'FLW' || refParts[1] !== 'PNG') {
+      return res.sendStatus(200);
+    }
+
+    const userIdSlice = refParts[2].toLowerCase();
+
+    // Find user by partial ID match
+    const { data: users } = await supabase
+      .from('users')
+      .select('id, wallet_balance')
+      .ilike('id', `${userIdSlice}%`);
+
+    if (!users?.length) return res.sendStatus(200);
+    const user = users[0];
+
+    const newBalance = parseFloat((parseFloat(user.wallet_balance || 0) + amount).toFixed(2));
+    await supabase.from('users').update({ wallet_balance: newBalance }).eq('id', user.id);
+    await supabase.from('transactions').insert({
+      user_id: user.id,
+      type: 'credit',
+      amount,
+      reference: transactionId,
+      description: `Wallet funding via card — ₦${amount.toLocaleString('en-NG')}`,
+    });
+
+    console.log(`[webhook] FLW credited ₦${amount} to user ${user.id.slice(0, 8)}`);
+  } catch (err) {
+    console.error('[webhook] FLW error:', err.message);
+  }
+
+  res.sendStatus(200);
+});
+
+// ─── PAYSTACK (commented out — replaced by Flutterwave) ────────────────────
+/*
+const paystack = require('../lib/paystack');
+
+router.post('/initialize', auth, async (req, res) => { ... });
+router.get('/verify/:reference', auth, async (req, res) => { ... });
+*/
 
 module.exports = router;
