@@ -176,8 +176,8 @@ html,body{overflow-x:hidden;max-width:100vw}
 .pn-brand-name{font-weight:600;font-size:16px;color:var(--text-primary)}
 .pn-balance-chip{display:flex;flex-direction:column;align-items:flex-end;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:10px;padding:5px 12px;cursor:default}
 .pn-root[data-theme="light"] .pn-balance-chip{background:rgba(217,119,6,.08);border-color:rgba(217,119,6,.25)}
-.pn-balance-chip-label{font-family:'Geist Mono','Courier New',monospace;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--accent);font-weight:500}
-.pn-balance-chip-amount{font-family:'Geist Mono','Courier New',monospace;font-size:14px;font-weight:500;color:var(--accent);white-space:nowrap}
+.pn-balance-chip-label{font-family:'Plus Jakarta Sans',sans-serif;font-size:8px;text-transform:uppercase;letter-spacing:1.2px;color:var(--accent);font-weight:600;opacity:.8}
+.pn-balance-chip-amount{font-family:'Plus Jakarta Sans',sans-serif;font-size:15px;font-weight:700;color:var(--accent);white-space:nowrap;font-variant-numeric:tabular-nums;letter-spacing:-0.02em}
 .pn-theme-icon-btn{width:34px;height:34px;display:flex;align-items:center;justify-content:center;background:none;border:none;cursor:pointer;color:var(--text-muted);border-radius:8px;transition:all 150ms ease;font-size:18px;position:relative}
 .pn-theme-icon-btn:hover{background:var(--bg-raised);color:var(--text-primary)}
 .pn-tooltip{position:absolute;top:calc(100% + 6px);right:0;background:var(--bg-surface);border:1px solid var(--border);border-radius:8px;padding:4px 8px;font-size:11px;color:var(--text-secondary);white-space:nowrap;box-shadow:var(--shadow-sm);pointer-events:none;z-index:100}
@@ -189,7 +189,7 @@ html,body{overflow-x:hidden;max-width:100vw}
 .pn-sidebar-wallet{margin:12px;padding:14px 16px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:12px}
 .pn-root[data-theme="light"] .pn-sidebar-wallet{background:rgba(217,119,6,.06);border-color:rgba(217,119,6,.15)}
 .pn-wallet-label{font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px}
-.pn-wallet-amount{font-family:'Geist Mono','Courier New',monospace;font-size:20px;font-weight:500;color:var(--accent)}
+.pn-wallet-amount{font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;font-weight:800;color:var(--accent);font-variant-numeric:tabular-nums;letter-spacing:-0.03em}
 .pn-sidebar-nav{flex:1;padding:8px 12px}
 .pn-nav-label{font-size:10px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:var(--text-muted);padding:10px 4px 4px}
 .pn-nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;cursor:pointer;color:var(--text-secondary);font-size:14px;font-weight:500;transition:all 150ms ease;background:transparent;border:none;width:100%;text-align:left;font-family:'Plus Jakarta Sans',sans-serif;margin-bottom:2px}
@@ -230,7 +230,7 @@ html,body{overflow-x:hidden;max-width:100vw}
 .pn-root[data-theme="light"] .pn-stat-icon.success{background:rgba(22,163,74,.1)}
 .pn-root[data-theme="light"] .pn-stat-icon.info{background:rgba(37,99,235,.1)}
 .pn-stat-label{font-size:12px;color:var(--text-muted);margin-bottom:4px;font-weight:500}
-.pn-stat-value{font-family:'Geist Mono','Courier New',monospace;font-size:22px;font-weight:500;color:var(--text-primary)}
+.pn-stat-value{font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;font-weight:700;color:var(--text-primary);font-variant-numeric:tabular-nums;letter-spacing:-0.02em}
 .pn-stat-value.accent{color:var(--accent)}
 
 /* Buttons */
@@ -275,7 +275,7 @@ html,body{overflow-x:hidden;max-width:100vw}
 .pn-root[data-theme="light"] .pn-badge-success{background:rgba(22,163,74,.1);border-color:rgba(22,163,74,.2)}
 .pn-root[data-theme="light"] .pn-badge-accent{background:rgba(217,119,6,.1);border-color:rgba(217,119,6,.2)}
 .pn-root[data-theme="light"] .pn-badge-role{background:rgba(217,119,6,.1);border-color:rgba(217,119,6,.2)}
-.pn-balance-badge{background:rgba(34,197,94,.1);color:var(--success);border:1px solid rgba(34,197,94,.2);font-family:'Geist Mono','Courier New',monospace;font-size:11px;font-weight:500;padding:2px 10px;border-radius:100px}
+.pn-balance-badge{background:rgba(34,197,94,.1);color:var(--success);border:1px solid rgba(34,197,94,.2);font-family:'Plus Jakarta Sans',sans-serif;font-size:11px;font-weight:600;padding:2px 10px;border-radius:100px;font-variant-numeric:tabular-nums}
 
 /* Tags */
 .pn-tag{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:100px;font-size:10px;font-weight:500;background:var(--tag-bg);color:var(--tag-text)}
@@ -446,7 +446,7 @@ html,body{overflow-x:hidden;max-width:100vw}
 /* Balance big card */
 .pn-balance-hero{background:var(--bg-raised);border:1px solid var(--border);border-radius:16px;padding:20px;margin-bottom:16px}
 .pn-balance-hero-label{font-size:10px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px}
-.pn-balance-hero-amount{font-family:'Geist Mono','Courier New',monospace;font-size:32px;font-weight:500;color:var(--accent)}
+.pn-balance-hero-amount{font-family:'Plus Jakarta Sans',sans-serif;font-size:34px;font-weight:800;color:var(--accent);font-variant-numeric:tabular-nums;letter-spacing:-0.04em}
 
 /* Responsive */
 @media (max-width:768px){
@@ -904,8 +904,8 @@ function SmsVerify() {
       <div style={{display:'inline-flex',alignItems:'center',gap:7,background:'rgba(245,158,11,.08)',border:'1px solid rgba(245,158,11,.25)',borderRadius:10,padding:'6px 12px',marginBottom:20}}>
         <i className="ti ti-wallet" style={{color:'var(--accent)',fontSize:14}}/>
         <div>
-          <div style={{fontFamily:'Geist Mono',fontSize:9,textTransform:'uppercase',letterSpacing:1,color:'var(--accent)',lineHeight:1}}>Balance</div>
-          <div className="pn-mono" style={{fontSize:14,color:'var(--accent)'}}>{fmt(user?.balance || 0)}</div>
+          <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:8,textTransform:'uppercase',letterSpacing:'1.2px',color:'var(--accent)',lineHeight:1,fontWeight:600,opacity:.8}}>Balance</div>
+          <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:15,fontWeight:700,color:'var(--accent)',fontVariantNumeric:'tabular-nums',letterSpacing:'-0.02em'}}>{fmt(user?.balance || 0)}</div>
         </div>
       </div>
 

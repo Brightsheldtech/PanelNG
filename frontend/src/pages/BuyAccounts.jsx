@@ -242,8 +242,8 @@ function ProductCard({ listing, onClick, exchangeRate = 1600 }) {
       <div style={{ height: '0.5px', background: 'var(--border)', marginBottom: 12 }} />
       <FeaturePills />
       <StockBar qty={qty} max={200} />
-      <div style={{ fontFamily: "'Geist Mono','Courier New',monospace", fontSize: 16, fontWeight: 500, color: 'var(--accent)', marginBottom: 12 }}>
-        {fmt(priceNGN)} <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'inherit' }}>/ account</span>
+      <div style={{ fontFamily: "'Plus Jakarta Sans',sans-serif", fontSize: 16, fontWeight: 700, color: 'var(--accent)', marginBottom: 12, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
+        {fmt(priceNGN)} <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400, letterSpacing: 0 }}>/ account</span>
       </div>
       <button
         style={{ width: '100%', height: 44, background: 'var(--accent)', color: 'var(--accent-text)', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
@@ -319,12 +319,12 @@ function DetailSheet({ listing, detail, detailLoading, onClose, balance, onBuy, 
   const isMobile = window.innerWidth <= 768;
 
   const sheetStyle = isMobile
-    ? { position: 'fixed', bottom: 0, left: 0, right: 0, height: '90vh', background: 'var(--bg-surface)', borderRadius: '20px 20px 0 0', zIndex: 300, display: 'flex', flexDirection: 'column', overflowY: 'auto' }
-    : { position: 'relative', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 20, maxWidth: 520, width: '100%', maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflowY: 'auto' };
+    ? { position: 'fixed', bottom: 0, left: 0, right: 0, height: '90vh', background: 'var(--bg-surface)', borderRadius: '20px 20px 0 0', zIndex: 300, display: 'flex', flexDirection: 'column', overflow: 'hidden' }
+    : { position: 'relative', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 20, maxWidth: 520, width: '100%', maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' };
 
   const overlayStyle = isMobile
     ? { position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', zIndex: 299 }
-    : { position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', zIndex: 299, display: 'flex', alignItems: 'center', justifyContent: 'center' };
+    : { position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', zIndex: 299, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' };
 
   return (
     <div style={overlayStyle} onClick={isMobile ? onClose : undefined}>
@@ -336,7 +336,7 @@ function DetailSheet({ listing, detail, detailLoading, onClose, balance, onBuy, 
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 3 }}>{title}</div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>{platform} · Account</div>
-              <div style={{ fontFamily: "'Geist Mono','Courier New',monospace", fontSize: 20, fontWeight: 500, color: 'var(--accent)' }}>{fmt(priceNGN)} <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>/ account</span></div>
+              <div style={{ fontFamily: "'Plus Jakarta Sans',sans-serif", fontSize: 20, fontWeight: 700, color: 'var(--accent)', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>{fmt(priceNGN)} <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 400, letterSpacing: 0 }}>/ account</span></div>
             </div>
             <button onClick={onClose} style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 16 }}>
               <i className="ti ti-x" />
@@ -348,7 +348,7 @@ function DetailSheet({ listing, detail, detailLoading, onClose, balance, onBuy, 
         </div>
 
         {/* Body */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '0 0 120px' }}>
+        <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', minHeight: 0 }}>
           {detailLoading ? (
             <div style={{ padding: 24 }}>
               {[80, 60, 100, 70, 90].map((w, i) => (
@@ -468,8 +468,8 @@ function DetailSheet({ listing, detail, detailLoading, onClose, balance, onBuy, 
           )}
         </div>
 
-        {/* Sticky buy bar */}
-        <div style={{ position: 'sticky', bottom: 0, background: 'var(--bg-surface)', borderTop: '1px solid var(--border)', padding: '14px 20px', flexShrink: 0 }}>
+        {/* Buy bar */}
+        <div style={{ flexShrink: 0, background: 'var(--bg-surface)', borderTop: '1px solid var(--border)', padding: '14px 20px' }}>
           {insufficient && (
             <div style={{ fontSize: 12, color: 'var(--danger)', marginBottom: 8 }}>
               You need {fmt(total - balance)} more. Balance: {fmt(balance)}
@@ -484,7 +484,7 @@ function DetailSheet({ listing, detail, detailLoading, onClose, balance, onBuy, 
             </div>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>Total</div>
-              <div style={{ fontFamily: "'Geist Mono','Courier New',monospace", fontSize: 18, fontWeight: 500, color: 'var(--accent)' }}>{fmt(total)}</div>
+              <div style={{ fontFamily: "'Plus Jakarta Sans',sans-serif", fontSize: 18, fontWeight: 700, color: 'var(--accent)', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>{fmt(total)}</div>
             </div>
             <button
               onClick={() => onBuy(listing, qty)}
@@ -599,12 +599,12 @@ function PurchaseModal({ listing, qty, balance, onClose, onSuccess, onAddFunds, 
               ].map(([l, v], i) => (
                 <div key={l} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0', borderBottom: i < 3 ? '0.5px solid var(--border)' : 'none', fontSize: 13 }}>
                   <span style={{ color: 'var(--text-muted)' }}>{l}</span>
-                  <span style={{ fontFamily: "'Geist Mono','Courier New',monospace", fontWeight: 500, color: i === 3 ? (afterBalance < 0 ? 'var(--danger)' : 'var(--text-primary)') : 'var(--text-primary)' }}>{v}</span>
+                  <span style={{ fontFamily: "'Plus Jakarta Sans',sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: i === 3 ? (afterBalance < 0 ? 'var(--danger)' : 'var(--text-primary)') : 'var(--text-primary)' }}>{v}</span>
                 </div>
               ))}
               <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 10, fontSize: 15 }}>
                 <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Total</span>
-                <span style={{ fontFamily: "'Geist Mono','Courier New',monospace", fontWeight: 600, color: 'var(--accent)', fontSize: 17 }}>{fmt(total)}</span>
+                <span style={{ fontFamily: "'Plus Jakarta Sans',sans-serif", fontWeight: 700, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em', color: 'var(--accent)', fontSize: 17 }}>{fmt(total)}</span>
               </div>
             </div>
             {insufficient ? (
@@ -799,8 +799,8 @@ export default function BuyAccounts({ balance = 0, token = '', onNavigate, onPur
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: 'rgba(245,158,11,.08)', border: '1px solid rgba(245,158,11,.25)', borderRadius: 10, padding: '6px 12px' }}>
             <i className="ti ti-wallet" style={{ color: 'var(--accent)', fontSize: 14 }} />
             <div>
-              <div style={{ fontFamily: 'Geist Mono', fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--accent)', lineHeight: 1 }}>Balance</div>
-              <div style={{ fontFamily: "'Geist Mono','Courier New',monospace", fontSize: 14, color: 'var(--accent)' }}>{fmt(balance)}</div>
+              <div style={{ fontFamily: "'Plus Jakarta Sans',sans-serif", fontSize: 8, textTransform: 'uppercase', letterSpacing: '1.2px', color: 'var(--accent)', lineHeight: 1, fontWeight: 600, opacity: .8 }}>Balance</div>
+              <div style={{ fontFamily: "'Plus Jakarta Sans',sans-serif", fontSize: 15, fontWeight: 700, color: 'var(--accent)', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>{fmt(balance)}</div>
             </div>
           </div>
         </div>
