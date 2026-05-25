@@ -1014,8 +1014,8 @@ function OrderHistory() {
   const [orders, setOrders] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [credModal, setCredModal] = useState(null); // { order, accounts, loading, error }
-  const fmtDate = (d) => new Date(d).toLocaleDateString('en-NG', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  const [detail, setDetail] = useState(null); // { order, accounts, credLoading, credError }
+  const fmtDate = (d) => new Date(d).toLocaleString('en-NG', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
   const fetchOrders = async () => {
     setLoading(true);
@@ -1046,17 +1046,22 @@ function OrderHistory() {
 
   useEffect(() => { fetchOrders(); }, [tab]);
 
-  const viewCredentials = async (order) => {
-    setCredModal({ order, accounts: null, loading: true, error: false });
-    try {
-      const { data } = await api.get(`/accszone/orders/${order.id}`);
-      const raw = data.delivered_data;
-      const accs = Array.isArray(raw) ? raw : (raw ? [raw] : []);
-      setCredModal({ order, accounts: accs, loading: false, error: false });
-    } catch (_) {
-      setCredModal(prev => ({ ...prev, loading: false, error: true }));
+  const openDetail = (order) => {
+    if (order.type === 'accounts') {
+      setDetail({ order, accounts: null, credLoading: true, credError: false });
+      api.get(`/accszone/orders/${order.id}`)
+        .then(({ data }) => {
+          const raw = data.delivered_data;
+          const accs = Array.isArray(raw) ? raw : (raw ? [raw] : []);
+          setDetail(prev => ({ ...prev, accounts: accs, credLoading: false }));
+        })
+        .catch(() => setDetail(prev => ({ ...prev, credLoading: false, credError: true })));
+    } else {
+      setDetail({ order, accounts: null, credLoading: false, credError: false });
     }
   };
+
+  const o = detail?.order;
 
   return (
     <div>
@@ -1083,88 +1088,121 @@ function OrderHistory() {
           <div className="pn-order-header">
             <span>Date</span><span>Type</span><span>Service / Platform</span><span style={{textAlign:'right'}}>Amount</span>
           </div>
-          {orders.map(o => (
+          {orders.map(ord => (
             <div
-              key={o.id}
+              key={ord.id}
               className="pn-order-row"
-              onClick={o.type==='accounts' ? ()=>viewCredentials(o) : undefined}
-              style={{cursor:o.type==='accounts'?'pointer':'default',transition:'background 150ms ease'}}
-              onMouseEnter={o.type==='accounts'?e=>e.currentTarget.style.background='var(--bg-raised)':undefined}
-              onMouseLeave={o.type==='accounts'?e=>e.currentTarget.style.background='':undefined}
+              onClick={() => openDetail(ord)}
+              style={{cursor:'pointer',transition:'background 150ms ease'}}
+              onMouseEnter={e=>e.currentTarget.style.background='var(--bg-raised)'}
+              onMouseLeave={e=>e.currentTarget.style.background=''}
             >
-              <div className="pn-order-id" style={{fontSize:10}}>{fmtDate(o.created_at)}</div>
-              <div><Badge type={o.type}/></div>
+              <div className="pn-order-id" style={{fontSize:10}}>{fmtDate(ord.created_at)}</div>
+              <div><Badge type={ord.type}/></div>
               <div>
                 <div className="pn-order-name" style={{display:'flex',alignItems:'center',gap:6}}>
-                  <PlatformIcon name={o.platform} size={14}/>
-                  {o.type==='accounts' ? (o.product_name||o.platform) : o.type==='sms' ? o.platform : (o.service_name||o.platform||'—')}
+                  <PlatformIcon name={ord.platform} size={14}/>
+                  {ord.type==='accounts' ? (ord.product_name||ord.platform) : ord.type==='sms' ? ord.platform : (ord.service_name||ord.platform||'—')}
                 </div>
                 <div className="pn-order-sub">
-                  {o.type==='accounts' ? `${o.quantity||1} account${(o.quantity||1)>1?'s':''}` :
-                   o.type==='sms' ? (o.phone||o.phone_number||'') :
-                   (o.link ? o.link.slice(0,30)+'…' : o.status||'')}
+                  {ord.type==='accounts' ? `${ord.quantity||1} account${(ord.quantity||1)>1?'s':''}` :
+                   ord.type==='sms' ? (ord.phone||ord.phone_number||'') :
+                   (ord.link ? ord.link.slice(0,30)+'…' : ord.status||'')}
                 </div>
               </div>
               <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:4}}>
-                <div className="pn-order-qty">{fmt(o.amount)}</div>
-                <Badge status={o.status}/>
-                {o.type==='accounts' && (
-                  <span style={{fontSize:10,color:'var(--accent)',display:'flex',alignItems:'center',gap:3,marginTop:2}}>
-                    <i className="ti ti-key" style={{fontSize:11}}/>View Credentials
-                  </span>
-                )}
+                <div className="pn-order-qty">{fmt(ord.amount)}</div>
+                <Badge status={ord.status}/>
               </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* Credentials modal */}
-      {credModal && (
-        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.6)',zIndex:400,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
-          <div style={{background:'var(--bg-surface)',border:'1px solid var(--border)',borderRadius:20,width:'100%',maxWidth:440,maxHeight:'80vh',display:'flex',flexDirection:'column',overflow:'hidden'}}>
-            <div style={{padding:'18px 20px 14px',borderBottom:'1px solid var(--border)',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
-              <div>
-                <div style={{fontSize:15,fontWeight:700,color:'var(--text-primary)'}}>{credModal.order.product_name || credModal.order.platform}</div>
-                <div style={{fontSize:12,color:'var(--text-muted)',marginTop:2}}>{credModal.order.quantity} account{credModal.order.quantity!==1?'s':''} · {fmt(credModal.order.amount)}</div>
+      {/* Universal order detail modal */}
+      {detail && o && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.6)',zIndex:400,display:'flex',alignItems:'center',justifyContent:'center',padding:20}} onClick={()=>setDetail(null)}>
+          <div style={{background:'var(--bg-surface)',border:'1px solid var(--border)',borderRadius:20,width:'100%',maxWidth:460,height:'80vh',display:'flex',flexDirection:'column',overflow:'hidden'}} onClick={e=>e.stopPropagation()}>
+
+            {/* Header */}
+            <div style={{padding:'18px 20px 14px',borderBottom:'1px solid var(--border)',flexShrink:0,display:'flex',alignItems:'center',gap:12}}>
+              <PlatformIcon name={o.platform} size={36}/>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:15,fontWeight:700,color:'var(--text-primary)',marginBottom:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                  {o.type==='accounts' ? (o.product_name||o.platform) : o.type==='sms' ? `${o.platform} Number` : (o.service_name||o.platform||'Order')}
+                </div>
+                <div style={{display:'flex',alignItems:'center',gap:6}}>
+                  <Badge type={o.type}/><Badge status={o.status}/>
+                </div>
               </div>
-              <button onClick={() => setCredModal(null)} style={{background:'var(--bg-raised)',border:'1px solid var(--border)',borderRadius:8,width:32,height:32,cursor:'pointer',color:'var(--text-muted)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16}}>
+              <button onClick={()=>setDetail(null)} style={{background:'var(--bg-raised)',border:'1px solid var(--border)',borderRadius:8,width:32,height:32,cursor:'pointer',color:'var(--text-muted)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0}}>
                 <i className="ti ti-x"/>
               </button>
             </div>
-            <div style={{flex:1,overflowY:'auto',padding:'16px 20px'}}>
-              {credModal.loading && (
-                <div style={{textAlign:'center',padding:'32px 0'}}>
-                  <i className="ti ti-loader-2" style={{fontSize:28,color:'var(--accent)',animation:'pn-spin 1s linear infinite'}}/>
-                  <div style={{fontSize:13,color:'var(--text-muted)',marginTop:10}}>Loading credentials…</div>
-                </div>
-              )}
-              {!credModal.loading && credModal.error && (
-                <div style={{textAlign:'center',padding:'24px 0',color:'var(--danger)',fontSize:13}}>
-                  <i className="ti ti-alert-circle" style={{fontSize:28,display:'block',marginBottom:8}}/>Could not load credentials. Try again.
-                </div>
-              )}
-              {!credModal.loading && !credModal.error && credModal.accounts?.length === 0 && (
-                <div style={{textAlign:'center',padding:'24px 0',color:'var(--text-muted)',fontSize:13}}>
-                  No credential data stored for this order.
-                </div>
-              )}
-              {!credModal.loading && !credModal.error && (credModal.accounts || []).map((acc, i) => (
-                <div key={i} style={{marginBottom:14}}>
-                  <div style={{fontSize:10,fontWeight:700,letterSpacing:'1px',textTransform:'uppercase',color:'var(--accent)',marginBottom:6}}>Account {i + 1}</div>
-                  <div style={{background:'var(--bg-raised)',border:'1px solid var(--border)',borderRadius:10,padding:'2px 12px'}}>
-                    {typeof acc === 'string'
-                      ? <CredHistoryRow label="credentials" value={acc}/>
-                      : Object.entries(acc).map(([k, v]) => <CredHistoryRow key={k} label={k} value={String(v)}/>)
-                    }
+
+            {/* Body */}
+            <div style={{flex:1,overflowY:'auto',overflowX:'hidden',minHeight:0,padding:'16px 20px'}}>
+
+              {/* Order meta grid */}
+              <div style={{background:'var(--bg-raised)',border:'1px solid var(--border)',borderRadius:12,overflow:'hidden',marginBottom:16}}>
+                {[
+                  ['Date', fmtDate(o.created_at)],
+                  ['Amount Charged', fmt(o.amount)],
+                  o.type==='accounts' && o.quantity ? ['Quantity', `${o.quantity} account${o.quantity!==1?'s':''}`] : null,
+                  o.type==='accounts' && o.unit_price ? ['Unit Price', fmt(o.unit_price)] : null,
+                  o.type==='smm' && o.quantity ? ['Quantity', Number(o.quantity).toLocaleString()] : null,
+                  o.type==='smm' && o.link ? ['Link', o.link] : null,
+                  o.type==='sms' && (o.phone||o.phone_number) ? ['Phone Number', o.phone||o.phone_number] : null,
+                  o.type==='sms' && o.country ? ['Country', o.country] : null,
+                  ['Order ID', String(o.id||'').slice(0,20)],
+                  o.accszone_order_id ? ['External ID', o.accszone_order_id] : null,
+                ].filter(Boolean).map(([label, value], i, arr) => (
+                  <div key={label} style={{display:'flex',padding:'9px 14px',background:i%2===0?'transparent':'rgba(255,255,255,.02)',borderBottom:i<arr.length-1?'0.5px solid var(--border)':'none',gap:12}}>
+                    <span style={{fontSize:12,color:'var(--text-muted)',width:110,flexShrink:0}}>{label}</span>
+                    <span style={{fontSize:12,fontWeight:500,color:'var(--text-primary)',wordBreak:'break-all',flex:1}}>{value}</span>
                   </div>
-                </div>
-              ))}
-            </div>
-            <div style={{padding:'12px 20px',borderTop:'1px solid var(--border)',flexShrink:0}}>
-              <div style={{fontSize:11,color:'var(--text-muted)',lineHeight:1.6}}>
-                <i className="ti ti-lock" style={{marginRight:4}}/>Keep these credentials private and secure.
+                ))}
               </div>
+
+              {/* Credentials — accounts only */}
+              {o.type === 'accounts' && (
+                <>
+                  <div style={{fontSize:10,fontWeight:700,letterSpacing:'1.2px',textTransform:'uppercase',color:'var(--text-muted)',marginBottom:10}}>Account Credentials</div>
+                  {detail.credLoading && (
+                    <div style={{textAlign:'center',padding:'24px 0'}}>
+                      <i className="ti ti-loader-2" style={{fontSize:24,color:'var(--accent)',animation:'pn-spin 1s linear infinite'}}/>
+                      <div style={{fontSize:12,color:'var(--text-muted)',marginTop:8}}>Loading credentials…</div>
+                    </div>
+                  )}
+                  {!detail.credLoading && detail.credError && (
+                    <div style={{textAlign:'center',padding:'20px 0',color:'var(--danger)',fontSize:13}}>
+                      <i className="ti ti-alert-circle" style={{fontSize:24,display:'block',marginBottom:6}}/>Could not load credentials.
+                    </div>
+                  )}
+                  {!detail.credLoading && !detail.credError && (detail.accounts||[]).length === 0 && (
+                    <div style={{textAlign:'center',padding:'20px 0',fontSize:12,color:'var(--text-muted)'}}>No credential data stored for this order.</div>
+                  )}
+                  {!detail.credLoading && !detail.credError && (detail.accounts||[]).map((acc, i) => (
+                    <div key={i} style={{marginBottom:12}}>
+                      <div style={{fontSize:10,fontWeight:700,letterSpacing:'1px',textTransform:'uppercase',color:'var(--accent)',marginBottom:6}}>Account {i + 1}</div>
+                      <div style={{background:'var(--bg-raised)',border:'1px solid var(--border)',borderRadius:10,padding:'2px 12px'}}>
+                        {typeof acc === 'string'
+                          ? <CredHistoryRow label="credentials" value={acc}/>
+                          : Object.entries(acc).map(([k, v]) => <CredHistoryRow key={k} label={k} value={String(v)}/>)
+                        }
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div style={{padding:'12px 20px',borderTop:'1px solid var(--border)',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+              <div style={{fontSize:11,color:'var(--text-muted)'}}>
+                {o.type==='accounts' ? <><i className="ti ti-lock" style={{marginRight:4}}/>Keep credentials private.</> : <><i className="ti ti-info-circle" style={{marginRight:4}}/>Contact support with your Order ID.</>}
+              </div>
+              <button onClick={()=>setDetail(null)} style={{height:32,padding:'0 14px',background:'var(--bg-raised)',border:'1px solid var(--border)',borderRadius:8,fontSize:13,fontWeight:500,cursor:'pointer',color:'var(--text-secondary)',fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Close</button>
             </div>
           </div>
         </div>
