@@ -320,7 +320,7 @@ function DetailSheet({ listing, detail, detailLoading, onClose, balance, onBuy, 
 
   const sheetStyle = isMobile
     ? { position: 'fixed', bottom: 0, left: 0, right: 0, height: '90vh', background: 'var(--bg-surface)', borderRadius: '20px 20px 0 0', zIndex: 300, display: 'flex', flexDirection: 'column', overflow: 'hidden' }
-    : { position: 'relative', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 20, maxWidth: 520, width: '100%', maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' };
+    : { position: 'relative', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 20, maxWidth: 520, width: '100%', height: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' };
 
   const overlayStyle = isMobile
     ? { position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', zIndex: 299 }

@@ -648,8 +648,14 @@ function Overview({ setPage }) {
           ) : recentOrders.length === 0 ? (
             <div className="pn-empty"><i className="ti ti-receipt pn-empty-icon"/><div className="pn-empty-title">No orders yet</div><div className="pn-empty-sub">Place your first order to get started</div></div>
           ) : recentOrders.map((o, i) => (
-            <div key={o.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'13px 18px',borderBottom:i<recentOrders.length-1?'0.5px solid var(--border)':'none',gap:12}}>
-              <div style={{minWidth:0}}>
+            <div
+              key={o.id}
+              onClick={()=>setPage('orders')}
+              style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'13px 18px',borderBottom:i<recentOrders.length-1?'0.5px solid var(--border)':'none',gap:12,cursor:'pointer',transition:'background 150ms ease'}}
+              onMouseEnter={e=>e.currentTarget.style.background='var(--bg-raised)'}
+              onMouseLeave={e=>e.currentTarget.style.background=''}
+            >
+              <div style={{minWidth:0,flex:1}}>
                 <div style={{fontSize:13,fontWeight:600,color:'var(--text-primary)',marginBottom:3}}>
                   {o.type==='accounts' ? (o.product_name||o.platform) :
                    o.type==='sms' ? `${o.platform} • ${o.country||''}` :
@@ -662,8 +668,9 @@ function Overview({ setPage }) {
                 </div>
               </div>
               <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
-                <div className="pn-mono" style={{fontSize:12,color:'var(--danger)'}}>{fmt(o.amount)}</div>
+                <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:600,fontVariantNumeric:'tabular-nums',fontSize:12,color:'var(--danger)'}}>{fmt(o.amount)}</div>
                 <Badge status={o.status}/>
+                <i className="ti ti-chevron-right" style={{fontSize:13,color:'var(--text-muted)'}}/>
               </div>
             </div>
           ))}
@@ -1077,7 +1084,14 @@ function OrderHistory() {
             <span>Date</span><span>Type</span><span>Service / Platform</span><span style={{textAlign:'right'}}>Amount</span>
           </div>
           {orders.map(o => (
-            <div key={o.id} className="pn-order-row">
+            <div
+              key={o.id}
+              className="pn-order-row"
+              onClick={o.type==='accounts' ? ()=>viewCredentials(o) : undefined}
+              style={{cursor:o.type==='accounts'?'pointer':'default',transition:'background 150ms ease'}}
+              onMouseEnter={o.type==='accounts'?e=>e.currentTarget.style.background='var(--bg-raised)':undefined}
+              onMouseLeave={o.type==='accounts'?e=>e.currentTarget.style.background='':undefined}
+            >
               <div className="pn-order-id" style={{fontSize:10}}>{fmtDate(o.created_at)}</div>
               <div><Badge type={o.type}/></div>
               <div>
@@ -1095,12 +1109,9 @@ function OrderHistory() {
                 <div className="pn-order-qty">{fmt(o.amount)}</div>
                 <Badge status={o.status}/>
                 {o.type==='accounts' && (
-                  <button
-                    onClick={() => viewCredentials(o)}
-                    style={{fontSize:10,color:'var(--accent)',background:'none',border:'none',cursor:'pointer',padding:0,fontFamily:"'Plus Jakarta Sans',sans-serif",display:'flex',alignItems:'center',gap:3,marginTop:2}}
-                  >
+                  <span style={{fontSize:10,color:'var(--accent)',display:'flex',alignItems:'center',gap:3,marginTop:2}}>
                     <i className="ti ti-key" style={{fontSize:11}}/>View Credentials
-                  </button>
+                  </span>
                 )}
               </div>
             </div>
@@ -1194,10 +1205,56 @@ function AddFunds() {
   const [selectedAmt, setSelectedAmt] = useState(null);
   const [copied, setCopied] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const REF = 'PNG-4625-ADE';
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const [ref, setRef] = useState('');
+  const [bankDetails, setBankDetails] = useState([]);
+  const [bankLoading, setBankLoading] = useState(true);
+  const [myRequests, setMyRequests] = useState([]);
+  const [reqLoading, setReqLoading] = useState(true);
   const QUICK = [500, 1000, 2000, 5000, 10000, 20000];
+
+  useEffect(() => {
+    api.get('/bank/details')
+      .then(r => setBankDetails(Array.isArray(r.data) ? r.data : []))
+      .catch(() => setBankDetails([]))
+      .finally(() => setBankLoading(false));
+    api.get('/bank/my-requests')
+      .then(r => setMyRequests(Array.isArray(r.data) ? r.data : []))
+      .catch(() => setMyRequests([]))
+      .finally(() => setReqLoading(false));
+  }, [submitted]);
+
+  const generateRef = () => {
+    const n = String(Math.floor(Math.random() * 9000) + 1000);
+    const letters = (user?.initials || 'U').replace(/[^A-Z]/g, '').slice(0, 3) || 'U';
+    return `PNG-${n}-${letters}`;
+  };
+
   const selectAmt = (a) => { setAmount(String(a)); setSelectedAmt(a); };
-  const handleCopy = () => { navigator.clipboard.writeText(REF); setCopied(true); setTimeout(()=>setCopied(false),2000); };
+  const handleCopy = () => { navigator.clipboard.writeText(ref); setCopied(true); setTimeout(()=>setCopied(false),2000); };
+
+  const goToStep2 = () => {
+    if (parseFloat(amount) >= 100) { setRef(generateRef()); setStep(2); setSubmitError(''); }
+  };
+
+  const handleSubmit = async () => {
+    setSubmitting(true); setSubmitError('');
+    try {
+      await api.post('/bank/request', { amount: parseFloat(amount), reference: ref });
+      setSubmitted(true);
+    } catch (err) {
+      setSubmitError(err.response?.data?.error || 'Failed to submit. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const reset = () => { setStep(1); setAmount(''); setSelectedAmt(null); setSubmitted(false); setRef(''); setSubmitError(''); };
+
+  const fmtDate = (d) => new Date(d).toLocaleDateString('en-NG', { day:'2-digit', month:'short', year:'numeric' });
+  const statusColor = (s) => s==='confirmed'?'var(--success)':s==='rejected'?'var(--danger)':'var(--accent)';
+
   return (
     <div>
       <div className="pn-page-title">Add Funds</div>
@@ -1208,7 +1265,7 @@ function AddFunds() {
       </div>
       <div className="pn-tabs pn-tabs gold-active">
         {[['bank','Bank Transfer'],['paystack','Paystack']].map(([v,l])=>(
-          <button key={v} className={`pn-tab${tab===v?' active':''}`} onClick={()=>{setTab(v);setStep(1);setAmount('');setSelectedAmt(null);setSubmitted(false);}}>
+          <button key={v} className={`pn-tab${tab===v?' active':''}`} onClick={()=>{setTab(v);reset();}}>
             <i className={`ti ${v==='bank'?'ti-building-bank':'ti-credit-card'}`}/>{l}
           </button>
         ))}
@@ -1233,7 +1290,7 @@ function AddFunds() {
                   <button key={a} className={`pn-achip${selectedAmt===a?' selected':''}`} onClick={()=>selectAmt(a)}>₦{a.toLocaleString()}</button>
                 ))}
               </div>
-              <button className="pn-btn pn-btn-primary pn-btn-full" onClick={()=>{if(parseFloat(amount)>=100)setStep(2);}} disabled={!amount||parseFloat(amount)<100} style={{opacity:(!amount||parseFloat(amount)<100)?.5:1}}>
+              <button className="pn-btn pn-btn-primary pn-btn-full" onClick={goToStep2} disabled={!amount||parseFloat(amount)<100} style={{opacity:(!amount||parseFloat(amount)<100)?.5:1}}>
                 Get Payment Details <i className="ti ti-arrow-right"/>
               </button>
             </>
@@ -1246,24 +1303,35 @@ function AddFunds() {
                 <div className="pn-se-label">Send Exactly</div>
                 <div className="pn-se-amount">{fmt(parseFloat(amount))}</div>
               </div>
-              {MOCK.bankDetails.map(b=>(
-                <div key={b.bank} className="pn-bank-card">
-                  <div className="pn-bank-name">{b.bank}</div>
-                  <div className="pn-bank-number">{b.number}</div>
-                  <div className="pn-bank-acct">{b.name}</div>
+              {bankLoading ? (
+                <div style={{textAlign:'center',padding:'16px 0'}}><i className="ti ti-loader-2" style={{animation:'pn-spin 1s linear infinite',fontSize:20,color:'var(--accent)'}}/></div>
+              ) : bankDetails.length === 0 ? (
+                <div style={{background:'rgba(248,113,113,.08)',border:'1px solid rgba(248,113,113,.2)',borderRadius:10,padding:'12px 16px',fontSize:13,color:'var(--danger)',marginBottom:12}}>
+                  <i className="ti ti-alert-circle" style={{marginRight:6}}/>Bank details not configured. Contact support.
+                </div>
+              ) : bankDetails.map(b=>(
+                <div key={b.id} className="pn-bank-card">
+                  <div className="pn-bank-name">{b.bank_name}</div>
+                  <div className="pn-bank-number">{b.account_number}</div>
+                  <div className="pn-bank-acct">{b.account_name}</div>
                 </div>
               ))}
               <div className="pn-narration">
                 <div className="pn-narration-lbl">Transfer Narration / Description</div>
-                <div className="pn-narration-code">{REF}</div>
+                <div className="pn-narration-code">{ref}</div>
                 <button className="pn-copy-btn" onClick={handleCopy}><i className={`ti ${copied?'ti-check':'ti-copy'}`}/></button>
                 <div style={{fontSize:11,color:'var(--success)',marginTop:8,opacity:.75}}>Use this exact code as your transfer narration — it's how we match your payment.</div>
               </div>
               <div className="pn-info-box">After sending, click the button below. We'll credit your wallet once we confirm the transfer — usually within minutes during business hours.</div>
-              <button className="pn-btn pn-btn-success pn-btn-full" style={{marginBottom:10}} onClick={()=>setSubmitted(true)}>
-                <i className="ti ti-circle-check"/>I Have Made This Transfer
+              {submitError && (
+                <div style={{background:'rgba(248,113,113,.08)',border:'1px solid rgba(248,113,113,.2)',borderRadius:10,padding:'10px 14px',fontSize:13,color:'var(--danger)',marginBottom:12}}>
+                  <i className="ti ti-alert-circle" style={{marginRight:6}}/>{submitError}
+                </div>
+              )}
+              <button className="pn-btn pn-btn-success pn-btn-full" style={{marginBottom:10}} onClick={handleSubmit} disabled={submitting}>
+                {submitting ? <><i className="ti ti-loader-2" style={{animation:'pn-spin 1s linear infinite'}}/>Submitting…</> : <><i className="ti ti-circle-check"/>I Have Made This Transfer</>}
               </button>
-              <button className="pn-btn pn-btn-secondary pn-btn-full" onClick={()=>{setStep(1);setSelectedAmt(null);}}>
+              <button className="pn-btn pn-btn-secondary pn-btn-full" onClick={()=>{setStep(1);setSelectedAmt(null);}} disabled={submitting}>
                 <i className="ti ti-arrow-left"/>Change Amount
               </button>
             </>
@@ -1275,9 +1343,9 @@ function AddFunds() {
               </div>
               <div style={{fontSize:17,fontWeight:600,color:'var(--text-primary)',marginBottom:8}}>Payment Submitted</div>
               <div style={{fontSize:13,color:'var(--text-secondary)',lineHeight:1.6,marginBottom:16}}>Your request is pending confirmation. We'll credit <strong className="pn-mono" style={{color:'var(--accent)'}}>{fmt(parseFloat(amount))}</strong> once we verify the transfer.</div>
-              <div className="pn-mono" style={{display:'inline-block',background:'rgba(34,197,94,.08)',border:'1px solid rgba(34,197,94,.2)',borderRadius:8,padding:'8px 14px',color:'var(--success)',marginBottom:20}}>{REF}</div>
+              <div className="pn-mono" style={{display:'inline-block',background:'rgba(34,197,94,.08)',border:'1px solid rgba(34,197,94,.2)',borderRadius:8,padding:'8px 14px',color:'var(--success)',marginBottom:20}}>{ref}</div>
               <br/>
-              <button className="pn-btn pn-btn-secondary" onClick={()=>{setStep(1);setAmount('');setSelectedAmt(null);setSubmitted(false);}}>Make Another Deposit</button>
+              <button className="pn-btn pn-btn-secondary" onClick={reset}>Make Another Deposit</button>
             </div>
           )}
         </div>
@@ -1307,15 +1375,22 @@ function AddFunds() {
         </div>
       )}
       <div style={{marginTop:20}}>
-        <span className="pn-section-label">Recent Transactions</span>
+        <span className="pn-section-label">My Payment Requests</span>
         <div className="pn-card" style={{padding:'0 20px'}}>
-          {MOCK.transactions.map((t,i)=>(
-            <div key={i} className="pn-tx-row">
+          {reqLoading ? (
+            <div style={{padding:'16px 0',textAlign:'center'}}><i className="ti ti-loader-2" style={{animation:'pn-spin 1s linear infinite',fontSize:18,color:'var(--accent)'}}/></div>
+          ) : myRequests.length === 0 ? (
+            <div style={{padding:'16px 0',textAlign:'center',fontSize:13,color:'var(--text-muted)'}}>No payment requests yet.</div>
+          ) : myRequests.map((r,i)=>(
+            <div key={r.id} className="pn-tx-row">
               <div style={{minWidth:0}}>
-                <div className="pn-tx-desc">{t.desc}</div>
-                <div className="pn-tx-date">{t.date}</div>
+                <div className="pn-tx-desc pn-mono">{r.reference}</div>
+                <div className="pn-tx-date">{fmtDate(r.created_at)}</div>
               </div>
-              <span className={t.amount>=0?'pn-tx-pos':'pn-tx-neg'}>{t.amount>=0?'+':''}{fmt(Math.abs(t.amount))}</span>
+              <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:3}}>
+                <span style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:700,fontVariantNumeric:'tabular-nums',fontSize:13,color:'var(--text-primary)'}}>+{fmt(r.amount)}</span>
+                <span style={{fontSize:10,fontWeight:600,textTransform:'uppercase',color:statusColor(r.status)}}>{r.status}</span>
+              </div>
             </div>
           ))}
         </div>
