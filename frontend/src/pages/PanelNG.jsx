@@ -1247,6 +1247,7 @@ function AddFunds() {
   const [transactions, setTransactions] = useState([]);
   const [txLoading, setTxLoading] = useState(true);
   const flwResult = useRef(null);
+  const verifyStarted = useRef(false);
   const QUICK = [500, 1000, 2000, 5000, 10000, 20000];
 
   const loadTx = () => {
@@ -1300,6 +1301,7 @@ function AddFunds() {
       const { data: cfg } = await api.post('/payment/flutterwave/init', { amount: amt });
       await loadFlwScript();
       flwResult.current = null;
+      verifyStarted.current = false;
       window.FlutterwaveCheckout({
         public_key: cfg.public_key,
         tx_ref: cfg.tx_ref,
@@ -1309,15 +1311,26 @@ function AddFunds() {
         customer: { email: cfg.customer_email, name: cfg.customer_name },
         customizations: { title: 'PanelNG Wallet', description: 'Add funds to your wallet' },
         callback: (resp) => {
-          // Store result synchronously — SDK does not await async callbacks
-          if (resp.status === 'successful' || resp.status === 'success') {
-            flwResult.current = { transaction_id: resp.transaction_id, tx_ref: resp.tx_ref };
+          // resp.id and resp.transaction_id are both the transaction ID depending on SDK version
+          const txId = resp.transaction_id || resp.id;
+          if ((resp.status === 'successful' || resp.status === 'success' || resp.status === 'completed') && txId) {
+            flwResult.current = { transaction_id: txId, tx_ref: resp.tx_ref };
+            if (!verifyStarted.current) {
+              verifyStarted.current = true;
+              // Start verification immediately — doVerify returns a Promise we don't need to await
+              doVerify(txId, resp.tx_ref);
+            }
           }
         },
         onclose: () => {
+          // Primary path: callback already started verification
+          if (verifyStarted.current) return;
+          // Fallback: callback fired but verify didn't start yet
           if (flwResult.current) {
+            verifyStarted.current = true;
             doVerify(flwResult.current.transaction_id, flwResult.current.tx_ref);
           } else {
+            // User cancelled or closed without paying
             setStep('method');
           }
         },
@@ -1329,7 +1342,8 @@ function AddFunds() {
 
   const reset = () => {
     setStep('amount'); setAmount(''); setSelectedAmt(null);
-    setSuccessData(null); setErrorMsg(''); flwResult.current = null;
+    setSuccessData(null); setErrorMsg('');
+    flwResult.current = null; verifyStarted.current = false;
   };
 
   const fmtDate = (d) => new Date(d).toLocaleDateString('en-NG', { day:'2-digit', month:'short', year:'numeric' });
