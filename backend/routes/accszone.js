@@ -68,7 +68,40 @@ const CATEGORY_CHIP_MAP = {
 };
 
 function categoryToChip(catTitle = '') {
-  return CATEGORY_CHIP_MAP[(catTitle || '').toLowerCase()] || 'Other';
+  return CATEGORY_CHIP_MAP[(catTitle || '').toLowerCase()] || null;
+}
+
+// Strict fallback: match only at START of product title to avoid false positives
+function chipFromTitle(title = '') {
+  const t = (title || '').toLowerCase();
+  if (/^facebook\b/.test(t)) return 'Facebook';
+  if (/^instagram\b/.test(t)) return 'Instagram';
+  if (/^tiktok\b/.test(t)) return 'TikTok';
+  if (/^twitter\b/.test(t)) return 'Twitter/X';
+  if (/^youtube\b/.test(t)) return 'YouTube';
+  if (/^whatsapp\b/.test(t)) return 'WhatsApp';
+  if (/^snapchat\b/.test(t)) return 'Snapchat';
+  if (/^telegram\b/.test(t)) return 'Telegram';
+  if (/^discord\b/.test(t)) return 'Discord';
+  if (/^linkedin\b/.test(t)) return 'LinkedIn';
+  if (/^reddit\b/.test(t)) return 'Reddit';
+  if (/^pinterest\b/.test(t)) return 'Pinterest';
+  if (/^threads\b/.test(t)) return 'Threads';
+  if (/^bluesky\b/.test(t)) return 'Bluesky';
+  if (/^gmail\b/.test(t)) return 'Gmail';
+  if (/^google voice\b/.test(t)) return 'Gmail';
+  if (/^google ads\b/.test(t)) return 'Gmail';
+  if (/^outlook\b/.test(t)) return 'Outlook';
+  if (/^(gmx|yahoo|zoho|aol|onet|protonmail)\b/.test(t)) return 'Email';
+  if (/^netflix\b/.test(t)) return 'Netflix';
+  if (/^spotify\b/.test(t)) return 'Spotify';
+  if (/^amazon\b/.test(t)) return 'Amazon';
+  if (/^apple id\b/.test(t) || /^icloud\b/.test(t)) return 'Apple ID';
+  if (/^binance\b/.test(t) || /^cashapp\b/.test(t)) return 'Crypto';
+  if (/^(nordvpn|expressvpn|vpn premium)\b/.test(t)) return 'VPN';
+  if (/^mobile proxies\b/.test(t)) return 'Proxy';
+  if (/^(badoo|bumble|grindr|tinder|eharmony|taimi)\b/.test(t)) return 'Dating';
+  return null;
 }
 
 // Fetch price overrides map { slug -> custom_price_ngn }
@@ -91,7 +124,9 @@ async function applyPrices(listings) {
     const slug = l.slug || l.ad_id || String(l.id || '');
     const autoNGN = parseFloat((Number(l.price || l.unit_price || 0) * rate).toFixed(2));
     const sellNGN = overrides[slug] != null ? overrides[slug] : autoNGN;
-    const platform = categoryToChip(l.category?.title);
+    // category can be object {title} or plain string depending on API response shape
+    const catTitle = typeof l.category === 'string' ? l.category : (l.category?.title || '');
+    const platform = categoryToChip(catTitle) || chipFromTitle(l.title || l.name) || 'Other';
     return { ...l, _auto_price_ngn: autoNGN, _sell_price_ngn: sellNGN, _platform: platform };
   };
   return Array.isArray(listings) ? listings.map(apply) : apply(listings);
