@@ -1,6 +1,7 @@
 const express = require('express');
 const supabase = require('../lib/supabase');
 const auth = require('../middleware/auth');
+const { getEmailConfig, sendSupportNotification } = require('../lib/mailer');
 const router = express.Router();
 
 // POST /api/support/start — get active conversation or create one
@@ -83,6 +84,34 @@ router.post('/:id/message', auth, async (req, res) => {
       .from('support_conversations')
       .update({ updated_at: new Date().toISOString() })
       .eq('id', id);
+
+    // Email admin if conversation is open (human phase)
+    if (conv.status === 'open') {
+      getEmailConfig().then(async (cfg) => {
+        try {
+          const { data: sender } = await supabase
+            .from('users')
+            .select('full_name, email')
+            .eq('id', req.user.id)
+            .single();
+
+          const dashboardUrl = process.env.FRONTEND_URL
+            ? `${process.env.FRONTEND_URL.replace(/\/$/, '')}/admin/support`
+            : null;
+
+          await sendSupportNotification({
+            adminEmail: cfg.adminEmail,
+            gmailUser: cfg.gmailUser,
+            gmailPass: cfg.gmailPass,
+            convId: id,
+            customerName: sender?.full_name || 'Customer',
+            customerEmail: sender?.email || '',
+            message: body.trim(),
+            dashboardUrl,
+          });
+        } catch (_) {}
+      });
+    }
 
     res.status(201).json(data);
   } catch (err) {

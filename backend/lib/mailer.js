@@ -298,4 +298,68 @@ async function sendRefundNotification({ toEmail, toName, amount, reason }) {
   }
 }
 
-module.exports = { sendPaymentNotification, sendOrderDelivery, sendPaymentConfirmed, sendPaymentRejected, sendRefundNotification };
+// Build the Reply-To alias for a support conversation
+// e.g. panelng@gmail.com + convId → panelng+support-{convIdNoDashes}@gmail.com
+function buildSupportReplyTo(gmailUser, convId) {
+  const noDashes = convId.replace(/-/g, '');
+  const [local, domain] = gmailUser.split('@');
+  return `${local}+support-${noDashes}@${domain}`;
+}
+
+async function sendSupportNotification({ adminEmail, gmailUser, gmailPass, convId, customerName, customerEmail, message, dashboardUrl }) {
+  try {
+    if (!adminEmail || !gmailUser || !gmailPass) return;
+
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: { user: gmailUser, pass: gmailPass },
+    });
+
+    const preview = message.length > 120 ? message.slice(0, 120) + '…' : message;
+    const replyTo = buildSupportReplyTo(gmailUser, convId);
+    const shortId = convId.slice(0, 8).toUpperCase();
+
+    await transporter.sendMail({
+      from: `PanelNG Support <${gmailUser}>`,
+      to: adminEmail,
+      replyTo,
+      subject: `[Support #${shortId}] ${customerName}: ${preview}`,
+      html: `
+        <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;background:#06080F;color:#E8E8F0;padding:32px;border-radius:10px;">
+          <div style="border-bottom:2px solid #F0A500;padding-bottom:14px;margin-bottom:24px;">
+            <span style="font-size:20px;font-weight:800;color:#F0A500;letter-spacing:-0.02em;">PanelNG</span>
+            <span style="font-size:13px;color:#A0A0B8;margin-left:10px;">Support Message</span>
+          </div>
+          <p style="font-size:13px;color:#A0A0B8;margin:0 0 18px;">New message from a customer — reply to this email to respond directly.</p>
+          <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:20px;">
+            <tr><td style="padding:8px 0;color:#A0A0B8;width:130px;">Customer</td><td style="padding:8px 0;font-weight:600;">${customerName}</td></tr>
+            <tr><td style="padding:8px 0;color:#A0A0B8;">Email</td><td style="padding:8px 0;">${customerEmail}</td></tr>
+            <tr><td style="padding:8px 0;color:#A0A0B8;">Ref</td><td style="padding:8px 0;font-family:monospace;font-size:12px;color:#0EC97F;">#${shortId}</td></tr>
+          </table>
+          <div style="background:#0F1520;border:1px solid #1A1D2E;border-left:3px solid #F0A500;border-radius:6px;padding:16px 18px;font-size:14px;line-height:1.7;color:#E8E8F0;margin-bottom:22px;">
+            ${message.replace(/\n/g, '<br>')}
+          </div>
+          <div style="margin-bottom:20px;padding:12px 16px;background:#1A1200;border:1px solid rgba(240,165,0,.25);border-radius:6px;font-size:12px;color:#F0A500;">
+            ↩ Hit <strong>Reply</strong> in your email to respond — your reply will appear in the customer's chat automatically.
+          </div>
+          ${dashboardUrl ? `<a href="${dashboardUrl}" style="display:inline-block;padding:10px 20px;background:#F0A500;color:#06080F;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700;">Open in Dashboard</a>` : ''}
+        </div>
+      `,
+    });
+
+    console.log(`[mailer] Support notification sent for conv ${convId}`);
+  } catch (err) {
+    console.error('[mailer] Failed to send support notification:', err.message);
+  }
+}
+
+module.exports = {
+  getEmailConfig,
+  sendPaymentNotification,
+  sendOrderDelivery,
+  sendPaymentConfirmed,
+  sendPaymentRejected,
+  sendRefundNotification,
+  sendSupportNotification,
+  buildSupportReplyTo,
+};

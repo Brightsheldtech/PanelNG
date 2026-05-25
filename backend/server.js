@@ -17,6 +17,7 @@ const bankRoutes = require('./routes/bankDeposit');
 const accszoneRoutes = require('./routes/accszone');
 const settingsRoutes = require('./routes/settings');
 const supportRoutes = require('./routes/support');
+const { startImapPoller } = require('./lib/imap');
 
 const app = express();
 
@@ -77,4 +78,5 @@ const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`\nPanelNG API running on http://localhost:${PORT}`);
   console.log(`Health check: http://localhost:${PORT}/api/health\n`);
+  startImapPoller();
 });
