@@ -4,6 +4,7 @@ const supabase = require('../lib/supabase');
 const auth = require('../middleware/auth');
 const adminOnly = require('../middleware/admin');
 const { getExchangeRate } = require('../lib/exchangeRate');
+const { sendOrderDelivery } = require('../lib/mailer');
 
 const router = express.Router();
 
@@ -253,7 +254,7 @@ router.post('/order', auth, async (req, res) => {
     // Check wallet balance (NGN)
     const { data: user, error: userErr } = await supabase
       .from('users')
-      .select('wallet_balance')
+      .select('wallet_balance, email, full_name')
       .eq('id', req.user.id)
       .single();
 
@@ -294,10 +295,24 @@ router.post('/order', auth, async (req, res) => {
       .select()
       .single();
 
+    const deliveredAccounts = orderResult?.accounts || orderResult?.data || [];
+
+    // Fire-and-forget delivery email — does not block the response
+    sendOrderDelivery({
+      toEmail: user.email,
+      toName: user.full_name,
+      productName: productName,
+      quantity: Number(quantity),
+      totalNGN: totalCostNGN,
+      orderId: savedOrder?.id || '',
+      deliveredAt: new Date().toISOString(),
+      accounts: deliveredAccounts,
+    });
+
     res.json({
       success: true,
       order: savedOrder,
-      accounts: orderResult?.accounts || orderResult?.data || [],
+      accounts: deliveredAccounts,
       new_balance: Number(user.wallet_balance) - totalCostNGN,
     });
   } catch (err) {

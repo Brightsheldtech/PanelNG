@@ -533,12 +533,47 @@ function PurchaseModal({ listing, qty, balance, onClose, onSuccess, onAddFunds, 
     }
   };
 
-  const copyAll = () => {
+  const buildAccountText = () => {
     const accs = result?.accounts || [];
-    const text = Array.isArray(accs)
-      ? accs.map(a => Object.values(a).join(':') ).join('\n')
-      : JSON.stringify(accs, null, 2);
-    navigator.clipboard.writeText(text);
+    const list = Array.isArray(accs) ? accs : (accs ? [accs] : []);
+    const lines = list.map((acc, i) => {
+      const header = `Account ${i + 1}`;
+      if (typeof acc === 'string') return `${header}:\n  ${acc}`;
+      return `${header}:\n${Object.entries(acc).map(([k, v]) => `  ${k}: ${v}`).join('\n')}`;
+    });
+    return [
+      '='.repeat(50),
+      'PANELNG ORDER DELIVERY',
+      '='.repeat(50),
+      `Product : ${title}`,
+      `Quantity: ${qty}`,
+      `Total   : ${fmt(total)}`,
+      `Date    : ${new Date().toLocaleString('en-NG', { timeZone: 'Africa/Lagos' })}`,
+      '='.repeat(50),
+      'YOUR ACCOUNT CREDENTIALS',
+      '='.repeat(50),
+      '',
+      ...lines,
+      '',
+      '='.repeat(50),
+      'Keep this file secure. PanelNG is not liable for misuse.',
+      '='.repeat(50),
+    ].join('\n');
+  };
+
+  const copyAll = () => {
+    navigator.clipboard.writeText(buildAccountText());
+  };
+
+  const downloadTxt = () => {
+    const text = buildAccountText();
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `panelng-order-${Date.now()}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -608,22 +643,29 @@ function PurchaseModal({ listing, qty, balance, onClose, onSuccess, onAddFunds, 
               <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{qty} × {title}</div>
             </div>
             <div style={{ background: 'rgba(245,158,11,.08)', border: '1px solid rgba(245,158,11,.25)', borderRadius: 10, padding: '10px 14px', fontSize: 12, color: '#F59E0B', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <i className="ti ti-alert-triangle" />Save these now — they will not be shown again.
+              <i className="ti ti-alert-triangle" />Credentials also sent to your email. Save them securely.
             </div>
             {/* Delivered accounts */}
             <div style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', borderRadius: 12, padding: '4px 16px', marginBottom: 16, maxHeight: 240, overflowY: 'auto' }}>
               {(result?.accounts || []).length > 0
                 ? (result.accounts.map((acc, i) => (
                     <div key={i} style={{ padding: '10px 0', borderBottom: i < result.accounts.length - 1 ? '0.5px solid var(--border)' : 'none' }}>
-                      {Object.entries(acc).map(([k, v]) => <CredRow key={k} label={k} value={String(v)} />)}
+                      {typeof acc === 'string'
+                        ? <CredRow label="credentials" value={acc} />
+                        : Object.entries(acc).map(([k, v]) => <CredRow key={k} label={k} value={String(v)} />)}
                     </div>
                   )))
-                : <div style={{ padding: '16px 0', textAlign: 'center', fontSize: 13, color: 'var(--text-muted)' }}>Account data delivered. Check your order history for details.</div>
+                : <div style={{ padding: '16px 0', textAlign: 'center', fontSize: 13, color: 'var(--text-muted)' }}>Account data delivered. Check your email and order history for details.</div>
               }
             </div>
-            <button onClick={copyAll} style={{ width: '100%', height: 44, background: 'var(--bg-raised)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: 12, fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif", marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-              <i className="ti ti-copy" />Copy All Accounts
-            </button>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+              <button onClick={copyAll} style={{ flex: 1, height: 44, background: 'var(--bg-raised)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: 12, fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                <i className="ti ti-copy" />Copy All
+              </button>
+              <button onClick={downloadTxt} style={{ flex: 1, height: 44, background: 'var(--bg-raised)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: 12, fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                <i className="ti ti-download" />Download .txt
+              </button>
+            </div>
             <div style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 14px', marginBottom: 12 }}>
               <p style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.6, margin: 0 }}>
                 <i className="ti ti-info-circle" style={{ marginRight: 5 }} />
