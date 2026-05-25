@@ -597,4 +597,110 @@ router.delete('/sms-country-settings/:id', async (req, res) => {
   }
 });
 
+// ============================================================
+// SUPPORT / LIVE CHAT
+// ============================================================
+
+// GET /api/admin/support — list conversations (open + resolved, not bot-phase)
+router.get('/support', async (req, res) => {
+  const { status } = req.query;
+  try {
+    let query = supabase
+      .from('support_conversations')
+      .select('id, status, subject, created_at, updated_at, users(id, full_name, email)')
+      .order('updated_at', { ascending: false });
+    if (status && status !== 'all') {
+      query = query.eq('status', status);
+    } else {
+      query = query.in('status', ['open', 'resolved']);
+    }
+    const { data, error } = await query;
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err) {
+    console.error('admin/support GET error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch conversations' });
+  }
+});
+
+// GET /api/admin/support/:id — conversation + full message thread
+router.get('/support/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const [convRes, msgRes] = await Promise.all([
+      supabase
+        .from('support_conversations')
+        .select('id, status, subject, created_at, updated_at, users(id, full_name, email)')
+        .eq('id', id)
+        .single(),
+      supabase
+        .from('support_messages')
+        .select('id, sender_type, body, created_at')
+        .eq('conversation_id', id)
+        .order('created_at', { ascending: true })
+        .limit(200),
+    ]);
+    if (convRes.error) throw convRes.error;
+    res.json({ conversation: convRes.data, messages: msgRes.data || [] });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch conversation' });
+  }
+});
+
+// POST /api/admin/support/:id/reply — admin sends a reply
+router.post('/support/:id/reply', async (req, res) => {
+  const { id } = req.params;
+  const { body } = req.body;
+  if (!body?.trim()) return res.status(400).json({ error: 'Message is required' });
+  try {
+    const { data, error } = await supabase
+      .from('support_messages')
+      .insert({ conversation_id: id, sender_type: 'admin', sender_id: req.user.id, body: body.trim() })
+      .select('id, sender_type, body, created_at')
+      .single();
+    if (error) throw error;
+    await supabase
+      .from('support_conversations')
+      .update({ updated_at: new Date().toISOString() })
+      .eq('id', id);
+    res.status(201).json(data);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to send reply' });
+  }
+});
+
+// PATCH /api/admin/support/:id/resolve — mark conversation as resolved
+router.patch('/support/:id/resolve', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const { data, error } = await supabase
+      .from('support_conversations')
+      .update({ status: 'resolved', updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select('id, status')
+      .single();
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to resolve conversation' });
+  }
+});
+
+// PATCH /api/admin/support/:id/reopen — reopen a resolved conversation
+router.patch('/support/:id/reopen', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const { data, error } = await supabase
+      .from('support_conversations')
+      .update({ status: 'open', updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select('id, status')
+      .single();
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to reopen conversation' });
+  }
+});
+
 module.exports = router;

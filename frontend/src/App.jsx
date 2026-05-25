@@ -20,6 +20,7 @@ import SmsManager from './pages/admin/SmsManager';
 import PaymentRequests from './pages/admin/PaymentRequests';
 import BankSettings from './pages/admin/BankSettings';
 import AccszoneManager from './pages/admin/AccszoneManager';
+import SupportManager from './pages/admin/SupportManager';
 
 export default function App() {
   const { user, loading } = useAuth();
@@ -69,6 +70,7 @@ export default function App() {
         <Route path="services" element={<ServicesManager />} />
         <Route path="sms-manager" element={<SmsManager />} />
         <Route path="accszone" element={<AccszoneManager />} />
+        <Route path="support" element={<SupportManager />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

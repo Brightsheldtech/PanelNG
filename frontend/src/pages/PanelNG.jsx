@@ -1507,6 +1507,258 @@ function ProfileSettings() {
   );
 }
 
+// ─── SUPPORT CHAT ─────────────────────────────────────────────────────────────
+const BOT_TOPICS = [
+  { id:'funding',  icon:'ti-wallet',         label:'Wallet & Funding',    reply:"To fund your wallet: Add Funds → Bank Transfer → enter amount → get unique reference code → send exact amount to our bank account → click \"I Have Made This Transfer\". Wallet is credited within minutes during business hours (8am–9pm WAT)." },
+  { id:'order',    icon:'ti-package',         label:'Order Not Delivered', reply:"Orders usually process within seconds. If your order shows \"pending\" after 5 minutes, check Order History for status updates. If it's been over 30 minutes and still pending, tap \"I still need help\" so a support agent can investigate." },
+  { id:'payment',  icon:'ti-clock',           label:'Payment Not Confirmed',reply:"Bank transfers are confirmed manually. If you submitted a request during business hours (8am–9pm WAT) and haven't been credited after 2 hours, please escalate. Make sure you used the exact reference code as the transfer narration." },
+  { id:'refund',   icon:'ti-receipt-refund',  label:'Refund / Dispute',    reply:"Refunds are handled case-by-case. Accounts suspended due to third-party policy violations are not eligible. For valid delivery issues, escalate below and include your Order ID." },
+  { id:'other',    icon:'ti-help-circle',     label:'Something Else',      reply:null, escalate:true },
+];
+
+function SupportChat() {
+  const user = useContext(UserCtx);
+  const [open, setOpen] = useState(false);
+  const [phase, setPhase] = useState('greeting'); // greeting | topics | bot-reply | escalating | human
+  const [selectedTopic, setSelectedTopic] = useState(null);
+  const [convId, setConvId] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState('');
+  const [sending, setSending] = useState(false);
+  const bottomRef = useRef(null);
+  const inputRef = useRef(null);
+
+  const scrollBottom = () => setTimeout(() => bottomRef.current?.scrollIntoView({ behavior:'smooth' }), 60);
+
+  // Poll messages while in human phase and chat is open
+  useEffect(() => {
+    if (phase !== 'human' || !convId || !open) return;
+    const poll = async () => {
+      try {
+        const { data } = await api.get(`/support/${convId}/messages`);
+        setMessages(data.messages || []);
+        scrollBottom();
+      } catch (_) {}
+    };
+    poll();
+    const id = setInterval(poll, 4000);
+    return () => clearInterval(id);
+  }, [phase, convId, open]);
+
+  const handleOpen = () => { setOpen(true); };
+  const handleClose = () => setOpen(false);
+
+  const handleTopic = async (topic) => {
+    setSelectedTopic(topic);
+    if (topic.escalate) {
+      await escalate(topic.label);
+    } else {
+      setPhase('bot-reply');
+    }
+  };
+
+  const escalate = async (subject) => {
+    setPhase('escalating');
+    try {
+      let id = convId;
+      if (!id) {
+        const { data: conv } = await api.post('/support/start');
+        id = conv.id;
+        setConvId(id);
+      }
+      await api.patch(`/support/${id}/escalate`, { subject });
+      setMessages([]);
+      setPhase('human');
+      scrollBottom();
+      setTimeout(() => inputRef.current?.focus(), 100);
+    } catch {
+      setPhase('topics');
+    }
+  };
+
+  const sendMessage = async () => {
+    if (!input.trim() || !convId || sending) return;
+    const body = input.trim();
+    setInput('');
+    setSending(true);
+    const temp = { id:`t-${Date.now()}`, sender_type:'user', body, created_at:new Date().toISOString() };
+    setMessages(prev => [...prev, temp]);
+    scrollBottom();
+    try {
+      const { data } = await api.post(`/support/${convId}/message`, { body });
+      setMessages(prev => prev.map(m => m.id === temp.id ? data : m));
+    } catch (_) {
+      setMessages(prev => prev.filter(m => m.id !== temp.id));
+      setInput(body);
+    }
+    setSending(false);
+  };
+
+  const handleKey = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } };
+
+  const reset = () => { setPhase('greeting'); setSelectedTopic(null); setConvId(null); setMessages([]); setInput(''); };
+
+  const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
+  const panelBottom = isMobile ? 76 : 24;
+
+  return (
+    <>
+      {/* Chat panel */}
+      {open && (
+        <div style={{position:'fixed',bottom:panelBottom+64,right:isMobile?12:24,width:isMobile?'calc(100vw - 24px)':'360px',maxWidth:360,height:480,background:'var(--bg-surface)',border:'1px solid var(--border)',borderRadius:16,boxShadow:'0 8px 40px rgba(0,0,0,.28)',display:'flex',flexDirection:'column',zIndex:9998,overflow:'hidden',fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+
+          {/* Header */}
+          <div style={{padding:'14px 16px',borderBottom:'1px solid var(--border)',display:'flex',alignItems:'center',gap:10,flexShrink:0,background:'var(--bg-surface)'}}>
+            <div style={{width:36,height:36,borderRadius:10,background:'rgba(245,158,11,.15)',border:'1px solid rgba(245,158,11,.3)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+              <i className="ti ti-headset" style={{fontSize:18,color:'var(--accent)'}}/>
+            </div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:14,fontWeight:700,color:'var(--text-primary)',lineHeight:1.2}}>PanelNG Support</div>
+              <div style={{fontSize:11,color:'var(--success)',display:'flex',alignItems:'center',gap:4,marginTop:2}}>
+                <span style={{width:6,height:6,borderRadius:'50%',background:'var(--success)',display:'inline-block'}}/>
+                {phase==='human'?'Connected to support':'Typically replies within minutes'}
+              </div>
+            </div>
+            {phase!=='greeting'&&phase!=='escalating'&&(
+              <button onClick={reset} style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-muted)',fontSize:12,padding:'4px 8px',borderRadius:6}}>
+                <i className="ti ti-refresh" style={{fontSize:14}}/>
+              </button>
+            )}
+            <button onClick={handleClose} style={{width:28,height:28,background:'var(--bg-raised)',border:'none',borderRadius:8,cursor:'pointer',color:'var(--text-secondary)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+              <i className="ti ti-x" style={{fontSize:14}}/>
+            </button>
+          </div>
+
+          {/* Body */}
+          <div style={{flex:1,overflowY:'auto',overflowX:'hidden',minHeight:0,padding:'16px 14px'}}>
+
+            {/* GREETING */}
+            {phase==='greeting'&&(
+              <div style={{display:'flex',flexDirection:'column',gap:12}}>
+                <div style={{display:'flex',gap:10,alignItems:'flex-start'}}>
+                  <div style={{width:30,height:30,borderRadius:10,background:'var(--accent)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginTop:2}}>
+                    <i className="ti ti-robot" style={{fontSize:15,color:'var(--accent-text)'}}/>
+                  </div>
+                  <div style={{background:'var(--bg-raised)',border:'1px solid var(--border)',borderRadius:'4px 12px 12px 12px',padding:'10px 14px',fontSize:13,color:'var(--text-primary)',lineHeight:1.6,maxWidth:'85%'}}>
+                    Hi <strong>{user?.name?.split(' ')[0]||'there'}</strong>! How can we help you today?
+                  </div>
+                </div>
+                <button onClick={()=>setPhase('topics')} style={{alignSelf:'flex-start',marginLeft:40,padding:'8px 14px',background:'var(--accent)',color:'var(--accent-text)',border:'none',borderRadius:20,fontSize:12,fontWeight:600,cursor:'pointer'}}>
+                  Get Help <i className="ti ti-arrow-right" style={{fontSize:11,marginLeft:4}}/>
+                </button>
+              </div>
+            )}
+
+            {/* TOPICS */}
+            {phase==='topics'&&(
+              <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                <div style={{display:'flex',gap:10,alignItems:'flex-start',marginBottom:4}}>
+                  <div style={{width:30,height:30,borderRadius:10,background:'var(--accent)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginTop:2}}>
+                    <i className="ti ti-robot" style={{fontSize:15,color:'var(--accent-text)'}}/>
+                  </div>
+                  <div style={{background:'var(--bg-raised)',border:'1px solid var(--border)',borderRadius:'4px 12px 12px 12px',padding:'10px 14px',fontSize:13,color:'var(--text-primary)',lineHeight:1.6,maxWidth:'85%'}}>
+                    Select a topic below and I'll help right away:
+                  </div>
+                </div>
+                {BOT_TOPICS.map(t=>(
+                  <button key={t.id} onClick={()=>handleTopic(t)} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',background:'var(--bg-raised)',border:'1px solid var(--border)',borderRadius:10,cursor:'pointer',color:'var(--text-primary)',fontSize:13,fontWeight:500,textAlign:'left',transition:'all 120ms ease',fontFamily:"'Plus Jakarta Sans',sans-serif"}}
+                    onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--accent)';e.currentTarget.style.background='rgba(245,158,11,.08)'}}
+                    onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--border)';e.currentTarget.style.background='var(--bg-raised)'}}>
+                    <i className={`ti ${t.icon}`} style={{fontSize:16,color:'var(--accent)',flexShrink:0}}/>
+                    {t.label}
+                    <i className="ti ti-chevron-right" style={{fontSize:12,color:'var(--text-muted)',marginLeft:'auto'}}/>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* BOT REPLY */}
+            {phase==='bot-reply'&&selectedTopic&&(
+              <div style={{display:'flex',flexDirection:'column',gap:12}}>
+                <div style={{display:'flex',gap:10,alignItems:'flex-start'}}>
+                  <div style={{width:30,height:30,borderRadius:10,background:'var(--accent)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginTop:2}}>
+                    <i className="ti ti-robot" style={{fontSize:15,color:'var(--accent-text)'}}/>
+                  </div>
+                  <div style={{background:'var(--bg-raised)',border:'1px solid var(--border)',borderRadius:'4px 12px 12px 12px',padding:'12px 14px',fontSize:13,color:'var(--text-primary)',lineHeight:1.7,maxWidth:'90%'}}>
+                    {selectedTopic.reply}
+                  </div>
+                </div>
+                <div style={{marginLeft:40,fontSize:12,color:'var(--text-muted)',marginTop:4}}>Did that help?</div>
+                <div style={{marginLeft:40,display:'flex',gap:8,flexWrap:'wrap'}}>
+                  <button onClick={handleClose} style={{padding:'7px 14px',background:'rgba(34,197,94,.1)',border:'1px solid rgba(34,197,94,.25)',borderRadius:20,fontSize:12,fontWeight:600,color:'var(--success)',cursor:'pointer'}}>
+                    <i className="ti ti-thumb-up" style={{marginRight:5,fontSize:12}}/>Yes, thanks!
+                  </button>
+                  <button onClick={()=>escalate(selectedTopic.label)} style={{padding:'7px 14px',background:'rgba(245,158,11,.1)',border:'1px solid rgba(245,158,11,.25)',borderRadius:20,fontSize:12,fontWeight:600,color:'var(--accent)',cursor:'pointer'}}>
+                    <i className="ti ti-headset" style={{marginRight:5,fontSize:12}}/>I still need help
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ESCALATING */}
+            {phase==='escalating'&&(
+              <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',gap:10,color:'var(--text-secondary)',fontSize:13}}>
+                <i className="ti ti-loader-2" style={{fontSize:26,color:'var(--accent)',animation:'pn-spin 1s linear infinite'}}/>
+                Connecting you to support…
+              </div>
+            )}
+
+            {/* HUMAN CHAT */}
+            {phase==='human'&&(
+              <div style={{display:'flex',flexDirection:'column',gap:2}}>
+                <div style={{textAlign:'center',marginBottom:12}}>
+                  <span style={{fontSize:11,color:'var(--text-muted)',background:'var(--bg-raised)',border:'1px solid var(--border)',borderRadius:20,padding:'3px 10px',display:'inline-block'}}>
+                    You're connected — a team member will be with you shortly
+                  </span>
+                </div>
+                {messages.length===0&&(
+                  <div style={{textAlign:'center',padding:'20px 0',fontSize:13,color:'var(--text-muted)'}}>
+                    Send a message to start the conversation.
+                  </div>
+                )}
+                {messages.map(m=>(
+                  <div key={m.id} style={{display:'flex',justifyContent:m.sender_type==='user'?'flex-end':'flex-start',marginBottom:6}}>
+                    {m.sender_type!=='user'&&(
+                      <div style={{width:26,height:26,borderRadius:8,background:'var(--accent)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginRight:6,alignSelf:'flex-end'}}>
+                        <i className="ti ti-headset" style={{fontSize:13,color:'var(--accent-text)'}}/>
+                      </div>
+                    )}
+                    <div style={{maxWidth:'78%',padding:'9px 12px',borderRadius:m.sender_type==='user'?'12px 4px 12px 12px':'4px 12px 12px 12px',background:m.sender_type==='user'?'var(--accent)':'var(--bg-raised)',border:m.sender_type==='user'?'none':'1px solid var(--border)',color:m.sender_type==='user'?'var(--accent-text)':'var(--text-primary)',fontSize:13,lineHeight:1.55,wordBreak:'break-word'}}>
+                      {m.body}
+                    </div>
+                  </div>
+                ))}
+                <div ref={bottomRef}/>
+              </div>
+            )}
+          </div>
+
+          {/* Input bar — human phase only */}
+          {phase==='human'&&(
+            <div style={{padding:'10px 12px',borderTop:'1px solid var(--border)',display:'flex',gap:8,alignItems:'flex-end',flexShrink:0,background:'var(--bg-surface)'}}>
+              <textarea ref={inputRef} value={input} onChange={e=>setInput(e.target.value)} onKeyDown={handleKey} placeholder="Type a message…" rows={1} style={{flex:1,resize:'none',background:'var(--bg-raised)',border:'1px solid var(--border)',borderRadius:10,padding:'9px 12px',fontSize:13,color:'var(--text-primary)',fontFamily:"'Plus Jakarta Sans',sans-serif",outline:'none',lineHeight:1.5,maxHeight:80,overflowY:'auto'}}/>
+              <button onClick={sendMessage} disabled={!input.trim()||sending} style={{width:36,height:36,borderRadius:10,background:'var(--accent)',border:'none',cursor:!input.trim()||sending?'not-allowed':'pointer',opacity:!input.trim()||sending?.5:1,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,transition:'opacity 120ms'}}>
+                <i className="ti ti-send" style={{fontSize:16,color:'var(--accent-text)'}}/>
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Floating button */}
+      <button
+        onClick={open?handleClose:handleOpen}
+        style={{position:'fixed',bottom:panelBottom,right:isMobile?12:24,width:52,height:52,borderRadius:'50%',background:'var(--accent)',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 4px 20px rgba(0,0,0,.25)',zIndex:9999,transition:'transform 180ms ease,box-shadow 180ms ease'}}
+        onMouseEnter={e=>{e.currentTarget.style.transform='scale(1.08)';e.currentTarget.style.boxShadow='0 6px 28px rgba(0,0,0,.35)'}}
+        onMouseLeave={e=>{e.currentTarget.style.transform='scale(1)';e.currentTarget.style.boxShadow='0 4px 20px rgba(0,0,0,.25)'}}
+        aria-label={open?'Close support chat':'Open support chat'}
+      >
+        <i className={`ti ${open?'ti-x':'ti-message-circle'}`} style={{fontSize:22,color:'var(--accent-text)',transition:'all 180ms ease'}}/>
+      </button>
+    </>
+  );
+}
+
 // ─── APP ──────────────────────────────────────────────────────────────────────
 function App() {
   const { resolved } = useContext(ThemeCtx);
@@ -1531,6 +1783,7 @@ function App() {
         </div>
         <BottomNav page={page} setPage={navigate}/>
       </div>
+      <SupportChat/>
     </div>
   );
 }

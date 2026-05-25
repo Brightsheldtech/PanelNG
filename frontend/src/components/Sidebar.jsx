@@ -2,7 +2,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, PlusCircle, MessageSquare, Clock,
   Wallet, User, Users, ShoppingCart, ArrowLeftRight,
-  Settings, LogOut, Shield, X, Banknote, Building2, Phone, ShoppingBag,
+  Settings, LogOut, Shield, X, Banknote, Building2, Phone, ShoppingBag, HeadphonesIcon,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useEffect, useState } from 'react';
@@ -42,7 +42,8 @@ export default function Sidebar({ isOpen, onClose }) {
     { to: '/admin/services',          icon: Settings,        label: 'Services Manager' },
     { to: '/admin/sms-manager',       icon: Phone,           label: 'SMS Manager' },
     { to: '/admin/accszone',          icon: ShoppingBag,     label: 'Accounts Manager' },
-    { to: '/admin/bank-settings',     icon: Building2,       label: 'Bank Settings' },
+    { to: '/admin/bank-settings',     icon: Building2,        label: 'Bank Settings' },
+    { to: '/admin/support',           icon: HeadphonesIcon,   label: 'Support' },
   ];
 
   const initials = user?.full_name
