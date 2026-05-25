@@ -8,7 +8,7 @@ import toast from 'react-hot-toast';
 
 export default function BankSettings() {
   const [banks, setBanks] = useState([]);
-  const [settings, setSettings] = useState({ admin_email: '', gmail_user: '', usd_ngn_rate: '2100' });
+  const [settings, setSettings] = useState({ admin_email: '', gmail_user: '', usd_ngn_rate: '2900' });
   const [loading, setLoading] = useState(true);
   const [savingSettings, setSavingSettings] = useState(false);
   const [editingBank, setEditingBank] = useState(null); // bank id being edited
@@ -27,7 +27,7 @@ export default function BankSettings() {
       .then(([bankRes, settingsRes]) => {
         setBanks(bankRes.data || []);
         const s = settingsRes.data || {};
-        setSettings({ admin_email: s.admin_email || '', gmail_user: s.gmail_user || '', usd_ngn_rate: s.usd_ngn_rate || '2100' });
+        setSettings({ admin_email: s.admin_email || '', gmail_user: s.gmail_user || '', usd_ngn_rate: s.usd_ngn_rate || '2900' });
       })
       .catch(() => toast.error('Failed to load settings'))
       .finally(() => setLoading(false));
@@ -298,7 +298,7 @@ export default function BankSettings() {
                 className="form-input"
                 value={settings.usd_ngn_rate}
                 onChange={(e) => setSettings((p) => ({ ...p, usd_ngn_rate: e.target.value }))}
-                placeholder="e.g. 2100"
+                placeholder="e.g. 2900"
                 style={{ flex: 1, maxWidth: 200 }}
                 min={1}
               />

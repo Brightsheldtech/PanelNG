@@ -59,7 +59,7 @@ function CountryRow({ country, serviceCode, onUpdated, rate }) {
     finally { setSaving(false); }
   };
 
-  const toNgn = (usd) => Number(usd || 0) * Number(rate || 2100);
+  const toNgn = (usd) => Number(usd || 0) * Number(rate || 2900);
   const fmtNgn = (n) => toNgn(n).toLocaleString('en-NG', { minimumFractionDigits: 2 });
   const fmtUsd = (n) => Number(n || 0).toFixed(4);
   const hasCustom = !!country.setting_id;
@@ -179,7 +179,7 @@ function CountryView({ serviceCode, serviceName, onBack, rate }) {
           {customCount > 0 && <span style={{ marginLeft: 8, color: 'var(--primary)' }}>{customCount} customized</span>}
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>₦{Number(rate || 2100).toLocaleString()}/$1</span>
+          <span style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>₦{Number(rate || 2900).toLocaleString()}/$1</span>
           <button className="btn btn-outline btn-sm" onClick={() => setShowHidden((v) => !v)}>
             {showHidden ? <EyeOff size={12} /> : <Eye size={12} />}
             {showHidden ? 'Hide hidden' : 'Show all'}
@@ -229,7 +229,7 @@ export default function SmsManager() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null); // { code, name }
-  const [rate, setRate] = useState(2100);
+  const [rate, setRate] = useState(2900);
 
   const load = () => {
     setLoading(true);
