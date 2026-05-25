@@ -898,7 +898,7 @@ export default function BuyAccounts({ balance = 0, token = '', onNavigate, onPur
           balance={balance}
           token={token}
           onClose={() => setPurchaseListing(null)}
-          onSuccess={() => { onPurchaseComplete?.(); }}
+          onSuccess={(data) => { onPurchaseComplete?.(data); }}
           onAddFunds={() => { setPurchaseListing(null); onNavigate && onNavigate('funds'); }}
           exchangeRate={exchangeRate}
         />

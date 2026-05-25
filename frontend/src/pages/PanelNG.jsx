@@ -1007,6 +1007,7 @@ function OrderHistory() {
   const [orders, setOrders] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [credModal, setCredModal] = useState(null); // { order, accounts, loading, error }
   const fmtDate = (d) => new Date(d).toLocaleDateString('en-NG', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 
   const fetchOrders = async () => {
@@ -1037,6 +1038,18 @@ function OrderHistory() {
   };
 
   useEffect(() => { fetchOrders(); }, [tab]);
+
+  const viewCredentials = async (order) => {
+    setCredModal({ order, accounts: null, loading: true, error: false });
+    try {
+      const { data } = await api.get(`/accszone/orders/${order.id}`);
+      const raw = data.delivered_data;
+      const accs = Array.isArray(raw) ? raw : (raw ? [raw] : []);
+      setCredModal({ order, accounts: accs, loading: false, error: false });
+    } catch (_) {
+      setCredModal(prev => ({ ...prev, loading: false, error: true }));
+    }
+  };
 
   return (
     <div>
@@ -1081,11 +1094,93 @@ function OrderHistory() {
               <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:4}}>
                 <div className="pn-order-qty">{fmt(o.amount)}</div>
                 <Badge status={o.status}/>
+                {o.type==='accounts' && (
+                  <button
+                    onClick={() => viewCredentials(o)}
+                    style={{fontSize:10,color:'var(--accent)',background:'none',border:'none',cursor:'pointer',padding:0,fontFamily:"'Plus Jakarta Sans',sans-serif",display:'flex',alignItems:'center',gap:3,marginTop:2}}
+                  >
+                    <i className="ti ti-key" style={{fontSize:11}}/>View Credentials
+                  </button>
+                )}
               </div>
             </div>
           ))}
         </div>
       )}
+
+      {/* Credentials modal */}
+      {credModal && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.6)',zIndex:400,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
+          <div style={{background:'var(--bg-surface)',border:'1px solid var(--border)',borderRadius:20,width:'100%',maxWidth:440,maxHeight:'80vh',display:'flex',flexDirection:'column',overflow:'hidden'}}>
+            <div style={{padding:'18px 20px 14px',borderBottom:'1px solid var(--border)',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
+              <div>
+                <div style={{fontSize:15,fontWeight:700,color:'var(--text-primary)'}}>{credModal.order.product_name || credModal.order.platform}</div>
+                <div style={{fontSize:12,color:'var(--text-muted)',marginTop:2}}>{credModal.order.quantity} account{credModal.order.quantity!==1?'s':''} · {fmt(credModal.order.amount)}</div>
+              </div>
+              <button onClick={() => setCredModal(null)} style={{background:'var(--bg-raised)',border:'1px solid var(--border)',borderRadius:8,width:32,height:32,cursor:'pointer',color:'var(--text-muted)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16}}>
+                <i className="ti ti-x"/>
+              </button>
+            </div>
+            <div style={{flex:1,overflowY:'auto',padding:'16px 20px'}}>
+              {credModal.loading && (
+                <div style={{textAlign:'center',padding:'32px 0'}}>
+                  <i className="ti ti-loader-2" style={{fontSize:28,color:'var(--accent)',animation:'pn-spin 1s linear infinite'}}/>
+                  <div style={{fontSize:13,color:'var(--text-muted)',marginTop:10}}>Loading credentials…</div>
+                </div>
+              )}
+              {!credModal.loading && credModal.error && (
+                <div style={{textAlign:'center',padding:'24px 0',color:'var(--danger)',fontSize:13}}>
+                  <i className="ti ti-alert-circle" style={{fontSize:28,display:'block',marginBottom:8}}/>Could not load credentials. Try again.
+                </div>
+              )}
+              {!credModal.loading && !credModal.error && credModal.accounts?.length === 0 && (
+                <div style={{textAlign:'center',padding:'24px 0',color:'var(--text-muted)',fontSize:13}}>
+                  No credential data stored for this order.
+                </div>
+              )}
+              {!credModal.loading && !credModal.error && (credModal.accounts || []).map((acc, i) => (
+                <div key={i} style={{marginBottom:14}}>
+                  <div style={{fontSize:10,fontWeight:700,letterSpacing:'1px',textTransform:'uppercase',color:'var(--accent)',marginBottom:6}}>Account {i + 1}</div>
+                  <div style={{background:'var(--bg-raised)',border:'1px solid var(--border)',borderRadius:10,padding:'2px 12px'}}>
+                    {typeof acc === 'string'
+                      ? <CredHistoryRow label="credentials" value={acc}/>
+                      : Object.entries(acc).map(([k, v]) => <CredHistoryRow key={k} label={k} value={String(v)}/>)
+                    }
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div style={{padding:'12px 20px',borderTop:'1px solid var(--border)',flexShrink:0}}>
+              <div style={{fontSize:11,color:'var(--text-muted)',lineHeight:1.6}}>
+                <i className="ti ti-lock" style={{marginRight:4}}/>Keep these credentials private and secure.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CredHistoryRow({ label, value }) {
+  const [copied, setCopied] = useState(false);
+  const [show, setShow] = useState(false);
+  const isSecret = label.toLowerCase().includes('pass') || label.toLowerCase().includes('token');
+  const copy = () => { navigator.clipboard.writeText(value); setCopied(true); setTimeout(() => setCopied(false), 1500); };
+  return (
+    <div style={{display:'flex',alignItems:'center',gap:8,padding:'7px 0',borderBottom:'0.5px solid var(--border)'}}>
+      <span style={{fontSize:11,color:'var(--text-muted)',width:80,flexShrink:0,fontWeight:500}}>{label}</span>
+      <span style={{fontFamily:"'Geist Mono','Courier New',monospace",fontSize:12,color:'var(--text-primary)',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+        {isSecret && !show ? '••••••••' : value}
+      </span>
+      {isSecret && (
+        <button onClick={() => setShow(s => !s)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-muted)',fontSize:13,padding:2}}>
+          <i className={`ti ${show ? 'ti-eye-off' : 'ti-eye'}`}/>
+        </button>
+      )}
+      <button onClick={copy} style={{background:'none',border:'none',cursor:'pointer',color:copied?'var(--success)':'var(--text-muted)',fontSize:13,padding:2}}>
+        <i className={`ti ${copied ? 'ti-check' : 'ti-copy'}`}/>
+      </button>
     </div>
   );
 }
@@ -1304,7 +1399,11 @@ function App() {
   const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
   const navigate = (p) => { setPage(p); setSidebarOpen(false); };
   const user = useContext(UserCtx) || MOCK.user;
-  const PAGES = { overview: <Overview setPage={setPage}/>, neworder: <NewOrder/>, sms: <SmsVerify/>, accounts: <BuyAccounts balance={user.balance} token={localStorage.getItem('panelng_token')} onNavigate={navigate} onPurchaseComplete={user.refreshUser}/>, orders: <OrderHistory/>, funds: <AddFunds/>, profile: <ProfileSettings/> };
+  const handlePurchaseComplete = (data) => {
+    if (data?.new_balance != null) updateUser({ wallet_balance: data.new_balance });
+    refreshUser();
+  };
+  const PAGES = { overview: <Overview setPage={setPage}/>, neworder: <NewOrder/>, sms: <SmsVerify/>, accounts: <BuyAccounts balance={user.balance} token={localStorage.getItem('panelng_token')} onNavigate={navigate} onPurchaseComplete={handlePurchaseComplete}/>, orders: <OrderHistory/>, funds: <AddFunds/>, profile: <ProfileSettings/> };
   return (
     <div className="pn-root" data-theme={resolved}>
       <div className="pn-shell">
@@ -1322,7 +1421,7 @@ function App() {
 
 // ─── ROOT ─────────────────────────────────────────────────────────────────────
 export default function PanelNG() {
-  const { user: authUser, logout, refreshUser } = useAuth();
+  const { user: authUser, logout, refreshUser, updateUser } = useAuth();
 
   const user = authUser ? {
     name: authUser.full_name || authUser.email?.split('@')[0] || 'User',
