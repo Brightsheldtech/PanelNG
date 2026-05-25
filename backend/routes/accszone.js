@@ -39,6 +39,15 @@ async function fetchAllListings() {
     page++;
   } while (page <= lastPage && all.length < 5000); // safety cap
 
+  // ACCSZONE API returns duplicate products across pages — deduplicate by ID
+  const seen = new Set();
+  all = all.filter(l => {
+    const key = l.id ?? l.slug;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
   setCached('_all_listings', all);
   return all;
 }
