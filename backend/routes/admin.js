@@ -4,7 +4,7 @@ const jap = require('../lib/jap');
 const herosms = require('../lib/herosms');
 const auth = require('../middleware/auth');
 const adminOnly = require('../middleware/admin');
-const { sendPaymentConfirmed, sendPaymentRejected } = require('../lib/mailer');
+const { sendPaymentConfirmed, sendPaymentRejected, sendRefundNotification } = require('../lib/mailer');
 const router = express.Router();
 
 router.use(auth, adminOnly);
@@ -594,6 +594,68 @@ router.delete('/sms-country-settings/:id', async (req, res) => {
     res.json({ success: true });
   } catch (err) { console.error(err.message);
     res.status(500).json({ error: 'Failed to delete country setting' });
+  }
+});
+
+// ============================================================
+// REFUNDS
+// ============================================================
+
+// POST /api/admin/refund
+router.post('/refund', async (req, res) => {
+  const { user_id, amount, reason, order_id, order_type } = req.body;
+  const parsedAmount = parseFloat(amount);
+
+  if (!user_id) return res.status(400).json({ error: 'user_id is required' });
+  if (!parsedAmount || parsedAmount <= 0) return res.status(400).json({ error: 'Amount must be greater than 0' });
+
+  try {
+    const { data: userRow, error: userErr } = await supabase
+      .from('users')
+      .select('id, email, full_name, wallet_balance')
+      .eq('id', user_id)
+      .single();
+    if (userErr || !userRow) return res.status(404).json({ error: 'User not found' });
+
+    const newBalance = parseFloat(userRow.wallet_balance || 0) + parsedAmount;
+
+    const { error: walletErr } = await supabase
+      .from('users')
+      .update({ wallet_balance: newBalance })
+      .eq('id', user_id);
+    if (walletErr) throw walletErr;
+
+    const txRef = `REFUND-${Date.now()}-${user_id.slice(0, 6).toUpperCase()}`;
+    const { error: txErr } = await supabase.from('transactions').insert({
+      user_id,
+      type: 'credit',
+      amount: parsedAmount,
+      reference: txRef,
+      description: `Refund${reason ? ': ' + reason : ''}`,
+    });
+    if (txErr) throw txErr;
+
+    // Mark order as refunded if order_id provided
+    if (order_id && order_type) {
+      const tableMap = { smm: 'orders', sms: 'sms_orders', accounts: 'accszone_orders' };
+      const table = tableMap[order_type];
+      if (table) {
+        await supabase.from(table).update({ status: 'refunded' }).eq('id', order_id);
+      }
+    }
+
+    // Notify user (non-blocking)
+    sendRefundNotification({
+      toEmail: userRow.email,
+      toName: userRow.full_name,
+      amount: parsedAmount,
+      reason: reason || null,
+    });
+
+    res.json({ success: true, new_balance: newBalance, reference: txRef });
+  } catch (err) {
+    console.error('Refund error:', err.message);
+    res.status(500).json({ error: 'Failed to process refund' });
   }
 });
 

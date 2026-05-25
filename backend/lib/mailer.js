@@ -256,4 +256,46 @@ async function sendPaymentRejected({ toEmail, toName, amount, reference, reason 
   }
 }
 
-module.exports = { sendPaymentNotification, sendOrderDelivery, sendPaymentConfirmed, sendPaymentRejected };
+async function sendRefundNotification({ toEmail, toName, amount, reason }) {
+  try {
+    const cfg = await getEmailConfig();
+    if (!cfg.gmailUser || !cfg.gmailPass) return;
+
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: { user: cfg.gmailUser, pass: cfg.gmailPass },
+    });
+
+    const amountFmt = Number(amount).toLocaleString('en-NG', { minimumFractionDigits: 2 });
+
+    await transporter.sendMail({
+      from: `PanelNG <${cfg.gmailUser}>`,
+      to: toEmail,
+      subject: `Refund Processed — ₦${amountFmt} | PanelNG`,
+      html: `
+        <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;background:#06080F;color:#E8E8F0;padding:32px;border-radius:10px;">
+          <div style="border-bottom:2px solid #F0A500;padding-bottom:14px;margin-bottom:24px;">
+            <span style="font-size:20px;font-weight:800;color:#F0A500;letter-spacing:-0.02em;">PanelNG</span>
+            <span style="font-size:13px;color:#A0A0B8;margin-left:10px;">Refund Processed</span>
+          </div>
+          <p style="font-size:15px;margin:0 0 20px;">Hi <strong>${toName || 'there'}</strong>, a refund has been credited to your wallet.</p>
+          <table style="width:100%;border-collapse:collapse;font-size:14px;">
+            <tr>
+              <td style="padding:10px 0;color:#A0A0B8;width:150px;">Amount Refunded</td>
+              <td style="padding:10px 0;font-family:monospace;font-size:22px;font-weight:800;color:#0EC97F;">₦${amountFmt}</td>
+            </tr>
+            ${reason ? `<tr><td style="padding:10px 0;color:#A0A0B8;vertical-align:top;">Reason</td><td style="padding:10px 0;">${reason}</td></tr>` : ''}
+          </table>
+          <div style="margin-top:20px;padding:14px 18px;background:#0B0E18;border-radius:6px;font-size:13px;color:#A0A0B8;border:1px solid #1A1D2E;">
+            Your wallet balance has been updated. Log in to use your credit on a new order.
+          </div>
+        </div>
+      `,
+    });
+    console.log(`[mailer] Refund notification sent to ${toEmail}`);
+  } catch (err) {
+    console.error('[mailer] Failed to send refund notification:', err.message);
+  }
+}
+
+module.exports = { sendPaymentNotification, sendOrderDelivery, sendPaymentConfirmed, sendPaymentRejected, sendRefundNotification };
