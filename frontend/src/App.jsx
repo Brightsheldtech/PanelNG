@@ -5,6 +5,7 @@ import PanelNG from './pages/PanelNG';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import AdminLogin from './pages/AdminLogin';
 import PaymentCallback from './pages/PaymentCallback';
 
 import DashboardLayout from './components/DashboardLayout';
@@ -39,6 +40,7 @@ export default function App() {
       <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <Landing />} />
       <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <Login />} />
       <Route path="/register" element={user ? <Navigate to="/dashboard" replace /> : <Register />} />
+      <Route path="/manage" element={user?.role === 'admin' ? <Navigate to="/admin/overview" replace /> : <AdminLogin />} />
       <Route path="/payment/callback" element={<PaymentCallback />} />
 
       {/* User Dashboard */}
