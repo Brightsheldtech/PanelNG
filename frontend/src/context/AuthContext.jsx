@@ -3,10 +3,11 @@ import api from '../lib/api';
 
 const AuthContext = createContext(null);
 
+const BALANCE_POLL_MS = 15000;
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-
   useEffect(() => {
     const token = localStorage.getItem('panelng_token');
     const saved = localStorage.getItem('panelng_user');
@@ -19,6 +20,37 @@ export function AuthProvider({ children }) {
     }
     setLoading(false);
   }, []);
+
+  // Poll wallet balance while logged in
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchBalance = async () => {
+      if (!localStorage.getItem('panelng_token')) return;
+      try {
+        const { data } = await api.get('/wallet/balance');
+        if (data?.balance == null) return;
+        setUser((prev) => {
+          if (!prev || prev.wallet_balance === data.balance) return prev;
+          const next = { ...prev, wallet_balance: data.balance };
+          localStorage.setItem('panelng_user', JSON.stringify(next));
+          return next;
+        });
+      } catch (_) {}
+    };
+
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') fetchBalance();
+    }, BALANCE_POLL_MS);
+
+    const onVisible = () => { if (document.visibilityState === 'visible') fetchBalance(); };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [!!user]); // restart only when logged-in state changes, not on every user update
 
   const login = async (email, password) => {
     const res = await api.post('/auth/login', { email, password });
