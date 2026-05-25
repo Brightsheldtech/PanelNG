@@ -1238,61 +1238,25 @@ function CredHistoryRow({ label, value }) {
 function AddFunds() {
   const user = useContext(UserCtx);
   const { updateUser, refreshUser } = useAuth();
-  const [tab, setTab] = useState('bank');
-  const [step, setStep] = useState(1);
+  // step: 'amount' | 'method' | 'verifying' | 'success' | 'error'
+  const [step, setStep] = useState('amount');
   const [amount, setAmount] = useState('');
   const [selectedAmt, setSelectedAmt] = useState(null);
-  const [copied, setCopied] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState('');
-  const [ref, setRef] = useState('');
-  const [bankDetails, setBankDetails] = useState([]);
-  const [bankLoading, setBankLoading] = useState(true);
+  const [successData, setSuccessData] = useState(null);
+  const [errorMsg, setErrorMsg] = useState('');
   const [transactions, setTransactions] = useState([]);
   const [txLoading, setTxLoading] = useState(true);
-  const [flwLoading, setFlwLoading] = useState(false);
-  const [flwSuccess, setFlwSuccess] = useState(null); // { amount, new_balance }
-  const [flwError, setFlwError] = useState('');
+  const flwResult = useRef(null);
   const QUICK = [500, 1000, 2000, 5000, 10000, 20000];
 
-  useEffect(() => {
-    api.get('/bank/details')
-      .then(r => setBankDetails(Array.isArray(r.data) ? r.data : []))
-      .catch(() => setBankDetails([]))
-      .finally(() => setBankLoading(false));
+  const loadTx = () => {
     api.get('/wallet/transactions')
       .then(r => setTransactions(Array.isArray(r.data?.transactions) ? r.data.transactions : []))
       .catch(() => setTransactions([]))
       .finally(() => setTxLoading(false));
-  }, [submitted]);
-
-  const generateRef = () => {
-    const n = String(Math.floor(Math.random() * 9000) + 1000);
-    const letters = (user?.initials || 'U').replace(/[^A-Z]/g, '').slice(0, 3) || 'U';
-    return `PNG-${n}-${letters}`;
   };
 
-  const selectAmt = (a) => { setAmount(String(a)); setSelectedAmt(a); };
-  const handleCopy = () => { navigator.clipboard.writeText(ref); setCopied(true); setTimeout(()=>setCopied(false),2000); };
-
-  const goToStep2 = () => {
-    if (parseFloat(amount) >= 100) { setRef(generateRef()); setStep(2); setSubmitError(''); }
-  };
-
-  const handleSubmit = async () => {
-    setSubmitting(true); setSubmitError('');
-    try {
-      await api.post('/bank/request', { amount: parseFloat(amount), reference: ref });
-      setSubmitted(true);
-    } catch (err) {
-      setSubmitError(err.response?.data?.error || 'Failed to submit. Please try again.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const reset = () => { setStep(1); setAmount(''); setSelectedAmt(null); setSubmitted(false); setRef(''); setSubmitError(''); };
+  useEffect(() => { loadTx(); }, []);
 
   const loadFlwScript = () => new Promise((resolve) => {
     if (window.FlutterwaveCheckout) { resolve(); return; }
@@ -1302,48 +1266,79 @@ function AddFunds() {
     document.body.appendChild(s);
   });
 
-  const handleFlwPayment = async () => {
+  const doVerify = async (transactionId, txRef) => {
+    setStep('verifying');
+    try {
+      const { data } = await api.post('/payment/flutterwave/verify', {
+        transaction_id: transactionId,
+        tx_ref: txRef,
+      });
+      setSuccessData({ amount: data.amount, new_balance: data.new_balance });
+      if (data.new_balance != null) updateUser({ wallet_balance: data.new_balance });
+      refreshUser();
+      loadTx();
+      setStep('success');
+    } catch (err) {
+      const msg = err.response?.data?.error || '';
+      if (msg.includes('Already')) {
+        setSuccessData({ amount: parseFloat(amount), new_balance: null });
+        refreshUser();
+        loadTx();
+        setStep('success');
+      } else {
+        setErrorMsg(msg || 'Payment received but verification failed. Contact support.');
+        setStep('error');
+      }
+    }
+  };
+
+  const handlePayWith = async (paymentOption) => {
     const amt = parseFloat(amount);
     if (!amt || amt < 100) return;
-    setFlwLoading(true); setFlwError(''); setFlwSuccess(null);
+    setErrorMsg('');
     try {
       const { data: cfg } = await api.post('/payment/flutterwave/init', { amount: amt });
       await loadFlwScript();
-      setFlwLoading(false);
+      flwResult.current = null;
       window.FlutterwaveCheckout({
         public_key: cfg.public_key,
         tx_ref: cfg.tx_ref,
         amount: amt,
         currency: 'NGN',
+        payment_options: paymentOption,
         customer: { email: cfg.customer_email, name: cfg.customer_name },
         customizations: { title: 'PanelNG Wallet', description: 'Add funds to your wallet' },
-        callback: async (resp) => {
-          if (resp.status === 'successful') {
-            try {
-              const { data } = await api.post('/payment/flutterwave/verify', {
-                transaction_id: resp.transaction_id,
-                tx_ref: resp.tx_ref,
-              });
-              setFlwSuccess({ amount: data.amount, new_balance: data.new_balance });
-              setAmount(''); setSelectedAmt(null);
-              if (data.new_balance != null) updateUser({ wallet_balance: data.new_balance });
-              refreshUser();
-            } catch (err) {
-              setFlwError(err.response?.data?.error || 'Payment received but verification failed. Contact support.');
-            }
-          } else {
-            setFlwError('Payment was not completed.');
+        callback: (resp) => {
+          // Store result synchronously — SDK does not await async callbacks
+          if (resp.status === 'successful' || resp.status === 'success') {
+            flwResult.current = { transaction_id: resp.transaction_id, tx_ref: resp.tx_ref };
           }
         },
-        onclose: () => setFlwLoading(false),
+        onclose: () => {
+          if (flwResult.current) {
+            doVerify(flwResult.current.transaction_id, flwResult.current.tx_ref);
+          } else {
+            setStep('method');
+          }
+        },
       });
     } catch (err) {
-      setFlwError(err.response?.data?.error || 'Could not start payment. Try again.');
-      setFlwLoading(false);
+      setErrorMsg(err.response?.data?.error || 'Could not start payment. Try again.');
     }
   };
 
+  const reset = () => {
+    setStep('amount'); setAmount(''); setSelectedAmt(null);
+    setSuccessData(null); setErrorMsg(''); flwResult.current = null;
+  };
+
   const fmtDate = (d) => new Date(d).toLocaleDateString('en-NG', { day:'2-digit', month:'short', year:'numeric' });
+
+  const METHODS = [
+    { key: 'card', option: 'card', icon: 'ti-credit-card', label: 'Debit / Credit Card', desc: 'Pay instantly with Visa, Mastercard, Verve' },
+    { key: 'banktransfer', option: 'banktransfer', icon: 'ti-building-bank', label: 'Bank Transfer', desc: 'Transfer directly from your bank account' },
+    { key: 'ussd', option: 'ussd', icon: 'ti-device-mobile', label: 'USSD', desc: 'Pay with *737#, *901# and more' },
+  ];
 
   return (
     <div>
@@ -1353,139 +1348,107 @@ function AddFunds() {
         <div className="pn-balance-hero-label">Current Balance</div>
         <div className="pn-balance-hero-amount">{fmt(user?.balance || 0)}</div>
       </div>
-      <div className="pn-tabs pn-tabs gold-active">
-        {[['bank','Bank Transfer'],['card','Card / Online']].map(([v,l])=>(
-          <button key={v} className={`pn-tab${tab===v?' active':''}`} onClick={()=>{setTab(v);reset();setFlwSuccess(null);setFlwError('');}}>
-            <i className={`ti ${v==='bank'?'ti-building-bank':'ti-credit-card'}`}/>{l}
-          </button>
-        ))}
-      </div>
-      {tab === 'bank' && (
-        <div className="pn-card">
-          {step === 1 && (
-            <>
-              <span className="pn-step-label">Step 1 — Enter Amount</span>
-              <p style={{fontSize:13,color:'var(--text-secondary)',marginBottom:16,marginTop:4}}>We'll generate a unique reference code for your transfer.</p>
-              <div className="pn-input-wrap">
-                <label className="pn-input-label">Amount (₦)</label>
-                <div className="pn-input-with-icon">
-                  <span className="pn-input-icon pn-mono" style={{fontWeight:500}}>₦</span>
-                  <input className="pn-input pn-mono" style={{paddingLeft:30,fontSize:18}} type="number" placeholder="0.00" value={amount} onChange={e=>{setAmount(e.target.value);setSelectedAmt(null);}} min={100}/>
-                </div>
-                <div style={{fontSize:11,color:'var(--text-muted)',marginTop:4}}>Minimum: ₦100</div>
+
+      <div className="pn-card">
+        {step === 'amount' && (
+          <>
+            <div className="pn-input-wrap">
+              <label className="pn-input-label">Amount (₦)</label>
+              <div className="pn-input-with-icon">
+                <span className="pn-input-icon pn-mono" style={{fontWeight:500}}>₦</span>
+                <input className="pn-input pn-mono" style={{paddingLeft:30,fontSize:18}} type="number" placeholder="0.00" value={amount} onChange={e=>{setAmount(e.target.value);setSelectedAmt(null);setErrorMsg('');}} min={100}/>
               </div>
-              <label className="pn-input-label">Quick Amounts</label>
-              <div className="pn-amount-chips">
-                {QUICK.map(a=>(
-                  <button key={a} className={`pn-achip${selectedAmt===a?' selected':''}`} onClick={()=>selectAmt(a)}>₦{a.toLocaleString()}</button>
-                ))}
-              </div>
-              <button className="pn-btn pn-btn-primary pn-btn-full" onClick={goToStep2} disabled={!amount||parseFloat(amount)<100} style={{opacity:(!amount||parseFloat(amount)<100)?.5:1}}>
-                Get Payment Details <i className="ti ti-arrow-right"/>
-              </button>
-            </>
-          )}
-          {step === 2 && !submitted && (
-            <>
-              <span className="pn-step-label">Step 2 — Make the Transfer</span>
-              <p style={{fontSize:13,color:'var(--text-secondary)',marginBottom:16,marginTop:4}}>Use these exact details when sending your transfer.</p>
-              <div className="pn-send-exactly">
-                <div className="pn-se-label">Send Exactly</div>
-                <div className="pn-se-amount">{fmt(parseFloat(amount))}</div>
-              </div>
-              {bankLoading ? (
-                <div style={{textAlign:'center',padding:'16px 0'}}><i className="ti ti-loader-2" style={{animation:'pn-spin 1s linear infinite',fontSize:20,color:'var(--accent)'}}/></div>
-              ) : bankDetails.length === 0 ? (
-                <div style={{background:'rgba(248,113,113,.08)',border:'1px solid rgba(248,113,113,.2)',borderRadius:10,padding:'12px 16px',fontSize:13,color:'var(--danger)',marginBottom:12}}>
-                  <i className="ti ti-alert-circle" style={{marginRight:6}}/>Bank details not configured. Contact support.
-                </div>
-              ) : bankDetails.map(b=>(
-                <div key={b.id} className="pn-bank-card">
-                  <div className="pn-bank-name">{b.bank_name}</div>
-                  <div className="pn-bank-number">{b.account_number}</div>
-                  <div className="pn-bank-acct">{b.account_name}</div>
-                </div>
+              <div style={{fontSize:11,color:'var(--text-muted)',marginTop:4}}>Minimum: ₦100</div>
+            </div>
+            <label className="pn-input-label">Quick Amounts</label>
+            <div className="pn-amount-chips">
+              {QUICK.map(a=>(
+                <button key={a} className={`pn-achip${selectedAmt===a?' selected':''}`} onClick={()=>{setAmount(String(a));setSelectedAmt(a);}}>₦{a.toLocaleString()}</button>
               ))}
-              <div className="pn-narration">
-                <div className="pn-narration-lbl">Transfer Narration / Description</div>
-                <div className="pn-narration-code">{ref}</div>
-                <button className="pn-copy-btn" onClick={handleCopy}><i className={`ti ${copied?'ti-check':'ti-copy'}`}/></button>
-                <div style={{fontSize:11,color:'var(--success)',marginTop:8,opacity:.75}}>Use this exact code as your transfer narration — it's how we match your payment.</div>
-              </div>
-              <div className="pn-info-box">After sending, click the button below. We'll credit your wallet once we confirm the transfer — usually within minutes during business hours.</div>
-              {submitError && (
-                <div style={{background:'rgba(248,113,113,.08)',border:'1px solid rgba(248,113,113,.2)',borderRadius:10,padding:'10px 14px',fontSize:13,color:'var(--danger)',marginBottom:12}}>
-                  <i className="ti ti-alert-circle" style={{marginRight:6}}/>{submitError}
-                </div>
-              )}
-              <button className="pn-btn pn-btn-success pn-btn-full" style={{marginBottom:10}} onClick={handleSubmit} disabled={submitting}>
-                {submitting ? <><i className="ti ti-loader-2" style={{animation:'pn-spin 1s linear infinite'}}/>Submitting…</> : <><i className="ti ti-circle-check"/>I Have Made This Transfer</>}
-              </button>
-              <button className="pn-btn pn-btn-secondary pn-btn-full" onClick={()=>{setStep(1);setSelectedAmt(null);}} disabled={submitting}>
-                <i className="ti ti-arrow-left"/>Change Amount
-              </button>
-            </>
-          )}
-          {step === 2 && submitted && (
-            <div style={{textAlign:'center',padding:'20px 0'}}>
-              <div style={{width:56,height:56,borderRadius:'50%',background:'rgba(245,158,11,.12)',border:'2px solid var(--accent)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px'}}>
-                <i className="ti ti-clock" style={{fontSize:26,color:'var(--accent)'}}/>
-              </div>
-              <div style={{fontSize:17,fontWeight:600,color:'var(--text-primary)',marginBottom:8}}>Payment Submitted</div>
-              <div style={{fontSize:13,color:'var(--text-secondary)',lineHeight:1.6,marginBottom:16}}>Your request is pending confirmation. We'll credit <strong className="pn-mono" style={{color:'var(--accent)'}}>{fmt(parseFloat(amount))}</strong> once we verify the transfer.</div>
-              <div className="pn-mono" style={{display:'inline-block',background:'rgba(34,197,94,.08)',border:'1px solid rgba(34,197,94,.2)',borderRadius:8,padding:'8px 14px',color:'var(--success)',marginBottom:20}}>{ref}</div>
-              <br/>
-              <button className="pn-btn pn-btn-secondary" onClick={reset}>Make Another Deposit</button>
             </div>
-          )}
-        </div>
-      )}
-      {tab === 'card' && (
-        <div className="pn-card">
-          {flwSuccess ? (
-            <div style={{textAlign:'center',padding:'20px 0'}}>
-              <div style={{width:56,height:56,borderRadius:'50%',background:'rgba(34,197,94,.12)',border:'2px solid var(--success)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px'}}>
-                <i className="ti ti-circle-check" style={{fontSize:28,color:'var(--success)'}}/>
+            {errorMsg && (
+              <div style={{background:'rgba(248,113,113,.08)',border:'1px solid rgba(248,113,113,.2)',borderRadius:10,padding:'10px 14px',fontSize:13,color:'var(--danger)',marginBottom:12}}>
+                <i className="ti ti-alert-circle" style={{marginRight:6}}/>{errorMsg}
               </div>
-              <div style={{fontSize:17,fontWeight:700,color:'var(--text-primary)',marginBottom:6}}>Payment Successful</div>
-              <div className="pn-mono" style={{fontSize:26,fontWeight:800,color:'var(--success)',marginBottom:4}}>{fmt(flwSuccess.amount)}</div>
-              <div style={{fontSize:13,color:'var(--text-secondary)',marginBottom:20}}>Your wallet has been credited instantly.</div>
-              <button className="pn-btn pn-btn-secondary" onClick={()=>{setFlwSuccess(null);setAmount('');setSelectedAmt(null);}}>Fund Again</button>
+            )}
+            <button className="pn-btn pn-btn-primary pn-btn-full" onClick={()=>{if(parseFloat(amount)>=100){setErrorMsg('');setStep('method');}}} disabled={!amount||parseFloat(amount)<100} style={{opacity:(!amount||parseFloat(amount)<100)?.5:1}}>
+              Continue <i className="ti ti-arrow-right"/>
+            </button>
+          </>
+        )}
+
+        {step === 'method' && (
+          <>
+            <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:20}}>
+              <button className="pn-btn pn-btn-secondary" style={{padding:'6px 12px',minWidth:'unset'}} onClick={()=>setStep('amount')}><i className="ti ti-arrow-left"/></button>
+              <div>
+                <div style={{fontWeight:600,fontSize:15}}>Choose Payment Method</div>
+                <div style={{fontSize:12,color:'var(--text-muted)'}}>Paying <strong className="pn-mono">{fmt(parseFloat(amount))}</strong></div>
+              </div>
             </div>
-          ) : (
-            <>
-              <div className="pn-input-wrap">
-                <label className="pn-input-label">Amount (₦)</label>
-                <div className="pn-input-with-icon">
-                  <span className="pn-input-icon pn-mono" style={{fontWeight:500}}>₦</span>
-                  <input className="pn-input pn-mono" style={{paddingLeft:30,fontSize:18}} type="number" placeholder="0.00" value={amount} onChange={e=>{setAmount(e.target.value);setSelectedAmt(null);setFlwError('');}} min={100}/>
-                </div>
-                <div style={{fontSize:11,color:'var(--text-muted)',marginTop:4}}>Minimum: ₦100</div>
+            {errorMsg && (
+              <div style={{background:'rgba(248,113,113,.08)',border:'1px solid rgba(248,113,113,.2)',borderRadius:10,padding:'10px 14px',fontSize:13,color:'var(--danger)',marginBottom:12}}>
+                <i className="ti ti-alert-circle" style={{marginRight:6}}/>{errorMsg}
               </div>
-              <label className="pn-input-label">Quick Amounts</label>
-              <div className="pn-amount-chips">
-                {QUICK.map(a=>(
-                  <button key={a} className={`pn-achip${selectedAmt===a?' selected':''}`} onClick={()=>selectAmt(a)}>₦{a.toLocaleString()}</button>
-                ))}
-              </div>
-              {flwError && (
-                <div style={{background:'rgba(248,113,113,.08)',border:'1px solid rgba(248,113,113,.2)',borderRadius:10,padding:'10px 14px',fontSize:13,color:'var(--danger)',marginBottom:12}}>
-                  <i className="ti ti-alert-circle" style={{marginRight:6}}/>{flwError}
+            )}
+            {METHODS.map(m=>(
+              <button key={m.key} onClick={()=>handlePayWith(m.option)} style={{width:'100%',display:'flex',alignItems:'center',gap:14,padding:'14px 16px',background:'var(--card-alt,rgba(255,255,255,.04))',border:'1px solid var(--border)',borderRadius:10,marginBottom:10,cursor:'pointer',textAlign:'left',transition:'border-color .15s'}}>
+                <div style={{width:40,height:40,borderRadius:10,background:'rgba(245,158,11,.1)',border:'1px solid rgba(245,158,11,.2)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                  <i className={`ti ${m.icon}`} style={{fontSize:18,color:'var(--accent)'}}/>
                 </div>
-              )}
-              <button className="pn-btn pn-btn-primary pn-btn-full" onClick={handleFlwPayment} disabled={!amount||parseFloat(amount)<100||flwLoading} style={{opacity:(!amount||parseFloat(amount)<100||flwLoading)?.5:1}}>
-                {flwLoading
-                  ? <><i className="ti ti-loader-2" style={{animation:'pn-spin 1s linear infinite'}}/>Loading payment…</>
-                  : <><i className="ti ti-credit-card"/>Pay ₦{amount?Number(amount).toLocaleString():''} Securely <i className="ti ti-arrow-right"/></>
-                }
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontWeight:600,fontSize:14,color:'var(--text-primary)',marginBottom:2}}>{m.label}</div>
+                  <div style={{fontSize:12,color:'var(--text-muted)'}}>{m.desc}</div>
+                </div>
+                <i className="ti ti-chevron-right" style={{color:'var(--text-muted)',flexShrink:0}}/>
               </button>
-              <div style={{textAlign:'center',marginTop:12,fontSize:12,color:'var(--text-muted)',display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
-                <i className="ti ti-shield-check" style={{fontSize:14}}/>Secured by Flutterwave · Cards, Bank Transfer, USSD
-              </div>
-            </>
-          )}
-        </div>
-      )}
+            ))}
+            <div style={{textAlign:'center',marginTop:8,fontSize:12,color:'var(--text-muted)',display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
+              <i className="ti ti-shield-check" style={{fontSize:14}}/>Secured by Flutterwave
+            </div>
+          </>
+        )}
+
+        {step === 'verifying' && (
+          <div style={{textAlign:'center',padding:'40px 0'}}>
+            <i className="ti ti-loader-2" style={{fontSize:40,color:'var(--accent)',animation:'pn-spin 1s linear infinite',display:'block',marginBottom:16}}/>
+            <div style={{fontSize:16,fontWeight:600,marginBottom:8}}>Verifying Payment…</div>
+            <div style={{fontSize:13,color:'var(--text-muted)'}}>Please wait while we confirm your payment.</div>
+          </div>
+        )}
+
+        {step === 'success' && (
+          <div style={{textAlign:'center',padding:'20px 0'}}>
+            <div style={{width:56,height:56,borderRadius:'50%',background:'rgba(34,197,94,.12)',border:'2px solid var(--success)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px'}}>
+              <i className="ti ti-circle-check" style={{fontSize:28,color:'var(--success)'}}/>
+            </div>
+            <div style={{fontSize:17,fontWeight:700,color:'var(--text-primary)',marginBottom:6}}>Payment Successful</div>
+            {successData?.amount > 0 && (
+              <div className="pn-mono" style={{fontSize:26,fontWeight:800,color:'var(--success)',marginBottom:4}}>{fmt(successData.amount)}</div>
+            )}
+            <div style={{fontSize:13,color:'var(--text-secondary)',marginBottom:successData?.new_balance != null ? 6 : 20}}>Your wallet has been credited instantly.</div>
+            {successData?.new_balance != null && (
+              <div style={{fontSize:13,color:'var(--text-muted)',marginBottom:20}}>New balance: <strong className="pn-mono" style={{color:'var(--accent)'}}>{fmt(successData.new_balance)}</strong></div>
+            )}
+            <button className="pn-btn pn-btn-secondary" onClick={reset}>Fund Again</button>
+          </div>
+        )}
+
+        {step === 'error' && (
+          <div style={{textAlign:'center',padding:'20px 0'}}>
+            <div style={{width:56,height:56,borderRadius:'50%',background:'rgba(248,113,113,.1)',border:'2px solid var(--danger)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px'}}>
+              <i className="ti ti-x" style={{fontSize:28,color:'var(--danger)'}}/>
+            </div>
+            <div style={{fontSize:17,fontWeight:600,color:'var(--danger)',marginBottom:8}}>Verification Failed</div>
+            <div style={{fontSize:13,color:'var(--text-secondary)',marginBottom:20}}>{errorMsg}</div>
+            <div style={{display:'flex',gap:10,justifyContent:'center'}}>
+              <button className="pn-btn pn-btn-primary" onClick={()=>setStep('method')}>Try Again</button>
+              <button className="pn-btn pn-btn-secondary" onClick={reset}>Start Over</button>
+            </div>
+          </div>
+        )}
+      </div>
+
       <div style={{marginTop:20}}>
         <span className="pn-section-label">Wallet History</span>
         <div className="pn-card" style={{padding:'0 20px'}}>

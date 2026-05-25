@@ -51,8 +51,8 @@ export default function AdminOverview() {
   const loadRate = async () => {
     try {
       const { data } = await api.get('/settings/exchange-rate');
-      setRate(String(data.value || '1600'));
-    } catch { setRate('1600'); }
+      setRate(String(data.value || '2100'));
+    } catch { setRate('2100'); }
   };
 
   const saveRate = async () => {
@@ -180,7 +180,7 @@ export default function AdminOverview() {
               step="1"
               value={rate}
               onChange={e => { setRate(e.target.value); setRateError(''); setRateSaved(false); }}
-              placeholder="e.g. 1600"
+              placeholder="e.g. 2100"
               style={{ height: 40, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '0 12px', fontSize: 15, fontFamily: 'var(--font-mono)', color: 'var(--text)', outline: 'none', width: '100%' }}
             />
           </div>

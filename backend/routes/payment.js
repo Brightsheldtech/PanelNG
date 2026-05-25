@@ -67,8 +67,8 @@ router.post('/flutterwave/verify', auth, async (req, res) => {
 
     const flwData = result.data;
 
-    // Confirm tx_ref belongs to this user
-    if (tx_ref && !flwData.tx_ref.includes(req.user.id.slice(0, 8).toUpperCase())) {
+    // Confirm tx_ref belongs to this user (case-insensitive — Flutterwave may lowercase)
+    if (tx_ref && !flwData.tx_ref.toUpperCase().includes(req.user.id.slice(0, 8).toUpperCase())) {
       return res.status(403).json({ error: 'Reference mismatch' });
     }
 

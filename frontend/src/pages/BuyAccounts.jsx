@@ -216,7 +216,7 @@ function FeaturePills() {
 }
 
 // ─── PRODUCT CARD ─────────────────────────────────────────────────────────────
-function ProductCard({ listing, onClick, exchangeRate = 1600 }) {
+function ProductCard({ listing, onClick, exchangeRate = 2100 }) {
   const platform = listing._platform || 'Other';
   const qty = Number(listing.quantity || listing.stock || listing.available_stock || 50);
   const priceUSD = Number(listing.price || listing.unit_price || 0);
@@ -300,7 +300,7 @@ function UseCaseRow({ icon, text }) {
 }
 
 // ─── DETAIL SHEET ─────────────────────────────────────────────────────────────
-function DetailSheet({ listing, detail, detailLoading, onClose, balance, onBuy, exchangeRate = 1600 }) {
+function DetailSheet({ listing, detail, detailLoading, onClose, balance, onBuy, exchangeRate = 2100 }) {
   const [qty, setQty] = useState(1);
   const platform = listing._platform || 'Other';
   const priceUSD = Number(listing.price || listing.unit_price || 0);
@@ -500,7 +500,7 @@ function DetailSheet({ listing, detail, detailLoading, onClose, balance, onBuy, 
 }
 
 // ─── PURCHASE MODAL ───────────────────────────────────────────────────────────
-function PurchaseModal({ listing, qty, balance, onClose, onSuccess, onAddFunds, token, exchangeRate = 1600 }) {
+function PurchaseModal({ listing, qty, balance, onClose, onSuccess, onAddFunds, token, exchangeRate = 2100 }) {
   const [step, setStep] = useState('confirm'); // confirm | processing | success | error
   const [result, setResult] = useState(null);
   const [errMsg, setErrMsg] = useState('');
@@ -714,7 +714,7 @@ export default function BuyAccounts({ balance = 0, token = '', onNavigate, onPur
   const [detailLoading, setDetailLoading] = useState(false);
   const [purchaseListing, setPurchaseListing] = useState(null);
   const [purchaseQty, setPurchaseQty] = useState(1);
-  const [exchangeRate, setExchangeRate] = useState(1600);
+  const [exchangeRate, setExchangeRate] = useState(2100);
 
   // Inject extra CSS once
   useEffect(() => {

@@ -12,11 +12,11 @@ async function getExchangeRate() {
       .select('value')
       .eq('key', 'exchange_rate')
       .single();
-    _cached = Number(data?.value || 1600);
+    _cached = Number(data?.value || 2100);
     _cachedAt = Date.now();
     return _cached;
   } catch {
-    return 1600; // safe default if table not yet created
+    return 2100; // safe default if table not yet created
   }
 }
 
