@@ -49,6 +49,7 @@ router.get('/orders', async (req, res) => {
     const smmOrders = (smmRes.data || []).map((o) => ({ ...o, type: 'smm' }));
     const smsOrders = (smsRes.data || []).map((o) => ({
       id: o.id,
+      user_id: o.user_id,
       type: 'sms',
       platform: o.platform,
       service_name: o.phone_number,
