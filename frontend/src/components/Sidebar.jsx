@@ -2,7 +2,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, PlusCircle, MessageSquare, Clock,
   Wallet, User, Users, ShoppingCart, ArrowLeftRight,
-  Settings, LogOut, Shield, X, Banknote, Building2, Phone, ShoppingBag, HeadphonesIcon,
+  Settings, LogOut, Shield, X, Banknote, Building2, Phone, ShoppingBag, HeadphonesIcon, Globe,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useEffect, useState } from 'react';
@@ -44,6 +44,7 @@ export default function Sidebar({ isOpen, onClose }) {
     { to: '/admin/accszone',          icon: ShoppingBag,     label: 'Accounts Manager' },
     { to: '/admin/bank-settings',     icon: Building2,        label: 'Bank Settings' },
     { to: '/admin/support',           icon: HeadphonesIcon,   label: 'Support' },
+    { to: '/admin/site-settings',     icon: Globe,            label: 'Site Settings' },
   ];
 
   const initials = user?.full_name

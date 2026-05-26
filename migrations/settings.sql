@@ -10,6 +10,11 @@ insert into public.settings (key, value)
 values ('exchange_rate', '1600')
 on conflict (key) do nothing;
 
+-- Seed hero image URL (empty by default; set via admin Site Settings page)
+insert into public.settings (key, value)
+values ('hero_image_url', '')
+on conflict (key) do nothing;
+
 -- Only admins can write; anyone authenticated can read
 alter table public.settings enable row level security;
 
