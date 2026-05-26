@@ -3,10 +3,15 @@ import { useAuth } from './context/AuthContext';
 
 import PanelNG from './pages/PanelNG';
 import Landing from './pages/Landing';
-import Login from './pages/Login';
-import Register from './pages/Register';
 import AdminLogin from './pages/AdminLogin';
 import PaymentCallback from './pages/PaymentCallback';
+import TermsOfService from './pages/TermsOfService';
+
+// Auth pages (new design)
+import Register from './pages/auth/Register';
+import Login from './pages/auth/Login';
+import ForgotPassword from './pages/auth/ForgotPassword';
+import OAuthCallback from './pages/auth/OAuthCallback';
 
 import DashboardLayout from './components/DashboardLayout';
 import PrivateRoute from './components/PrivateRoute';
@@ -41,6 +46,9 @@ export default function App() {
       <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <Landing />} />
       <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <Login />} />
       <Route path="/register" element={user ? <Navigate to="/dashboard" replace /> : <Register />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/auth/callback" element={<OAuthCallback />} />
+      <Route path="/terms" element={<TermsOfService />} />
       <Route path="/manage" element={user?.role === 'admin' ? <Navigate to="/admin/overview" replace /> : <AdminLogin />} />
       <Route path="/payment/callback" element={<PaymentCallback />} />
 

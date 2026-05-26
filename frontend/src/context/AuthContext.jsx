@@ -52,8 +52,8 @@ export function AuthProvider({ children }) {
     };
   }, [!!user]); // restart only when logged-in state changes, not on every user update
 
-  const login = async (email, password) => {
-    const res = await api.post('/auth/login', { email, password });
+  const login = async (identifier, password) => {
+    const res = await api.post('/auth/login', { identifier, password });
     const { user, token } = res.data;
     localStorage.setItem('panelng_token', token);
     localStorage.setItem('panelng_user', JSON.stringify(user));
