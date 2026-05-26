@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import api from '../../lib/api';
 import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../context/AuthContext';
 
 function Icon({ name, size = 16, color = '#A8A49C' }) {
   const props = { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: color, strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round', display: 'block', flexShrink: 0 };
@@ -116,6 +117,8 @@ const css = `
 
 export default function Register() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { setSession } = useAuth();
 
   const [form, setForm] = useState({ fullName: '', username: '', email: '', phone: '', referralCode: '', password: '', confirmPassword: '' });
   const [errors, setErrors] = useState({});
@@ -196,7 +199,8 @@ export default function Register() {
         referral_code: form.referralCode.trim() || undefined,
         password: form.password,
       });
-      setPendingEmail(res.data.email || form.email.trim().toLowerCase());
+      setSession({ user: res.data.user, token: res.data.token });
+      navigate('/dashboard');
     } catch (err) {
       console.error('Registration error:', err);
       setServerError(err.response?.data?.error || err.message || 'Registration failed. Please try again.');

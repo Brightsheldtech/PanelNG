@@ -70,6 +70,12 @@ export function AuthProvider({ children }) {
     return user;
   };
 
+  const setSession = useCallback(({ user, token }) => {
+    localStorage.setItem('panelng_token', token);
+    localStorage.setItem('panelng_user', JSON.stringify(user));
+    setUser(user);
+  }, []);
+
   const logout = useCallback(async () => {
     try { await api.post('/auth/logout'); } catch (_) {}
     localStorage.removeItem('panelng_token');
@@ -97,7 +103,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, updateUser, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, updateUser, refreshUser, setSession }}>
       {children}
     </AuthContext.Provider>
   );

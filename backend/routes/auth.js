@@ -90,10 +90,8 @@ router.post('/register', async (req, res) => {
       wallet_balance: 0,
       role: 'user',
       referral_code: myReferralCode,
-      email_verified: false,
+      email_verified: true,
       status: 'active',
-      email_verification_token: verificationToken,
-      email_verification_expires: verificationExpires,
       ...(username && { username: username.toLowerCase() }),
       ...(phone && { phone }),
     };
@@ -121,27 +119,9 @@ router.post('/register', async (req, res) => {
       }
     }
 
-    // Send verification email (non-blocking — don't fail registration if email fails)
-    const frontendUrl = process.env.FRONTEND_URL || 'https://panelng-production.up.railway.app';
-    const verifyUrl = `${frontendUrl}/verify-email?token=${verificationToken}`;
-
-    if (process.env.RESEND_API_KEY) {
-      getResend().emails.send({
-        from: FROM,
-        to: [user.email],
-        subject: 'Verify your PanelNG email address',
-        html: `
-          <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px">
-            <h2 style="color:#111110;margin-bottom:8px">Verify your email</h2>
-            <p style="color:#6B6860;margin-bottom:24px">Hi ${user.full_name}, click the button below to verify your PanelNG email address. This link expires in 24 hours.</p>
-            <a href="${verifyUrl}" style="display:inline-block;padding:14px 24px;background:#1C1C1A;color:white;text-decoration:none;border-radius:10px;font-weight:700">Verify Email Address</a>
-            <p style="color:#A8A49C;font-size:12px;margin-top:24px">If you didn't create a PanelNG account, you can safely ignore this email.</p>
-          </div>
-        `,
-      }).catch((e) => console.warn('[register] Verification email failed:', e.message));
-    }
-
-    res.status(201).json({ pending_verification: true, email: user.email });
+    // Email verification disabled — re-enable once a sending domain is configured
+    const token = signToken(user);
+    res.status(201).json({ user: safeUser(user), token });
   } catch (err) {
     console.error('Registration error:', err);
     res.status(500).json({ error: err?.message || 'Registration failed. Try again.' });
