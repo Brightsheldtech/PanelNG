@@ -10,17 +10,206 @@ const router = express.Router();
 router.use(auth, adminOnly);
 
 // GET /api/admin/users
+// Supports optional query params: search, status, from_date, to_date, limit, offset
+// When limit/offset are provided → returns { data, total } (paginated mode)
+// When omitted → returns array (legacy mode, used by AdminOverview)
 router.get('/users', async (req, res) => {
+  const { search, status, from_date, to_date, limit, offset } = req.query;
+  const isPaginated = limit !== undefined || offset !== undefined;
+
+  try {
+    let query = supabase
+      .from('users')
+      .select(
+        'id, email, full_name, username, phone, wallet_balance, total_funded, total_spent, role, status, email_verified, referral_code, created_at',
+        isPaginated ? { count: 'exact' } : {}
+      )
+      .order('created_at', { ascending: false });
+
+    if (search) {
+      query = query.or(`full_name.ilike.%${search}%,username.ilike.%${search}%,email.ilike.%${search}%`);
+    }
+    if (status && status !== 'all') {
+      query = query.eq('status', status);
+    }
+    if (from_date) {
+      query = query.gte('created_at', from_date);
+    }
+    if (to_date) {
+      // Include the full to_date day
+      query = query.lte('created_at', to_date + 'T23:59:59.999Z');
+    }
+
+    if (isPaginated) {
+      const from = parseInt(offset) || 0;
+      const to = from + (parseInt(limit) || 20) - 1;
+      query = query.range(from, to);
+      const { data, error, count } = await query;
+      if (error) throw error;
+      return res.json({ data: data || [], total: count || 0 });
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err) {
+    console.error('admin/users error:', err.message);
+    res.status(500).json({ error: 'Failed to get users' });
+  }
+});
+
+// GET /api/admin/users/:userId — full user profile for detail page
+router.get('/users/:userId', async (req, res) => {
+  const { userId } = req.params;
+  try {
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('id, email, full_name, username, phone, wallet_balance, total_funded, total_spent, role, status, email_verified, referral_code, created_at')
+      .eq('id', userId)
+      .single();
+
+    if (error || !user) return res.status(404).json({ error: 'User not found' });
+
+    // Referral count
+    const { count: referralCount } = await supabase
+      .from('referrals')
+      .select('id', { count: 'exact' })
+      .eq('referrer_id', userId);
+
+    // Referred users list
+    const { data: referrals } = await supabase
+      .from('referrals')
+      .select('id, bonus_paid, created_at, referee:users!referrals_referee_id_fkey(id, full_name, username, email, created_at)')
+      .eq('referrer_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    res.json({
+      ...user,
+      referral_count: referralCount || 0,
+      referrals: referrals || [],
+    });
+  } catch (err) {
+    console.error('admin/users/:id error:', err.message);
+    res.status(500).json({ error: 'Failed to get user' });
+  }
+});
+
+// PATCH /api/admin/users/:userId/status — suspend or activate account
+router.patch('/users/:userId/status', async (req, res) => {
+  const { userId } = req.params;
+  const { status } = req.body;
+  if (!['active', 'suspended'].includes(status)) {
+    return res.status(400).json({ error: 'status must be "active" or "suspended"' });
+  }
   try {
     const { data, error } = await supabase
       .from('users')
-      .select('id, email, full_name, wallet_balance, role, created_at')
-      .order('created_at', { ascending: false });
-
+      .update({ status })
+      .eq('id', userId)
+      .select('id, status')
+      .single();
     if (error) throw error;
     res.json(data);
   } catch (err) {
-    res.status(500).json({ error: 'Failed to get users' });
+    console.error('admin/users status error:', err.message);
+    res.status(500).json({ error: 'Failed to update status' });
+  }
+});
+
+// POST /api/admin/users/:userId/wallet-adjust — add or deduct funds with audit log
+router.post('/users/:userId/wallet-adjust', async (req, res) => {
+  const { userId } = req.params;
+  const { type, amount, reason } = req.body;
+  const parsedAmount = parseFloat(amount);
+
+  if (!['add', 'deduct'].includes(type)) return res.status(400).json({ error: 'type must be "add" or "deduct"' });
+  if (!parsedAmount || parsedAmount <= 0) return res.status(400).json({ error: 'Amount must be greater than 0' });
+
+  try {
+    const { data: userRow, error: userErr } = await supabase
+      .from('users')
+      .select('id, email, full_name, wallet_balance, total_funded, total_spent')
+      .eq('id', userId)
+      .single();
+
+    if (userErr || !userRow) return res.status(404).json({ error: 'User not found' });
+
+    const currentBalance = parseFloat(userRow.wallet_balance || 0);
+
+    if (type === 'deduct' && parsedAmount > currentBalance) {
+      return res.status(400).json({ error: 'Cannot deduct more than current balance.' });
+    }
+
+    const newBalance = type === 'add' ? currentBalance + parsedAmount : currentBalance - parsedAmount;
+    const newFunded = type === 'add' ? parseFloat(userRow.total_funded || 0) + parsedAmount : parseFloat(userRow.total_funded || 0);
+    const newSpent = type === 'deduct' ? parseFloat(userRow.total_spent || 0) + parsedAmount : parseFloat(userRow.total_spent || 0);
+
+    const { error: walletErr } = await supabase
+      .from('users')
+      .update({ wallet_balance: newBalance, total_funded: newFunded, total_spent: newSpent })
+      .eq('id', userId);
+    if (walletErr) throw walletErr;
+
+    // Transaction record
+    const txRef = `ADJ-${Date.now()}-${userId.slice(0, 6).toUpperCase()}`;
+    await supabase.from('transactions').insert({
+      user_id: userId,
+      type: type === 'add' ? 'credit' : 'debit',
+      amount: parsedAmount,
+      reference: txRef,
+      description: `Admin ${type === 'add' ? 'top-up' : 'deduction'}${reason ? ': ' + reason : ''}`,
+    }).catch(() => {});
+
+    // Audit log
+    await supabase.from('wallet_adjustments').insert({
+      user_id: userId,
+      admin_id: req.user.id,
+      type,
+      amount: parsedAmount,
+      reason: reason || null,
+    }).catch(() => {});
+
+    res.json({ success: true, new_balance: newBalance });
+  } catch (err) {
+    console.error('wallet-adjust error:', err.message);
+    res.status(500).json({ error: 'Wallet adjustment failed' });
+  }
+});
+
+// GET /api/admin/users/:userId/transactions
+router.get('/users/:userId/transactions', async (req, res) => {
+  const { userId } = req.params;
+  const limit = parseInt(req.query.limit) || 30;
+  const offset = parseInt(req.query.offset) || 0;
+  try {
+    const { data, error, count } = await supabase
+      .from('transactions')
+      .select('*', { count: 'exact' })
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+    if (error) throw error;
+    res.json({ data: data || [], total: count || 0 });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to get transactions' });
+  }
+});
+
+// GET /api/admin/users/:userId/adjustments
+router.get('/users/:userId/adjustments', async (req, res) => {
+  const { userId } = req.params;
+  try {
+    const { data, error } = await supabase
+      .from('wallet_adjustments')
+      .select('*, admin:users!wallet_adjustments_admin_id_fkey(full_name)')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to get adjustments' });
   }
 });
 

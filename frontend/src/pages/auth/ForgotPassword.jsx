@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import api from '../../lib/api';
 
 function Icon({ name, size = 16, color = '#A8A49C' }) {
@@ -14,8 +14,15 @@ function Icon({ name, size = 16, color = '#A8A49C' }) {
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Cabinet+Grotesk:wght@700;800;900&family=Epilogue:wght@400;500;600&display=swap');
 
-  .fp-page { min-height: 100vh; background: #F8F7F4; display: flex; align-items: center; justify-content: center; padding: 40px 20px; font-family: 'Epilogue', sans-serif; }
-  .fp-card { background: white; width: 100%; max-width: 440px; padding: 40px 36px; border-radius: 20px; border: 1px solid #E5E2D9; box-shadow: 0 4px 24px rgba(0,0,0,0.06); }
+  html { scroll-behavior: smooth; }
+  .fp-page {
+    position: fixed; inset: 0; overflow-y: auto; overflow-x: hidden;
+    -webkit-overflow-scrolling: touch; overscroll-behavior: none;
+    background: #F8F7F4; font-family: 'Epilogue', sans-serif;
+    scroll-behavior: smooth;
+  }
+  .fp-inner { min-height: 100%; display: flex; flex-direction: column; align-items: center; padding: 40px 20px; }
+  .fp-card { background: white; width: 100%; max-width: 440px; padding: 40px 36px; border-radius: 20px; border: 1px solid #E5E2D9; box-shadow: 0 4px 24px rgba(0,0,0,0.06); box-sizing: border-box; }
   .fp-back { display: flex; align-items: center; gap: 6px; cursor: pointer; margin-bottom: 24px; text-decoration: none; background: none; border: none; padding: 0; }
   .fp-back-text { font-size: 13px; color: #6B6860; }
   .fp-logo { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 28px; text-decoration: none; }
@@ -26,7 +33,12 @@ const css = `
   .fp-field label { display: block; font-size: 12px; font-weight: 500; color: #6B6860; margin-bottom: 5px; }
   .fp-input-wrap { position: relative; display: flex; align-items: center; }
   .fp-input-icon { position: absolute; left: 14px; pointer-events: none; }
-  .fp-input { width: 100%; padding: 12px 14px 12px 42px; border-radius: 11px; border: 1px solid #E5E2D9; background: #FAFAF8; font-family: 'Epilogue', sans-serif; font-size: 14px; color: #111110; outline: none; transition: border-color 0.15s, background 0.15s; }
+  .fp-input {
+    width: 100%; padding: 12px 14px 12px 42px; border-radius: 11px; border: 1px solid #E5E2D9;
+    background: #FAFAF8; font-family: 'Epilogue', sans-serif; font-size: 16px; color: #111110;
+    outline: none; transition: border-color 0.15s, background 0.15s; box-sizing: border-box;
+    -webkit-appearance: none; appearance: none; max-width: 100%;
+  }
   .fp-input::placeholder { color: #A8A49C; }
   .fp-input:focus { border-color: #C9620A; background: white; }
   .fp-submit { margin-top: 20px; width: 100%; padding: 14px; border-radius: 12px; background: #1C1C1A; color: white; font-family: 'Cabinet Grotesk', sans-serif; font-weight: 700; font-size: 15px; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: background 0.12s, transform 0.1s; }
@@ -44,13 +56,12 @@ const css = `
   .fp-success-text { font-size: 14px; color: #6B6860; line-height: 1.6; margin: 0 0 16px; }
   .fp-resend { font-size: 13px; color: #C9620A; font-weight: 600; cursor: pointer; background: none; border: none; padding: 0; }
   @media (max-width: 500px) {
-    .fp-page { padding: 0; align-items: flex-start; }
-    .fp-card { border-radius: 0; border: none; box-shadow: none; min-height: 100vh; padding: 32px 20px; }
+    .fp-inner { padding: 0; }
+    .fp-card { border-radius: 0; border: none; box-shadow: none; padding: 32px 20px 60px; min-height: 100vh; }
   }
 `;
 
 export default function ForgotPassword() {
-  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -81,6 +92,7 @@ export default function ForgotPassword() {
     <>
       <style>{css}</style>
       <div className="fp-page">
+        <div className="fp-inner">
         <div className="fp-card">
           <Link to="/login" className="fp-back">
             <Icon name="chevron-left" size={16} color="#A8A49C" />
@@ -101,7 +113,7 @@ export default function ForgotPassword() {
                   <label>Email Address</label>
                   <div className="fp-input-wrap">
                     <span className="fp-input-icon"><Icon name="mail" /></span>
-                    <input className="fp-input" type="email" placeholder="Your email address" value={email} onChange={e => { setEmail(e.target.value); setError(''); }} autoFocus />
+                    <input className="fp-input" type="email" placeholder="Your email address" value={email} onChange={e => { setEmail(e.target.value); setError(''); }} onFocus={e => setTimeout(() => e.target.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300)} autoFocus />
                   </div>
                 </div>
                 <button type="submit" className="fp-submit" disabled={loading || !email.trim()}>
@@ -127,6 +139,7 @@ export default function ForgotPassword() {
               </button>
             </div>
           )}
+        </div>
         </div>
       </div>
     </>

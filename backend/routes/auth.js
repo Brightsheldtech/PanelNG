@@ -74,6 +74,10 @@ router.post('/register', async (req, res) => {
     const { data: codeConflict } = await supabase.from('users').select('id').eq('referral_code', myReferralCode).maybeSingle();
     if (codeConflict) myReferralCode = `PNG-${letters}${Math.floor(100 + Math.random() * 900)}`;
 
+    // Generate email verification token
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 24 hours
+
     const password_hash = await bcrypt.hash(password, 12);
 
     const insertPayload = {
@@ -83,6 +87,10 @@ router.post('/register', async (req, res) => {
       wallet_balance: 0,
       role: 'user',
       referral_code: myReferralCode,
+      email_verified: false,
+      status: 'active',
+      email_verification_token: verificationToken,
+      email_verification_expires: verificationExpires,
       ...(username && { username: username.toLowerCase() }),
       ...(phone && { phone }),
     };
@@ -90,7 +98,7 @@ router.post('/register', async (req, res) => {
     const { data: user, error } = await supabase
       .from('users')
       .insert(insertPayload)
-      .select('id, email, full_name, wallet_balance, role, username, phone, referral_code, created_at')
+      .select('id, email, full_name, wallet_balance, role, username, phone, referral_code, email_verified, status, created_at')
       .single();
 
     if (error) throw error;
@@ -110,8 +118,33 @@ router.post('/register', async (req, res) => {
       }
     }
 
-    const token = signToken(user);
-    res.status(201).json({ user, token });
+    // Send verification email (non-blocking — don't fail registration if email fails)
+    const frontendUrl = process.env.FRONTEND_URL || 'https://panelng-production.up.railway.app';
+    const verifyUrl = `${frontendUrl}/verify-email?token=${verificationToken}`;
+
+    const gmailUser = process.env.GMAIL_USER;
+    const gmailPass = process.env.GMAIL_APP_PASSWORD || process.env.GMAIL_PASS;
+    if (gmailUser && gmailPass) {
+      const transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: { user: gmailUser, pass: gmailPass },
+      });
+      transporter.sendMail({
+        from: `"PanelNG" <${gmailUser}>`,
+        to: user.email,
+        subject: 'Verify your PanelNG email address',
+        html: `
+          <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px">
+            <h2 style="color:#111110;margin-bottom:8px">Verify your email</h2>
+            <p style="color:#6B6860;margin-bottom:24px">Hi ${user.full_name}, click the button below to verify your PanelNG email address. This link expires in 24 hours.</p>
+            <a href="${verifyUrl}" style="display:inline-block;padding:14px 24px;background:#1C1C1A;color:white;text-decoration:none;border-radius:10px;font-weight:700">Verify Email Address</a>
+            <p style="color:#A8A49C;font-size:12px;margin-top:24px">If you didn't create a PanelNG account, you can safely ignore this email.</p>
+          </div>
+        `,
+      }).catch((e) => console.warn('[register] Verification email failed:', e.message));
+    }
+
+    res.status(201).json({ pending_verification: true, email: user.email });
   } catch (err) {
     console.error('Register error:', err.message);
     res.status(500).json({ error: 'Registration failed. Try again.' });
@@ -152,6 +185,16 @@ router.post('/login', async (req, res) => {
 
     const valid = await bcrypt.compare(password, user.password_hash);
     if (!valid) return res.status(401).json({ error: 'Email/username or password is incorrect.' });
+
+    // Check email verification (only if column exists — strict false check)
+    if (user.email_verified === false) {
+      return res.status(403).json({ error: 'Please verify your email before logging in.', code: 'EMAIL_NOT_VERIFIED', email: user.email });
+    }
+
+    // Check account status
+    if (user.status === 'suspended') {
+      return res.status(403).json({ error: 'Your account has been suspended. Contact support.', code: 'ACCOUNT_SUSPENDED' });
+    }
 
     const token = signToken(user);
     res.json({ user: safeUser(user), token });
@@ -282,6 +325,102 @@ router.post('/reset-password', async (req, res) => {
   } catch (err) {
     console.error('[reset-password]:', err.message);
     res.status(500).json({ error: 'Password reset failed. Try again.' });
+  }
+});
+
+// POST /api/auth/verify-email — confirm a verification token from the email link
+router.post('/verify-email', async (req, res) => {
+  const { token } = req.body;
+  if (!token) return res.status(400).json({ error: 'Verification token is required' });
+
+  try {
+    const { data: user } = await supabase
+      .from('users')
+      .select('id, email, full_name, wallet_balance, role, username, phone, referral_code, email_verified, status, email_verification_expires, created_at')
+      .eq('email_verification_token', token)
+      .maybeSingle();
+
+    if (!user) return res.status(400).json({ error: 'Invalid or expired verification link.' });
+    if (user.email_verified) {
+      // Already verified — just log them in
+      const jwtToken = signToken(user);
+      return res.json({ user: safeUser(user), token: jwtToken });
+    }
+    if (new Date(user.email_verification_expires) < new Date()) {
+      return res.status(400).json({ error: 'Verification link has expired. Request a new one.', code: 'TOKEN_EXPIRED', email: user.email });
+    }
+
+    const { data: updated, error: updateErr } = await supabase
+      .from('users')
+      .update({ email_verified: true, email_verification_token: null, email_verification_expires: null })
+      .eq('id', user.id)
+      .select('id, email, full_name, wallet_balance, role, username, phone, referral_code, email_verified, status, created_at')
+      .single();
+
+    if (updateErr) throw updateErr;
+
+    const jwtToken = signToken(updated);
+    res.json({ user: safeUser(updated), token: jwtToken });
+  } catch (err) {
+    console.error('[verify-email]:', err.message);
+    res.status(500).json({ error: 'Verification failed. Try again.' });
+  }
+});
+
+// POST /api/auth/resend-verification — resend verification email
+router.post('/resend-verification', async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email is required' });
+
+  try {
+    const { data: user } = await supabase
+      .from('users')
+      .select('id, email, full_name, email_verified')
+      .eq('email', email.toLowerCase())
+      .maybeSingle();
+
+    // Always respond 200 to avoid user enumeration
+    if (!user || user.email_verified) {
+      return res.json({ message: 'If that email is unverified, a new link has been sent.' });
+    }
+
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+    await supabase.from('users').update({
+      email_verification_token: verificationToken,
+      email_verification_expires: verificationExpires,
+    }).eq('id', user.id);
+
+    const frontendUrl = process.env.FRONTEND_URL || 'https://panelng-production.up.railway.app';
+    const verifyUrl = `${frontendUrl}/verify-email?token=${verificationToken}`;
+
+    const gmailUser = process.env.GMAIL_USER;
+    const gmailPass = process.env.GMAIL_APP_PASSWORD || process.env.GMAIL_PASS;
+    if (gmailUser && gmailPass) {
+      const transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: { user: gmailUser, pass: gmailPass },
+      });
+      await transporter.sendMail({
+        from: `"PanelNG" <${gmailUser}>`,
+        to: user.email,
+        subject: 'Verify your PanelNG email address',
+        html: `
+          <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px">
+            <h2 style="color:#111110;margin-bottom:8px">Verify your email</h2>
+            <p style="color:#6B6860;margin-bottom:24px">Hi ${user.full_name}, here's a new verification link for your PanelNG account. It expires in 24 hours.</p>
+            <a href="${verifyUrl}" style="display:inline-block;padding:14px 24px;background:#1C1C1A;color:white;text-decoration:none;border-radius:10px;font-weight:700">Verify Email Address</a>
+            <p style="color:#A8A49C;font-size:12px;margin-top:24px">If you didn't request this, you can safely ignore it.</p>
+          </div>
+        `,
+      });
+    }
+
+    res.json({ message: 'If that email is unverified, a new link has been sent.' });
+  } catch (err) {
+    console.error('[resend-verification]:', err.message);
+    res.status(500).json({ error: 'Could not resend verification email. Try again.' });
   }
 });
 

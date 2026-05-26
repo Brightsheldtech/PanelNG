@@ -1,10 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import api from '../../lib/api';
 import { supabase } from '../../lib/supabase';
-import SuccessModal from '../../components/auth/SuccessModal';
 
-// ── Inline SVG icons ──────────────────────────────────────────────────
 function Icon({ name, size = 16, color = '#A8A49C' }) {
   const props = { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: color, strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round', display: 'block', flexShrink: 0 };
   switch (name) {
@@ -46,15 +44,26 @@ const strengthColor = ['', '#F87171', '#FB923C', '#F5A623', '#16A34A'];
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Cabinet+Grotesk:wght@700;800;900&family=Epilogue:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
 
-  .ar-page { min-height: 100vh; background: #F8F7F4; display: flex; align-items: center; justify-content: center; padding: 40px 20px; font-family: 'Epilogue', sans-serif; }
-  .ar-card { background: white; width: 100%; max-width: 440px; padding: 40px 36px; border-radius: 20px; border: 1px solid #E5E2D9; box-shadow: 0 4px 24px rgba(0,0,0,0.06); }
+  html { scroll-behavior: smooth; }
+
+  .ar-page {
+    position: fixed; inset: 0; overflow-y: auto; overflow-x: hidden;
+    -webkit-overflow-scrolling: touch; overscroll-behavior: none;
+    background: #F8F7F4; font-family: 'Epilogue', sans-serif;
+    scroll-behavior: smooth;
+  }
+  .ar-inner {
+    min-height: 100%; display: flex; flex-direction: column;
+    align-items: center; padding: 40px 20px;
+  }
+  .ar-card { background: white; width: 100%; max-width: 440px; padding: 40px 36px; border-radius: 20px; border: 1px solid #E5E2D9; box-shadow: 0 4px 24px rgba(0,0,0,0.06); box-sizing: border-box; }
   .ar-logo { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 28px; text-decoration: none; }
   .ar-logo-box { width: 32px; height: 32px; background: #1C1C1A; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-family: 'Cabinet Grotesk', sans-serif; font-weight: 900; font-size: 15px; color: #F5A623; flex-shrink: 0; }
   .ar-logo-word { font-family: 'Cabinet Grotesk', sans-serif; font-weight: 800; font-size: 18px; color: #111110; letter-spacing: -0.3px; }
   .ar-heading { font-family: 'Cabinet Grotesk', sans-serif; font-weight: 700; font-size: 22px; color: #111110; margin: 0 0 6px; }
   .ar-sub { font-size: 14px; color: #6B6860; margin: 0 0 28px; }
   .ar-sub a { color: #C9620A; font-weight: 600; text-decoration: none; }
-  .ar-google-btn { width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 13px 20px; border-radius: 12px; background: white; border: 1px solid #E5E2D9; font-family: 'Epilogue', sans-serif; font-weight: 600; font-size: 14px; color: #111110; cursor: pointer; transition: background 0.15s, border-color 0.15s, transform 0.1s; margin-bottom: 20px; }
+  .ar-google-btn { width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 13px 20px; border-radius: 12px; background: white; border: 1px solid #E5E2D9; font-family: 'Epilogue', sans-serif; font-weight: 600; font-size: 14px; color: #111110; cursor: pointer; transition: background 0.15s, border-color 0.15s, transform 0.1s; margin-bottom: 20px; box-sizing: border-box; }
   .ar-google-btn:hover { background: #F8F7F4; border-color: #CCC9C0; }
   .ar-google-btn:active { transform: scale(0.98); }
   .ar-divider { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
@@ -64,7 +73,12 @@ const css = `
   .ar-field label { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: #6B6860; margin-bottom: 5px; }
   .ar-input-wrap { position: relative; display: flex; align-items: center; }
   .ar-input-icon { position: absolute; left: 14px; pointer-events: none; }
-  .ar-input { width: 100%; padding: 12px 14px 12px 42px; border-radius: 11px; border: 1px solid #E5E2D9; background: #FAFAF8; font-family: 'Epilogue', sans-serif; font-size: 14px; color: #111110; outline: none; transition: border-color 0.15s, background 0.15s; }
+  .ar-input {
+    width: 100%; padding: 12px 14px 12px 42px; border-radius: 11px; border: 1px solid #E5E2D9;
+    background: #FAFAF8; font-family: 'Epilogue', sans-serif; font-size: 16px; color: #111110;
+    outline: none; transition: border-color 0.15s, background 0.15s; box-sizing: border-box;
+    -webkit-appearance: none; appearance: none; max-width: 100%;
+  }
   .ar-input::placeholder { color: #A8A49C; }
   .ar-input:focus { border-color: #C9620A; background: white; }
   .ar-input.has-error { border-color: #DC2626 !important; }
@@ -79,7 +93,7 @@ const css = `
   .ar-checkbox.checked { background: #1C1C1A; border-color: #1C1C1A; }
   .ar-terms-text { font-size: 13px; color: #6B6860; line-height: 1.5; }
   .ar-terms-text a { color: #C9620A; font-weight: 600; text-decoration: underline; }
-  .ar-submit { margin-top: 20px; width: 100%; padding: 14px; border-radius: 12px; background: #1C1C1A; color: white; font-family: 'Cabinet Grotesk', sans-serif; font-weight: 700; font-size: 15px; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: background 0.12s, transform 0.1s; }
+  .ar-submit { margin-top: 20px; width: 100%; padding: 14px; border-radius: 12px; background: #1C1C1A; color: white; font-family: 'Cabinet Grotesk', sans-serif; font-weight: 700; font-size: 15px; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: background 0.12s, transform 0.1s; box-sizing: border-box; }
   .ar-submit:hover:not(:disabled) { background: #111110; }
   .ar-submit:active:not(:disabled) { transform: scale(0.98); }
   .ar-submit:disabled { opacity: 0.5; pointer-events: none; }
@@ -87,16 +101,21 @@ const css = `
   @keyframes ar-spin { to { transform: rotate(360deg); } }
   .ar-error-banner { margin-top: 12px; padding: 12px 14px; background: rgba(220,38,38,0.06); border: 1px solid rgba(220,38,38,0.15); border-radius: 10px; font-size: 13px; color: #DC2626; line-height: 1.5; }
   .ar-applied-pill { background: rgba(22,163,74,0.1); color: #16A34A; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 100px; font-family: 'Epilogue', sans-serif; }
+  .ar-pending { text-align: center; }
+  .ar-env-icon { width: 64px; height: 64px; margin: 0 auto 20px; display: block; }
+  .ar-pending-heading { font-family: 'Cabinet Grotesk', sans-serif; font-weight: 700; font-size: 22px; color: #111110; margin: 0 0 10px; }
+  .ar-pending-text { font-size: 14px; color: #6B6860; line-height: 1.6; margin: 0 0 20px; }
+  .ar-pending-text strong { color: #111110; }
+  .ar-resend-btn { font-size: 13px; color: #C9620A; font-weight: 600; cursor: pointer; background: none; border: none; padding: 0; }
+  .ar-resend-btn:disabled { opacity: 0.5; pointer-events: none; }
   @media (max-width: 500px) {
-    .ar-page { padding: 0; align-items: flex-start; }
-    .ar-card { border-radius: 0; border: none; box-shadow: none; min-height: 100vh; padding: 32px 20px; }
+    .ar-inner { padding: 0; }
+    .ar-card { border-radius: 0; border: none; box-shadow: none; padding: 32px 20px 60px; }
   }
 `;
 
 export default function Register() {
-  const navigate = useNavigate();
   const location = useLocation();
-  const { login } = { login: null }; // not used — we call api directly
 
   const [form, setForm] = useState({ fullName: '', username: '', email: '', phone: '', referralCode: '', password: '', confirmPassword: '' });
   const [errors, setErrors] = useState({});
@@ -105,12 +124,12 @@ export default function Register() {
   const [agreed, setAgreed] = useState(false);
   const [loading, setLoading] = useState(false);
   const [serverError, setServerError] = useState('');
-  const [showSuccess, setShowSuccess] = useState(false);
+  const [pendingEmail, setPendingEmail] = useState('');
   const [refAutoApplied, setRefAutoApplied] = useState(false);
+  const [resending, setResending] = useState(false);
   const usernameTimer = useRef(null);
   const [usernameChecking, setUsernameChecking] = useState(false);
 
-  // Auto-fill referral code from ?ref= param
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const ref = params.get('ref');
@@ -126,7 +145,6 @@ export default function Register() {
     setServerError('');
   };
 
-  // Real-time username check
   useEffect(() => {
     const u = form.username.trim();
     if (!u || u.length < 3) return;
@@ -141,6 +159,12 @@ export default function Register() {
       setUsernameChecking(false);
     }, 500);
   }, [form.username]);
+
+  const handleInputFocus = (e) => {
+    setTimeout(() => {
+      e.target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 300);
+  };
 
   const validate = () => {
     const e = {};
@@ -164,7 +188,7 @@ export default function Register() {
     setLoading(true);
     setServerError('');
     try {
-      await api.post('/auth/register', {
+      const res = await api.post('/auth/register', {
         full_name: form.fullName.trim(),
         username: form.username.trim().toLowerCase(),
         email: form.email.trim().toLowerCase(),
@@ -172,7 +196,7 @@ export default function Register() {
         referral_code: form.referralCode.trim() || undefined,
         password: form.password,
       });
-      setShowSuccess(true);
+      setPendingEmail(res.data.email || form.email.trim().toLowerCase());
     } catch (err) {
       setServerError(err.response?.data?.error || 'Registration failed. Please try again.');
     } finally {
@@ -189,177 +213,209 @@ export default function Register() {
     });
   };
 
+  const handleResend = async () => {
+    setResending(true);
+    try { await api.post('/auth/resend-verification', { email: pendingEmail }); } catch { /* ignore */ }
+    setResending(false);
+  };
+
   const pwScore = passwordStrength(form.password);
 
   const isFormValid = form.fullName.trim().length >= 2 && form.username.length >= 3 && form.email.includes('@') &&
     form.phone.length >= 10 && form.password.length >= 8 && form.password === form.confirmPassword && agreed;
 
+  if (pendingEmail) {
+    return (
+      <>
+        <style>{css}</style>
+        <div className="ar-page">
+          <div className="ar-inner">
+            <div className="ar-card">
+              <Link to="/" className="ar-logo">
+                <div className="ar-logo-box">P</div>
+                <span className="ar-logo-word">PanelNG</span>
+              </Link>
+              <div className="ar-pending">
+                <svg className="ar-env-icon" viewBox="0 0 64 64" fill="none">
+                  <rect x="4" y="12" width="56" height="40" rx="4" stroke="#C9620A" strokeWidth="2.5"/>
+                  <path d="M4 16l28 20 28-20" stroke="#C9620A" strokeWidth="2.5" strokeLinecap="round"/>
+                </svg>
+                <h1 className="ar-pending-heading">Check your email</h1>
+                <p className="ar-pending-text">
+                  We sent a confirmation link to <strong>{pendingEmail}</strong>. Click it to activate your account. Check your spam folder if you don't see it.
+                </p>
+                <button className="ar-resend-btn" onClick={handleResend} disabled={resending}>
+                  {resending ? 'Sending…' : 'Resend email'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
       <style>{css}</style>
       <div className="ar-page">
-        <div className="ar-card">
-          <Link to="/" className="ar-logo">
-            <div className="ar-logo-box">P</div>
-            <span className="ar-logo-word">PanelNG</span>
-          </Link>
+        <div className="ar-inner">
+          <div className="ar-card">
+            <Link to="/" className="ar-logo">
+              <div className="ar-logo-box">P</div>
+              <span className="ar-logo-word">PanelNG</span>
+            </Link>
 
-          <h1 className="ar-heading">Create your account</h1>
-          <p className="ar-sub">Already have an account? <Link to="/login">Sign in</Link></p>
+            <h1 className="ar-heading">Create your account</h1>
+            <p className="ar-sub">Already have an account? <Link to="/login">Sign in</Link></p>
 
-          <button className="ar-google-btn" type="button" onClick={handleGoogle}>
-            <GoogleIcon /> Continue with Google
-          </button>
-
-          <div className="ar-divider">
-            <div className="ar-divider-line" />
-            <span className="ar-divider-text">or</span>
-            <div className="ar-divider-line" />
-          </div>
-
-          <form onSubmit={handleSubmit} noValidate>
-            <div className="ar-fields">
-              {/* Full Name */}
-              <div className="ar-field">
-                <label>Full Name</label>
-                <div className="ar-input-wrap">
-                  <span className="ar-input-icon"><Icon name="user" /></span>
-                  <input className={`ar-input${errors.fullName ? ' has-error' : ''}`} type="text" placeholder="Enter your full name" value={form.fullName} onChange={set('fullName')} autoComplete="name" />
-                </div>
-                {errors.fullName && <div className="ar-field-error">{errors.fullName}</div>}
-              </div>
-
-              {/* Username */}
-              <div className="ar-field">
-                <label>Username {usernameChecking && <span style={{ fontSize: 10, color: '#A8A49C' }}>checking…</span>}</label>
-                <div className="ar-input-wrap">
-                  <span className="ar-input-icon"><Icon name="at" /></span>
-                  <input className={`ar-input${errors.username ? ' has-error' : ''}`} type="text" placeholder="Choose a username" value={form.username} onChange={set('username')} autoComplete="username" />
-                </div>
-                <div className="ar-note">Letters, numbers and underscores only. No spaces.</div>
-                {errors.username && <div className="ar-field-error">{errors.username}</div>}
-              </div>
-
-              {/* Email */}
-              <div className="ar-field">
-                <label>Email Address</label>
-                <div className="ar-input-wrap">
-                  <span className="ar-input-icon"><Icon name="mail" /></span>
-                  <input className={`ar-input${errors.email ? ' has-error' : ''}`} type="email" placeholder="Enter your email address" value={form.email} onChange={set('email')} autoComplete="email" />
-                </div>
-                {errors.email && <div className="ar-field-error">{errors.email}</div>}
-              </div>
-
-              {/* Phone */}
-              <div className="ar-field">
-                <label>Phone Number</label>
-                <div className="ar-input-wrap">
-                  <span className="ar-input-icon"><Icon name="phone" /></span>
-                  <input className={`ar-input${errors.phone ? ' has-error' : ''}`} type="tel" placeholder="e.g. 08012345678" value={form.phone} onChange={set('phone')} autoComplete="tel" />
-                </div>
-                <div className="ar-note">Nigerian number preferred.</div>
-                {errors.phone && <div className="ar-field-error">{errors.phone}</div>}
-              </div>
-
-              {/* Referral Code */}
-              <div className="ar-field">
-                <label>
-                  Referral Code (optional)
-                  {refAutoApplied && <span className="ar-applied-pill">Applied</span>}
-                </label>
-                <div className="ar-input-wrap">
-                  <span className="ar-input-icon"><Icon name="gift" /></span>
-                  <input
-                    className="ar-input"
-                    type="text"
-                    placeholder="Enter referral code (optional)"
-                    value={form.referralCode}
-                    onChange={refAutoApplied ? undefined : set('referralCode')}
-                    readOnly={refAutoApplied}
-                    style={refAutoApplied ? { background: 'rgba(22,163,74,0.05)', borderColor: 'rgba(22,163,74,0.3)', color: '#16A34A' } : {}}
-                  />
-                </div>
-              </div>
-
-              {/* Password */}
-              <div className="ar-field">
-                <label>Password</label>
-                <div className="ar-input-wrap">
-                  <span className="ar-input-icon"><Icon name="lock" /></span>
-                  <input
-                    className={`ar-input${errors.password ? ' has-error' : ''}`}
-                    type={showPw ? 'text' : 'password'}
-                    placeholder="Create a password"
-                    value={form.password}
-                    onChange={set('password')}
-                    style={{ paddingRight: 42 }}
-                    autoComplete="new-password"
-                  />
-                  <button type="button" className="ar-input-right" onClick={() => setShowPw(v => !v)}>
-                    <Icon name={showPw ? 'eye-off' : 'eye'} />
-                  </button>
-                </div>
-                {form.password && (
-                  <>
-                    <div className="ar-strength-bars">
-                      {[1, 2, 3, 4].map(i => (
-                        <div key={i} className="ar-strength-bar" style={{ background: i <= pwScore ? strengthColor[pwScore] : '#E5E2D9' }} />
-                      ))}
-                    </div>
-                    <div className="ar-strength-label" style={{ color: strengthColor[pwScore] }}>{strengthLabel[pwScore]}</div>
-                  </>
-                )}
-                {errors.password && <div className="ar-field-error">{errors.password}</div>}
-              </div>
-
-              {/* Confirm Password */}
-              <div className="ar-field">
-                <label>Confirm Password</label>
-                <div className="ar-input-wrap">
-                  <span className="ar-input-icon"><Icon name="lock" /></span>
-                  <input
-                    className={`ar-input${errors.confirmPassword ? ' has-error' : ''}`}
-                    type={showConfirm ? 'text' : 'password'}
-                    placeholder="Confirm your password"
-                    value={form.confirmPassword}
-                    onChange={set('confirmPassword')}
-                    style={{ paddingRight: 42 }}
-                    autoComplete="new-password"
-                  />
-                  <button type="button" className="ar-input-right" onClick={() => setShowConfirm(v => !v)}>
-                    <Icon name={showConfirm ? 'eye-off' : 'eye'} />
-                  </button>
-                </div>
-                {form.confirmPassword && form.password !== form.confirmPassword && (
-                  <div className="ar-field-error">Passwords do not match</div>
-                )}
-                {errors.confirmPassword && form.password === form.confirmPassword && (
-                  <div className="ar-field-error">{errors.confirmPassword}</div>
-                )}
-              </div>
-            </div>
-
-            {/* Terms */}
-            <div className="ar-terms" style={{ marginTop: 16 }}>
-              <div className={`ar-checkbox${agreed ? ' checked' : ''}`} onClick={() => { setAgreed(v => !v); setErrors(er => ({ ...er, terms: '' })); }} role="checkbox" aria-checked={agreed}>
-                {agreed && <Icon name="check" size={11} color="white" />}
-              </div>
-              <span className="ar-terms-text">
-                I agree to the <Link to="/terms" target="_blank" rel="noopener noreferrer">Terms of Service</Link>
-              </span>
-            </div>
-            {errors.terms && <div className="ar-field-error" style={{ marginTop: 4 }}>{errors.terms}</div>}
-
-            <button type="submit" className="ar-submit" disabled={loading || !isFormValid}>
-              {loading ? <><span className="ar-spinner" /> Creating account…</> : 'Sign Up'}
+            <button className="ar-google-btn" type="button" onClick={handleGoogle}>
+              <GoogleIcon /> Continue with Google
             </button>
 
-            {serverError && <div className="ar-error-banner">{serverError}</div>}
-          </form>
+            <div className="ar-divider">
+              <div className="ar-divider-line" />
+              <span className="ar-divider-text">or</span>
+              <div className="ar-divider-line" />
+            </div>
+
+            <form onSubmit={handleSubmit} noValidate>
+              <div className="ar-fields">
+                <div className="ar-field">
+                  <label>Full Name</label>
+                  <div className="ar-input-wrap">
+                    <span className="ar-input-icon"><Icon name="user" /></span>
+                    <input className={`ar-input${errors.fullName ? ' has-error' : ''}`} type="text" placeholder="Enter your full name" value={form.fullName} onChange={set('fullName')} onFocus={handleInputFocus} autoComplete="name" />
+                  </div>
+                  {errors.fullName && <div className="ar-field-error">{errors.fullName}</div>}
+                </div>
+
+                <div className="ar-field">
+                  <label>Username {usernameChecking && <span style={{ fontSize: 10, color: '#A8A49C' }}>checking…</span>}</label>
+                  <div className="ar-input-wrap">
+                    <span className="ar-input-icon"><Icon name="at" /></span>
+                    <input className={`ar-input${errors.username ? ' has-error' : ''}`} type="text" placeholder="Choose a username" value={form.username} onChange={set('username')} onFocus={handleInputFocus} autoComplete="username" />
+                  </div>
+                  <div className="ar-note">Letters, numbers and underscores only. No spaces.</div>
+                  {errors.username && <div className="ar-field-error">{errors.username}</div>}
+                </div>
+
+                <div className="ar-field">
+                  <label>Email Address</label>
+                  <div className="ar-input-wrap">
+                    <span className="ar-input-icon"><Icon name="mail" /></span>
+                    <input className={`ar-input${errors.email ? ' has-error' : ''}`} type="email" placeholder="Enter your email address" value={form.email} onChange={set('email')} onFocus={handleInputFocus} autoComplete="email" />
+                  </div>
+                  {errors.email && <div className="ar-field-error">{errors.email}</div>}
+                </div>
+
+                <div className="ar-field">
+                  <label>Phone Number</label>
+                  <div className="ar-input-wrap">
+                    <span className="ar-input-icon"><Icon name="phone" /></span>
+                    <input className={`ar-input${errors.phone ? ' has-error' : ''}`} type="tel" placeholder="e.g. 08012345678" value={form.phone} onChange={set('phone')} onFocus={handleInputFocus} autoComplete="tel" />
+                  </div>
+                  <div className="ar-note">Nigerian number preferred.</div>
+                  {errors.phone && <div className="ar-field-error">{errors.phone}</div>}
+                </div>
+
+                <div className="ar-field">
+                  <label>
+                    Referral Code (optional)
+                    {refAutoApplied && <span className="ar-applied-pill">Applied</span>}
+                  </label>
+                  <div className="ar-input-wrap">
+                    <span className="ar-input-icon"><Icon name="gift" /></span>
+                    <input
+                      className="ar-input"
+                      type="text"
+                      placeholder="Enter referral code (optional)"
+                      value={form.referralCode}
+                      onChange={refAutoApplied ? undefined : set('referralCode')}
+                      onFocus={handleInputFocus}
+                      readOnly={refAutoApplied}
+                      style={refAutoApplied ? { background: 'rgba(22,163,74,0.05)', borderColor: 'rgba(22,163,74,0.3)', color: '#16A34A' } : {}}
+                    />
+                  </div>
+                </div>
+
+                <div className="ar-field">
+                  <label>Password</label>
+                  <div className="ar-input-wrap">
+                    <span className="ar-input-icon"><Icon name="lock" /></span>
+                    <input
+                      className={`ar-input${errors.password ? ' has-error' : ''}`}
+                      type={showPw ? 'text' : 'password'}
+                      placeholder="Create a password"
+                      value={form.password}
+                      onChange={set('password')}
+                      onFocus={handleInputFocus}
+                      style={{ paddingRight: 42 }}
+                      autoComplete="new-password"
+                    />
+                    <button type="button" className="ar-input-right" onClick={() => setShowPw(v => !v)}>
+                      <Icon name={showPw ? 'eye-off' : 'eye'} />
+                    </button>
+                  </div>
+                  {form.password && (
+                    <>
+                      <div className="ar-strength-bars">
+                        {[1, 2, 3, 4].map(i => (
+                          <div key={i} className="ar-strength-bar" style={{ background: i <= pwScore ? strengthColor[pwScore] : '#E5E2D9' }} />
+                        ))}
+                      </div>
+                      <div className="ar-strength-label" style={{ color: strengthColor[pwScore] }}>{strengthLabel[pwScore]}</div>
+                    </>
+                  )}
+                  {errors.password && <div className="ar-field-error">{errors.password}</div>}
+                </div>
+
+                <div className="ar-field">
+                  <label>Confirm Password</label>
+                  <div className="ar-input-wrap">
+                    <span className="ar-input-icon"><Icon name="lock" /></span>
+                    <input
+                      className={`ar-input${errors.confirmPassword ? ' has-error' : ''}`}
+                      type={showConfirm ? 'text' : 'password'}
+                      placeholder="Confirm your password"
+                      value={form.confirmPassword}
+                      onChange={set('confirmPassword')}
+                      onFocus={handleInputFocus}
+                      style={{ paddingRight: 42 }}
+                      autoComplete="new-password"
+                    />
+                    <button type="button" className="ar-input-right" onClick={() => setShowConfirm(v => !v)}>
+                      <Icon name={showConfirm ? 'eye-off' : 'eye'} />
+                    </button>
+                  </div>
+                  {form.confirmPassword && form.password !== form.confirmPassword && (
+                    <div className="ar-field-error">Passwords do not match</div>
+                  )}
+                  {errors.confirmPassword && form.password === form.confirmPassword && (
+                    <div className="ar-field-error">{errors.confirmPassword}</div>
+                  )}
+                </div>
+              </div>
+
+              <div className="ar-terms" style={{ marginTop: 16 }}>
+                <div className={`ar-checkbox${agreed ? ' checked' : ''}`} onClick={() => { setAgreed(v => !v); setErrors(er => ({ ...er, terms: '' })); }} role="checkbox" aria-checked={agreed}>
+                  {agreed && <Icon name="check" size={11} color="white" />}
+                </div>
+                <span className="ar-terms-text">
+                  I agree to the <Link to="/terms" target="_blank" rel="noopener noreferrer">Terms of Service</Link>
+                </span>
+              </div>
+              {errors.terms && <div className="ar-field-error" style={{ marginTop: 4 }}>{errors.terms}</div>}
+
+              <button type="submit" className="ar-submit" disabled={loading || !isFormValid}>
+                {loading ? <><span className="ar-spinner" /> Creating account…</> : 'Sign Up'}
+              </button>
+
+              {serverError && <div className="ar-error-banner">{serverError}</div>}
+            </form>
+          </div>
         </div>
       </div>
-
-      <SuccessModal isOpen={showSuccess} onClose={() => { setShowSuccess(false); navigate('/dashboard'); }} />
     </>
   );
 }

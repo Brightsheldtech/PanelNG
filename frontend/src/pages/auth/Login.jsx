@@ -30,15 +30,26 @@ function GoogleIcon() {
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Cabinet+Grotesk:wght@700;800;900&family=Epilogue:wght@400;500;600&display=swap');
 
-  .al-page { min-height: 100vh; background: #F8F7F4; display: flex; align-items: center; justify-content: center; padding: 40px 20px; font-family: 'Epilogue', sans-serif; }
-  .al-card { background: white; width: 100%; max-width: 440px; padding: 40px 36px; border-radius: 20px; border: 1px solid #E5E2D9; box-shadow: 0 4px 24px rgba(0,0,0,0.06); }
+  html { scroll-behavior: smooth; }
+
+  .al-page {
+    position: fixed; inset: 0; overflow-y: auto; overflow-x: hidden;
+    -webkit-overflow-scrolling: touch; overscroll-behavior: none;
+    background: #F8F7F4; font-family: 'Epilogue', sans-serif;
+    scroll-behavior: smooth;
+  }
+  .al-inner {
+    min-height: 100%; display: flex; flex-direction: column;
+    align-items: center; padding: 40px 20px;
+  }
+  .al-card { background: white; width: 100%; max-width: 440px; padding: 40px 36px; border-radius: 20px; border: 1px solid #E5E2D9; box-shadow: 0 4px 24px rgba(0,0,0,0.06); box-sizing: border-box; }
   .al-logo { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 28px; text-decoration: none; }
   .al-logo-box { width: 32px; height: 32px; background: #1C1C1A; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-family: 'Cabinet Grotesk', sans-serif; font-weight: 900; font-size: 15px; color: #F5A623; flex-shrink: 0; }
   .al-logo-word { font-family: 'Cabinet Grotesk', sans-serif; font-weight: 800; font-size: 18px; color: #111110; letter-spacing: -0.3px; }
   .al-heading { font-family: 'Cabinet Grotesk', sans-serif; font-weight: 700; font-size: 22px; color: #111110; margin: 0 0 6px; }
   .al-sub { font-size: 14px; color: #6B6860; margin: 0 0 28px; }
   .al-sub a { color: #C9620A; font-weight: 600; text-decoration: none; }
-  .al-google-btn { width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 13px 20px; border-radius: 12px; background: white; border: 1px solid #E5E2D9; font-family: 'Epilogue', sans-serif; font-weight: 600; font-size: 14px; color: #111110; cursor: pointer; transition: background 0.15s, border-color 0.15s, transform 0.1s; margin-bottom: 20px; }
+  .al-google-btn { width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 13px 20px; border-radius: 12px; background: white; border: 1px solid #E5E2D9; font-family: 'Epilogue', sans-serif; font-weight: 600; font-size: 14px; color: #111110; cursor: pointer; transition: background 0.15s, border-color 0.15s, transform 0.1s; margin-bottom: 20px; box-sizing: border-box; }
   .al-google-btn:hover { background: #F8F7F4; border-color: #CCC9C0; }
   .al-google-btn:active { transform: scale(0.98); }
   .al-divider { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
@@ -48,7 +59,12 @@ const css = `
   .al-field label { display: block; font-size: 12px; font-weight: 500; color: #6B6860; margin-bottom: 5px; }
   .al-input-wrap { position: relative; display: flex; align-items: center; }
   .al-input-icon { position: absolute; left: 14px; pointer-events: none; }
-  .al-input { width: 100%; padding: 12px 14px 12px 42px; border-radius: 11px; border: 1px solid #E5E2D9; background: #FAFAF8; font-family: 'Epilogue', sans-serif; font-size: 14px; color: #111110; outline: none; transition: border-color 0.15s, background 0.15s; }
+  .al-input {
+    width: 100%; padding: 12px 14px 12px 42px; border-radius: 11px; border: 1px solid #E5E2D9;
+    background: #FAFAF8; font-family: 'Epilogue', sans-serif; font-size: 16px; color: #111110;
+    outline: none; transition: border-color 0.15s, background 0.15s; box-sizing: border-box;
+    -webkit-appearance: none; appearance: none; max-width: 100%;
+  }
   .al-input::placeholder { color: #A8A49C; }
   .al-input:focus { border-color: #C9620A; background: white; }
   .al-input-right { position: absolute; right: 14px; cursor: pointer; background: none; border: none; padding: 0; display: flex; color: #A8A49C; }
@@ -58,16 +74,18 @@ const css = `
   .al-checkbox.checked { background: #1C1C1A; border-color: #1C1C1A; }
   .al-remember-text { font-size: 13px; color: #6B6860; }
   .al-forgot { font-size: 13px; color: #C9620A; font-weight: 600; cursor: pointer; text-decoration: none; background: none; border: none; padding: 0; }
-  .al-submit { margin-top: 20px; width: 100%; padding: 14px; border-radius: 12px; background: #1C1C1A; color: white; font-family: 'Cabinet Grotesk', sans-serif; font-weight: 700; font-size: 15px; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: background 0.12s, transform 0.1s; }
+  .al-submit { margin-top: 20px; width: 100%; padding: 14px; border-radius: 12px; background: #1C1C1A; color: white; font-family: 'Cabinet Grotesk', sans-serif; font-weight: 700; font-size: 15px; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: background 0.12s, transform 0.1s; box-sizing: border-box; }
   .al-submit:hover:not(:disabled) { background: #111110; }
   .al-submit:active:not(:disabled) { transform: scale(0.98); }
   .al-submit:disabled { opacity: 0.5; pointer-events: none; }
   .al-spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: al-spin 0.7s linear infinite; flex-shrink: 0; }
   @keyframes al-spin { to { transform: rotate(360deg); } }
   .al-error-banner { margin-top: 12px; padding: 12px 14px; background: rgba(220,38,38,0.06); border: 1px solid rgba(220,38,38,0.15); border-radius: 10px; font-size: 13px; color: #DC2626; line-height: 1.5; }
+  .al-resend-link { display: block; margin-top: 8px; font-size: 13px; color: #C9620A; font-weight: 600; cursor: pointer; background: none; border: none; padding: 0; }
+  .al-resend-link:disabled { opacity: 0.5; pointer-events: none; }
   @media (max-width: 500px) {
-    .al-page { padding: 0; align-items: flex-start; }
-    .al-card { border-radius: 0; border: none; box-shadow: none; min-height: 100vh; padding: 32px 20px; }
+    .al-inner { padding: 0; }
+    .al-card { border-radius: 0; border: none; box-shadow: none; padding: 32px 20px 60px; min-height: 100vh; }
   }
 `;
 
@@ -80,20 +98,40 @@ export default function Login() {
   const [remember, setRemember] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [errorCode, setErrorCode] = useState('');
+  const [unverifiedEmail, setUnverifiedEmail] = useState('');
+  const [resending, setResending] = useState(false);
+
+  const handleInputFocus = (e) => {
+    setTimeout(() => {
+      e.target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 300);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!identifier.trim() || !password) return;
     setLoading(true);
     setError('');
+    setErrorCode('');
+    setUnverifiedEmail('');
     try {
       const user = await login(identifier.trim(), password);
       navigate(user.role === 'admin' ? '/admin' : '/dashboard');
     } catch (err) {
+      const code = err.response?.data?.code || '';
       const msg = err.response?.data?.error || '';
-      if (msg.includes('Invalid') || msg.includes('incorrect')) setError('Email/username or password is incorrect.');
-      else if (msg.includes('confirm')) setError('Please confirm your email before logging in.');
-      else setError(msg || 'Login failed. Please try again.');
+      setErrorCode(code);
+      if (code === 'EMAIL_NOT_VERIFIED') {
+        setUnverifiedEmail(err.response?.data?.email || identifier.trim());
+        setError('Please verify your email before logging in.');
+      } else if (code === 'ACCOUNT_SUSPENDED') {
+        setError('Your account has been suspended. Contact support.');
+      } else if (msg.includes('Invalid') || msg.includes('incorrect')) {
+        setError('Email/username or password is incorrect.');
+      } else {
+        setError(msg || 'Login failed. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -107,69 +145,89 @@ export default function Login() {
     });
   };
 
+  const handleResendVerification = async () => {
+    if (!unverifiedEmail) return;
+    setResending(true);
+    try { await api.post('/auth/resend-verification', { email: unverifiedEmail }); } catch { /* ignore */ }
+    setResending(false);
+    setError('Verification email sent! Check your inbox.');
+    setErrorCode('');
+  };
+
   const isValid = identifier.trim().length > 0 && password.length > 0;
 
   return (
     <>
       <style>{css}</style>
       <div className="al-page">
-        <div className="al-card">
-          <Link to="/" className="al-logo">
-            <div className="al-logo-box">P</div>
-            <span className="al-logo-word">PanelNG</span>
-          </Link>
+        <div className="al-inner">
+          <div className="al-card">
+            <Link to="/" className="al-logo">
+              <div className="al-logo-box">P</div>
+              <span className="al-logo-word">PanelNG</span>
+            </Link>
 
-          <h1 className="al-heading">Welcome back</h1>
-          <p className="al-sub">Don't have an account? <Link to="/register">Sign up</Link></p>
+            <h1 className="al-heading">Welcome back</h1>
+            <p className="al-sub">Don't have an account? <Link to="/register">Sign up</Link></p>
 
-          <button className="al-google-btn" type="button" onClick={handleGoogle}>
-            <GoogleIcon /> Continue with Google
-          </button>
-
-          <div className="al-divider">
-            <div className="al-divider-line" />
-            <span className="al-divider-text">or</span>
-            <div className="al-divider-line" />
-          </div>
-
-          <form onSubmit={handleSubmit} noValidate>
-            <div className="al-fields">
-              <div className="al-field">
-                <label>Email or Username</label>
-                <div className="al-input-wrap">
-                  <span className="al-input-icon"><Icon name="user" /></span>
-                  <input className="al-input" type="text" placeholder="Email address or username" value={identifier} onChange={e => { setIdentifier(e.target.value); setError(''); }} autoComplete="username" autoFocus />
-                </div>
-              </div>
-
-              <div className="al-field">
-                <label>Password</label>
-                <div className="al-input-wrap">
-                  <span className="al-input-icon"><Icon name="lock" /></span>
-                  <input className="al-input" type={showPw ? 'text' : 'password'} placeholder="Your password" value={password} onChange={e => { setPassword(e.target.value); setError(''); }} style={{ paddingRight: 42 }} autoComplete="current-password" />
-                  <button type="button" className="al-input-right" onClick={() => setShowPw(v => !v)}>
-                    <Icon name={showPw ? 'eye-off' : 'eye'} />
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="al-row">
-              <div className="al-remember">
-                <div className={`al-checkbox${remember ? ' checked' : ''}`} onClick={() => setRemember(v => !v)} role="checkbox" aria-checked={remember}>
-                  {remember && <Icon name="check" size={11} color="white" />}
-                </div>
-                <span className="al-remember-text">Remember me</span>
-              </div>
-              <Link to="/forgot-password" className="al-forgot">Forgot password?</Link>
-            </div>
-
-            <button type="submit" className="al-submit" disabled={loading || !isValid}>
-              {loading ? <><span className="al-spinner" /> Signing in…</> : 'Sign In'}
+            <button className="al-google-btn" type="button" onClick={handleGoogle}>
+              <GoogleIcon /> Continue with Google
             </button>
 
-            {error && <div className="al-error-banner">{error}</div>}
-          </form>
+            <div className="al-divider">
+              <div className="al-divider-line" />
+              <span className="al-divider-text">or</span>
+              <div className="al-divider-line" />
+            </div>
+
+            <form onSubmit={handleSubmit} noValidate>
+              <div className="al-fields">
+                <div className="al-field">
+                  <label>Email or Username</label>
+                  <div className="al-input-wrap">
+                    <span className="al-input-icon"><Icon name="user" /></span>
+                    <input className="al-input" type="text" placeholder="Email address or username" value={identifier} onChange={e => { setIdentifier(e.target.value); setError(''); setErrorCode(''); }} onFocus={handleInputFocus} autoComplete="username" autoFocus />
+                  </div>
+                </div>
+
+                <div className="al-field">
+                  <label>Password</label>
+                  <div className="al-input-wrap">
+                    <span className="al-input-icon"><Icon name="lock" /></span>
+                    <input className="al-input" type={showPw ? 'text' : 'password'} placeholder="Your password" value={password} onChange={e => { setPassword(e.target.value); setError(''); setErrorCode(''); }} onFocus={handleInputFocus} style={{ paddingRight: 42 }} autoComplete="current-password" />
+                    <button type="button" className="al-input-right" onClick={() => setShowPw(v => !v)}>
+                      <Icon name={showPw ? 'eye-off' : 'eye'} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="al-row">
+                <div className="al-remember">
+                  <div className={`al-checkbox${remember ? ' checked' : ''}`} onClick={() => setRemember(v => !v)} role="checkbox" aria-checked={remember}>
+                    {remember && <Icon name="check" size={11} color="white" />}
+                  </div>
+                  <span className="al-remember-text">Remember me</span>
+                </div>
+                <Link to="/forgot-password" className="al-forgot">Forgot password?</Link>
+              </div>
+
+              <button type="submit" className="al-submit" disabled={loading || !isValid}>
+                {loading ? <><span className="al-spinner" /> Signing in…</> : 'Sign In'}
+              </button>
+
+              {error && (
+                <div className="al-error-banner">
+                  {error}
+                  {errorCode === 'EMAIL_NOT_VERIFIED' && (
+                    <button className="al-resend-link" type="button" onClick={handleResendVerification} disabled={resending}>
+                      {resending ? 'Sending…' : 'Resend verification email'}
+                    </button>
+                  )}
+                </div>
+              )}
+            </form>
+          </div>
         </div>
       </div>
     </>

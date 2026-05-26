@@ -11,6 +11,7 @@ import TermsOfService from './pages/TermsOfService';
 import Register from './pages/auth/Register';
 import Login from './pages/auth/Login';
 import ForgotPassword from './pages/auth/ForgotPassword';
+import VerifyEmail from './pages/auth/VerifyEmail';
 import OAuthCallback from './pages/auth/OAuthCallback';
 
 import DashboardLayout from './components/DashboardLayout';
@@ -19,6 +20,7 @@ import AdminRoute from './components/AdminRoute';
 
 import AdminOverview from './pages/admin/AdminOverview';
 import AdminUsers from './pages/admin/AdminUsers';
+import UserDetail from './pages/admin/UserDetail';
 import AdminOrders from './pages/admin/AdminOrders';
 import AdminTransactions from './pages/admin/AdminTransactions';
 import ServicesManager from './pages/admin/ServicesManager';
@@ -47,6 +49,7 @@ export default function App() {
       <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <Login />} />
       <Route path="/register" element={user ? <Navigate to="/dashboard" replace /> : <Register />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/verify-email" element={<VerifyEmail />} />
       <Route path="/auth/callback" element={<OAuthCallback />} />
       <Route path="/terms" element={<TermsOfService />} />
       <Route path="/manage" element={user?.role === 'admin' ? <Navigate to="/admin/overview" replace /> : <AdminLogin />} />
@@ -74,6 +77,7 @@ export default function App() {
         <Route index element={<Navigate to="/admin/overview" replace />} />
         <Route path="overview" element={<AdminOverview />} />
         <Route path="users" element={<AdminUsers />} />
+        <Route path="users/:userId" element={<UserDetail />} />
         <Route path="orders" element={<AdminOrders />} />
         <Route path="transactions" element={<AdminTransactions />} />
         <Route path="payment-requests" element={<PaymentRequests />} />
