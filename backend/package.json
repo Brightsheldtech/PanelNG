@@ -20,6 +20,7 @@
     "mailparser": "^3.9.8",
     "morgan": "^1.10.0",
     "nodemailer": "^8.0.8",
+    "resend": "^6.12.4",
     "ws": "^8.21.0"
   },
   "devDependencies": {

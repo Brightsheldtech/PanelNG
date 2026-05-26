@@ -101,8 +101,6 @@ router.post('/:id/message', auth, async (req, res) => {
 
           await sendSupportNotification({
             adminEmail: cfg.adminEmail,
-            gmailUser: cfg.gmailUser,
-            gmailPass: cfg.gmailPass,
             convId: id,
             customerName: sender?.full_name || 'Customer',
             customerEmail: sender?.email || '',

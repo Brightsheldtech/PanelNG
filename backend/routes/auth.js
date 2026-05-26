@@ -2,8 +2,11 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 const supabase = require('../lib/supabase');
+
+const FROM = 'PanelNG <onboarding@resend.dev>';
+function getResend() { return new Resend(process.env.RESEND_API_KEY); }
 const auth = require('../middleware/auth');
 const router = express.Router();
 
@@ -122,16 +125,10 @@ router.post('/register', async (req, res) => {
     const frontendUrl = process.env.FRONTEND_URL || 'https://panelng-production.up.railway.app';
     const verifyUrl = `${frontendUrl}/verify-email?token=${verificationToken}`;
 
-    const gmailUser = process.env.GMAIL_USER;
-    const gmailPass = process.env.GMAIL_APP_PASSWORD || process.env.GMAIL_PASS;
-    if (gmailUser && gmailPass) {
-      const transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: { user: gmailUser, pass: gmailPass },
-      });
-      transporter.sendMail({
-        from: `"PanelNG" <${gmailUser}>`,
-        to: user.email,
+    if (process.env.RESEND_API_KEY) {
+      getResend().emails.send({
+        from: FROM,
+        to: [user.email],
         subject: 'Verify your PanelNG email address',
         html: `
           <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px">
@@ -276,14 +273,9 @@ router.post('/forgot-password', async (req, res) => {
 
     const resetUrl = `${process.env.FRONTEND_URL || 'https://panelng-production.up.railway.app'}/reset-password?token=${token}`;
 
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_PASS },
-    });
-
-    await transporter.sendMail({
-      from: `"PanelNG" <${process.env.GMAIL_USER}>`,
-      to: user.email,
+    await getResend().emails.send({
+      from: FROM,
+      to: [user.email],
       subject: 'Reset your PanelNG password',
       html: `
         <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px">
@@ -395,16 +387,10 @@ router.post('/resend-verification', async (req, res) => {
     const frontendUrl = process.env.FRONTEND_URL || 'https://panelng-production.up.railway.app';
     const verifyUrl = `${frontendUrl}/verify-email?token=${verificationToken}`;
 
-    const gmailUser = process.env.GMAIL_USER;
-    const gmailPass = process.env.GMAIL_APP_PASSWORD || process.env.GMAIL_PASS;
-    if (gmailUser && gmailPass) {
-      const transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: { user: gmailUser, pass: gmailPass },
-      });
-      await transporter.sendMail({
-        from: `"PanelNG" <${gmailUser}>`,
-        to: user.email,
+    if (process.env.RESEND_API_KEY) {
+      await getResend().emails.send({
+        from: FROM,
+        to: [user.email],
         subject: 'Verify your PanelNG email address',
         html: `
           <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px">

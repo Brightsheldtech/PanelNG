@@ -1,47 +1,47 @@
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 const supabase = require('./supabase');
+
+const FROM = 'PanelNG <onboarding@resend.dev>';
+
+function getResend() {
+  return new Resend(process.env.RESEND_API_KEY);
+}
 
 async function getEmailConfig() {
   const { data } = await supabase
     .from('app_settings')
     .select('key, value')
-    .in('key', ['admin_email', 'gmail_user']);
+    .in('key', ['admin_email']);
 
   const s = {};
   (data || []).forEach((row) => { s[row.key] = row.value; });
 
   return {
     adminEmail: s.admin_email || process.env.ADMIN_EMAIL,
-    gmailUser:  s.gmail_user  || process.env.GMAIL_USER,
-    gmailPass:  process.env.GMAIL_APP_PASSWORD,
   };
 }
 
 async function sendPaymentNotification({ fullName, email, amount, reference, createdAt }) {
   try {
+    if (!process.env.RESEND_API_KEY) {
+      console.warn('[mailer] RESEND_API_KEY not set — skipping admin notification');
+      return;
+    }
     const cfg = await getEmailConfig();
-
-    if (!cfg.adminEmail || !cfg.gmailUser || !cfg.gmailPass) {
-      console.warn('[mailer] Email not configured — skipping admin notification');
+    if (!cfg.adminEmail) {
+      console.warn('[mailer] admin_email not configured — skipping admin notification');
       return;
     }
 
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: { user: cfg.gmailUser, pass: cfg.gmailPass },
-    });
-
+    const resend = getResend();
     const timeStr = new Date(createdAt).toLocaleString('en-NG', {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-      timeZone: 'Africa/Lagos',
+      dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Lagos',
     });
-
     const amountFmt = Number(amount).toLocaleString('en-NG', { minimumFractionDigits: 2 });
 
-    await transporter.sendMail({
-      from: `PanelNG <${cfg.gmailUser}>`,
-      to: cfg.adminEmail,
+    await resend.emails.send({
+      from: FROM,
+      to: [cfg.adminEmail],
       subject: `[PanelNG] New Payment Request — ${reference}`,
       html: `
         <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;background:#06080F;color:#E8E8F0;padding:32px;border-radius:10px;">
@@ -68,7 +68,6 @@ async function sendPaymentNotification({ fullName, email, amount, reference, cre
         </div>
       `,
     });
-
     console.log(`[mailer] Notification sent for ${reference}`);
   } catch (err) {
     console.error('[mailer] Failed to send notification:', err.message);
@@ -77,7 +76,6 @@ async function sendPaymentNotification({ fullName, email, amount, reference, cre
 
 function formatAccountsText(accounts) {
   if (!accounts) return 'No account data returned.';
-  // String already formatted
   if (typeof accounts === 'string') return accounts;
   const list = Array.isArray(accounts) ? accounts : [accounts];
   return list.map((acc, i) => {
@@ -89,29 +87,16 @@ function formatAccountsText(accounts) {
 
 async function sendOrderDelivery({ toEmail, toName, productName, quantity, totalNGN, orderId, deliveredAt, accounts }) {
   try {
-    const cfg = await getEmailConfig();
-    if (!cfg.gmailUser || !cfg.gmailPass) {
-      console.warn('[mailer] Email not configured — skipping order delivery email');
-      return;
-    }
-
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: { user: cfg.gmailUser, pass: cfg.gmailPass },
-    });
-
+    if (!process.env.RESEND_API_KEY) return;
+    const resend = getResend();
     const amountFmt = Number(totalNGN).toLocaleString('en-NG', { minimumFractionDigits: 2 });
     const dateStr = new Date(deliveredAt).toLocaleString('en-NG', {
       dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Lagos',
     });
-
     const accountList = Array.isArray(accounts) ? accounts : (accounts ? [accounts] : []);
-    const hasStructured = accountList.length > 0 && typeof accountList[0] === 'object';
 
     const accountRows = accountList.map((acc, i) => {
-      const fields = typeof acc === 'string'
-        ? [['credentials', acc]]
-        : Object.entries(acc);
+      const fields = typeof acc === 'string' ? [['credentials', acc]] : Object.entries(acc);
       return `
         <div style="background:#0B0E18;border:1px solid #1A1D2E;border-radius:8px;padding:14px 18px;margin-bottom:10px;">
           <div style="font-size:11px;font-weight:700;color:#F0A500;letter-spacing:0.08em;margin-bottom:10px;text-transform:uppercase;">Account ${i + 1}</div>
@@ -123,11 +108,9 @@ async function sendOrderDelivery({ toEmail, toName, productName, quantity, total
         </div>`;
     }).join('');
 
-    const noAccounts = accountList.length === 0;
-
-    await transporter.sendMail({
-      from: `PanelNG <${cfg.gmailUser}>`,
-      to: toEmail,
+    await resend.emails.send({
+      from: FROM,
+      to: [toEmail],
       subject: `Your Order is Ready — ${productName}`,
       html: `
         <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;background:#06080F;color:#E8E8F0;padding:32px;border-radius:10px;">
@@ -135,9 +118,7 @@ async function sendOrderDelivery({ toEmail, toName, productName, quantity, total
             <span style="font-size:22px;font-weight:800;color:#F0A500;letter-spacing:-0.02em;">PanelNG</span>
             <span style="font-size:13px;color:#A0A0B8;margin-left:10px;">Order Delivery</span>
           </div>
-
           <p style="font-size:15px;margin:0 0 20px;">Hi <strong>${toName || 'there'}</strong>, your order has been delivered!</p>
-
           <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:24px;">
             <tr><td style="padding:8px 0;color:#A0A0B8;width:130px;">Product</td><td style="padding:8px 0;font-weight:600;">${productName}</td></tr>
             <tr><td style="padding:8px 0;color:#A0A0B8;">Quantity</td><td style="padding:8px 0;">${quantity} account${quantity !== 1 ? 's' : ''}</td></tr>
@@ -145,25 +126,21 @@ async function sendOrderDelivery({ toEmail, toName, productName, quantity, total
             <tr><td style="padding:8px 0;color:#A0A0B8;">Order ID</td><td style="padding:8px 0;font-family:monospace;font-size:12px;color:#0EC97F;">${orderId}</td></tr>
             <tr><td style="padding:8px 0;color:#A0A0B8;">Date</td><td style="padding:8px 0;">${dateStr}</td></tr>
           </table>
-
           <div style="background:#2A1A00;border:1px solid #F0A500;border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#F0A500;">
-            ⚠ Save these credentials now and store them securely. Do not share them.
+            Save these credentials now and store them securely. Do not share them.
           </div>
-
           <div style="margin-bottom:24px;">
             <div style="font-size:12px;font-weight:700;color:#A0A0B8;letter-spacing:0.06em;text-transform:uppercase;margin-bottom:12px;">Your Account Credentials</div>
-            ${noAccounts
+            ${accountList.length === 0
               ? '<p style="color:#A0A0B8;font-size:13px;">Your order was processed. Please check your order history in the dashboard for full details.</p>'
               : accountRows}
           </div>
-
           <div style="background:#0B0E18;border:1px solid #1A1D2E;border-radius:8px;padding:14px 18px;font-size:12px;color:#A0A0B8;line-height:1.7;">
-            PanelNG acts solely as a reseller of third-party digital accounts. We are not responsible for how purchased accounts are used after delivery. Accounts suspended due to policy violations are not eligible for refund.
+            PanelNG acts solely as a reseller of third-party digital accounts. We are not responsible for how purchased accounts are used after delivery.
           </div>
         </div>
       `,
     });
-
     console.log(`[mailer] Order delivery email sent to ${toEmail} for order ${orderId}`);
   } catch (err) {
     console.error('[mailer] Failed to send order delivery email:', err.message);
@@ -172,22 +149,16 @@ async function sendOrderDelivery({ toEmail, toName, productName, quantity, total
 
 async function sendPaymentConfirmed({ toEmail, toName, amount, reference, confirmedAt }) {
   try {
-    const cfg = await getEmailConfig();
-    if (!cfg.gmailUser || !cfg.gmailPass) return;
-
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: { user: cfg.gmailUser, pass: cfg.gmailPass },
-    });
-
+    if (!process.env.RESEND_API_KEY) return;
+    const resend = getResend();
     const amountFmt = Number(amount).toLocaleString('en-NG', { minimumFractionDigits: 2 });
     const timeStr = new Date(confirmedAt).toLocaleString('en-NG', {
       dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Lagos',
     });
 
-    await transporter.sendMail({
-      from: `PanelNG <${cfg.gmailUser}>`,
-      to: toEmail,
+    await resend.emails.send({
+      from: FROM,
+      to: [toEmail],
       subject: `Wallet Credited — ₦${amountFmt} | PanelNG`,
       html: `
         <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;background:#06080F;color:#E8E8F0;padding:32px;border-radius:10px;">
@@ -218,19 +189,13 @@ async function sendPaymentConfirmed({ toEmail, toName, amount, reference, confir
 
 async function sendPaymentRejected({ toEmail, toName, amount, reference, reason }) {
   try {
-    const cfg = await getEmailConfig();
-    if (!cfg.gmailUser || !cfg.gmailPass) return;
-
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: { user: cfg.gmailUser, pass: cfg.gmailPass },
-    });
-
+    if (!process.env.RESEND_API_KEY) return;
+    const resend = getResend();
     const amountFmt = Number(amount).toLocaleString('en-NG', { minimumFractionDigits: 2 });
 
-    await transporter.sendMail({
-      from: `PanelNG <${cfg.gmailUser}>`,
-      to: toEmail,
+    await resend.emails.send({
+      from: FROM,
+      to: [toEmail],
       subject: `Payment Request Rejected — ${reference} | PanelNG`,
       html: `
         <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;background:#06080F;color:#E8E8F0;padding:32px;border-radius:10px;">
@@ -258,19 +223,13 @@ async function sendPaymentRejected({ toEmail, toName, amount, reference, reason 
 
 async function sendRefundNotification({ toEmail, toName, amount, reason }) {
   try {
-    const cfg = await getEmailConfig();
-    if (!cfg.gmailUser || !cfg.gmailPass) return;
-
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: { user: cfg.gmailUser, pass: cfg.gmailPass },
-    });
-
+    if (!process.env.RESEND_API_KEY) return;
+    const resend = getResend();
     const amountFmt = Number(amount).toLocaleString('en-NG', { minimumFractionDigits: 2 });
 
-    await transporter.sendMail({
-      from: `PanelNG <${cfg.gmailUser}>`,
-      to: toEmail,
+    await resend.emails.send({
+      from: FROM,
+      to: [toEmail],
       subject: `Refund Processed — ₦${amountFmt} | PanelNG`,
       html: `
         <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;background:#06080F;color:#E8E8F0;padding:32px;border-radius:10px;">
@@ -298,31 +257,16 @@ async function sendRefundNotification({ toEmail, toName, amount, reason }) {
   }
 }
 
-// Build the Reply-To alias for a support conversation
-// e.g. panelng@gmail.com + convId → panelng+support-{convIdNoDashes}@gmail.com
-function buildSupportReplyTo(gmailUser, convId) {
-  const noDashes = convId.replace(/-/g, '');
-  const [local, domain] = gmailUser.split('@');
-  return `${local}+support-${noDashes}@${domain}`;
-}
-
-async function sendSupportNotification({ adminEmail, gmailUser, gmailPass, convId, customerName, customerEmail, message, dashboardUrl }) {
+async function sendSupportNotification({ adminEmail, convId, customerName, customerEmail, message, dashboardUrl }) {
   try {
-    if (!adminEmail || !gmailUser || !gmailPass) return;
-
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: { user: gmailUser, pass: gmailPass },
-    });
-
-    const preview = message.length > 120 ? message.slice(0, 120) + '…' : message;
-    const replyTo = buildSupportReplyTo(gmailUser, convId);
+    if (!process.env.RESEND_API_KEY || !adminEmail) return;
+    const resend = getResend();
     const shortId = convId.slice(0, 8).toUpperCase();
+    const preview = message.length > 120 ? message.slice(0, 120) + '…' : message;
 
-    await transporter.sendMail({
-      from: `PanelNG Support <${gmailUser}>`,
-      to: adminEmail,
-      replyTo,
+    await resend.emails.send({
+      from: FROM,
+      to: [adminEmail],
       subject: `[Support #${shortId}] ${customerName}: ${preview}`,
       html: `
         <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;background:#06080F;color:#E8E8F0;padding:32px;border-radius:10px;">
@@ -330,7 +274,6 @@ async function sendSupportNotification({ adminEmail, gmailUser, gmailPass, convI
             <span style="font-size:20px;font-weight:800;color:#F0A500;letter-spacing:-0.02em;">PanelNG</span>
             <span style="font-size:13px;color:#A0A0B8;margin-left:10px;">Support Message</span>
           </div>
-          <p style="font-size:13px;color:#A0A0B8;margin:0 0 18px;">New message from a customer — reply to this email to respond directly.</p>
           <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:20px;">
             <tr><td style="padding:8px 0;color:#A0A0B8;width:130px;">Customer</td><td style="padding:8px 0;font-weight:600;">${customerName}</td></tr>
             <tr><td style="padding:8px 0;color:#A0A0B8;">Email</td><td style="padding:8px 0;">${customerEmail}</td></tr>
@@ -339,14 +282,10 @@ async function sendSupportNotification({ adminEmail, gmailUser, gmailPass, convI
           <div style="background:#0F1520;border:1px solid #1A1D2E;border-left:3px solid #F0A500;border-radius:6px;padding:16px 18px;font-size:14px;line-height:1.7;color:#E8E8F0;margin-bottom:22px;">
             ${message.replace(/\n/g, '<br>')}
           </div>
-          <div style="margin-bottom:20px;padding:12px 16px;background:#1A1200;border:1px solid rgba(240,165,0,.25);border-radius:6px;font-size:12px;color:#F0A500;">
-            ↩ Hit <strong>Reply</strong> in your email to respond — your reply will appear in the customer's chat automatically.
-          </div>
           ${dashboardUrl ? `<a href="${dashboardUrl}" style="display:inline-block;padding:10px 20px;background:#F0A500;color:#06080F;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700;">Open in Dashboard</a>` : ''}
         </div>
       `,
     });
-
     console.log(`[mailer] Support notification sent for conv ${convId}`);
   } catch (err) {
     console.error('[mailer] Failed to send support notification:', err.message);
@@ -361,5 +300,4 @@ module.exports = {
   sendPaymentRejected,
   sendRefundNotification,
   sendSupportNotification,
-  buildSupportReplyTo,
 };

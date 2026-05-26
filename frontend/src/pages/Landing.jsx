@@ -72,6 +72,12 @@ function Icon({ name, size = 20, color = 'currentColor', strokeWidth = 1.8, styl
     case 'check': return (
       <svg {...base}><polyline points="20 6 9 17 4 12" /></svg>
     );
+    case 'signal': return (
+      <svg {...base}>
+        <path d="M1.5 8.5a13 13 0 0 1 21 0" /><path d="M5 12a9 9 0 0 1 14 0" />
+        <path d="M8.5 15.5a5 5 0 0 1 7 0" /><circle cx="12" cy="19" r="1" fill={color} stroke="none" />
+      </svg>
+    );
     default: return null;
   }
 }
@@ -651,11 +657,11 @@ export default function Landing() {
               <div className="ln-hero-eyebrow-box">
                 <Icon name="zap" size={12} color="#F5A623" />
               </div>
-              <span className="ln-hero-eyebrow-text">Nigeria's SMM, SMS and accounts panel</span>
+              <span className="ln-hero-eyebrow-text">Nigeria's digital services panel</span>
             </div>
             <h1 className="ln-hero-h1">
               <span style={{ color: '#111110' }}>One wallet.</span><br />
-              <span style={{ color: '#C9620A' }}>Three services.</span><br />
+              <span style={{ color: '#C9620A' }}>Five services.</span><br />
               <span style={{ color: '#111110' }}>All in naira.</span>
             </h1>
             <p className="ln-hero-p">
@@ -713,19 +719,31 @@ export default function Landing() {
             <h2 className="ln-section-heading">Everything a Nigerian digital operator needs</h2>
             <div className="ln-bento-grid">
 
-              {/* SMM Panel — span 5 */}
-              <div className="ln-card" style={{ gridColumn: 'span 5' }}>
-                <div className="ln-card-pill" style={{ background: 'rgba(22,163,74,0.1)', color: '#16A34A' }}>500+ SERVICES</div>
-                <div className="ln-card-icon" style={{ background: 'rgba(22,163,74,0.08)' }}>
-                  <Icon name="trending-up" size={20} color="#16A34A" />
+              {/* Buy Data — span 4 */}
+              <div className="ln-card" style={{ gridColumn: 'span 4' }}>
+                <div className="ln-card-pill" style={{ background: 'rgba(22,163,74,0.1)', color: '#16A34A' }}>CHEAPEST</div>
+                <div className="ln-card-icon" style={{ background: 'rgba(37,99,235,0.08)' }}>
+                  <Icon name="signal" size={20} color="#2563EB" />
                 </div>
-                <p className="ln-card-name">SMM Panel</p>
-                <p className="ln-card-desc">500+ services on Instagram, TikTok, YouTube, Twitter/X and Facebook. Followers, likes, views and comments sourced directly from JustAnotherPanel. Priced in naira.</p>
+                <p className="ln-card-name">Buy Data</p>
+                <p className="ln-card-desc">MTN, Glo, Airtel and 9mobile at reseller rates. All networks, all plans.</p>
                 <div className="ln-card-checks">
-                  {['Real-time delivery tracking', 'Min/max quantity controls', 'Admin-set pricing per service'].map(p => (
-                    <div key={p} className="ln-card-check">
-                      <Icon name="check" size={12} color="#16A34A" />{p}
-                    </div>
+                  {['All 4 networks', 'From ₦230/GB', 'Instant SIM credit'].map(p => (
+                    <div key={p} className="ln-card-check"><Icon name="check" size={12} color="#2563EB" />{p}</div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Pay Bills — span 4 */}
+              <div className="ln-card" style={{ gridColumn: 'span 4' }}>
+                <div className="ln-card-icon" style={{ background: 'rgba(201,98,10,0.08)' }}>
+                  <Icon name="zap" size={20} color="#C9620A" />
+                </div>
+                <p className="ln-card-name">Pay Bills</p>
+                <p className="ln-card-desc">Electricity, DSTV, GOtv, StarTimes, airtime and exam pins.</p>
+                <div className="ln-card-checks">
+                  {['IKEDC · EKEDC · AEDC · PHED', 'DSTV · GOtv · StarTimes', 'WAEC · NECO · JAMB'].map(p => (
+                    <div key={p} className="ln-card-check"><Icon name="check" size={12} color="#C9620A" />{p}</div>
                   ))}
                 </div>
               </div>
@@ -739,9 +757,22 @@ export default function Landing() {
                 <p className="ln-card-desc">Virtual numbers for 18+ apps. OTP auto-detected — no manual refresh.</p>
                 <div className="ln-card-checks">
                   {['WhatsApp · Telegram · Instagram', '18+ supported platforms', 'Refund if no OTP in 20 min'].map(p => (
-                    <div key={p} className="ln-card-check">
-                      <Icon name="check" size={12} color="#7C3AED" />{p}
-                    </div>
+                    <div key={p} className="ln-card-check"><Icon name="check" size={12} color="#7C3AED" />{p}</div>
+                  ))}
+                </div>
+              </div>
+
+              {/* SMM Panel — span 6 */}
+              <div className="ln-card" style={{ gridColumn: 'span 6' }}>
+                <div className="ln-card-pill" style={{ background: 'rgba(22,163,74,0.1)', color: '#16A34A' }}>500+ SERVICES</div>
+                <div className="ln-card-icon" style={{ background: 'rgba(22,163,74,0.08)' }}>
+                  <Icon name="trending-up" size={20} color="#16A34A" />
+                </div>
+                <p className="ln-card-name">SMM Panel</p>
+                <p className="ln-card-desc">500+ services on Instagram, TikTok, YouTube, Twitter/X and Facebook. Followers, likes, views and comments — priced in naira.</p>
+                <div className="ln-card-checks">
+                  {['Real-time delivery tracking', 'Min/max quantity controls', 'Admin-set pricing per service'].map(p => (
+                    <div key={p} className="ln-card-check"><Icon name="check" size={12} color="#16A34A" />{p}</div>
                   ))}
                 </div>
               </div>
@@ -755,26 +786,22 @@ export default function Landing() {
                 <p className="ln-card-name">Buy Accounts</p>
                 <p className="ln-card-desc">Pre-verified Facebook, Gmail, Instagram and more. Instant delivery via ACCSZONE.</p>
                 <div className="ln-card-checks">
-                  {['Replacement guarantee', 'Aged and fresh options', 'Email access included'].map(p => (
-                    <div key={p} className="ln-card-check">
-                      <Icon name="check" size={12} color="#0D9488" />{p}
-                    </div>
+                  {['Replacement guarantee', 'Aged and fresh options'].map(p => (
+                    <div key={p} className="ln-card-check"><Icon name="check" size={12} color="#0D9488" />{p}</div>
                   ))}
                 </div>
               </div>
 
-              {/* Naira Wallet — span 4, second row */}
-              <div className="ln-card" style={{ gridColumn: 'span 4' }}>
+              {/* Naira Wallet — span 3 */}
+              <div className="ln-card" style={{ gridColumn: 'span 3' }}>
                 <div className="ln-card-icon" style={{ background: 'rgba(201,98,10,0.08)' }}>
                   <Icon name="wallet" size={20} color="#C9620A" />
                 </div>
                 <p className="ln-card-name">Naira Wallet</p>
-                <p className="ln-card-desc">One wallet. Fund via Flutterwave or bank transfer. Spend across all three services.</p>
+                <p className="ln-card-desc">One wallet. Fund via Flutterwave or bank transfer. Spend across all five services.</p>
                 <div className="ln-card-checks">
                   {['No FX conversion', 'Instant credit', 'Full transaction history'].map(p => (
-                    <div key={p} className="ln-card-check">
-                      <Icon name="check" size={12} color="#C9620A" />{p}
-                    </div>
+                    <div key={p} className="ln-card-check"><Icon name="check" size={12} color="#C9620A" />{p}</div>
                   ))}
                 </div>
               </div>
