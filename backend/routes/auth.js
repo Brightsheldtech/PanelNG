@@ -146,8 +146,8 @@ router.post('/register', async (req, res) => {
 
     res.status(201).json({ pending_verification: true, email: user.email });
   } catch (err) {
-    console.error('Register error:', err.message);
-    res.status(500).json({ error: 'Registration failed. Try again.' });
+    console.error('Registration error:', err);
+    res.status(500).json({ error: err?.message || 'Registration failed. Try again.' });
   }
 });
 

@@ -198,7 +198,8 @@ export default function Register() {
       });
       setPendingEmail(res.data.email || form.email.trim().toLowerCase());
     } catch (err) {
-      setServerError(err.response?.data?.error || 'Registration failed. Please try again.');
+      console.error('Registration error:', err);
+      setServerError(err.response?.data?.error || err.message || 'Registration failed. Please try again.');
     } finally {
       setLoading(false);
     }
