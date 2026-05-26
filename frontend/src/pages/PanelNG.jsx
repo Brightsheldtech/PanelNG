@@ -448,6 +448,20 @@ html,body{overflow-x:hidden;max-width:100vw}
 .pn-balance-hero-label{font-size:10px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px}
 .pn-balance-hero-amount{font-family:'Plus Jakarta Sans',sans-serif;font-size:34px;font-weight:800;color:var(--accent);font-variant-numeric:tabular-nums;letter-spacing:-0.04em}
 
+/* Referral page */
+.pn-ref-code-row{display:flex;align-items:center;gap:8px;background:var(--bg-surface);border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin-top:10px}
+.pn-ref-code-val{font-family:'Geist Mono','Courier New',monospace;font-size:15px;font-weight:600;color:var(--accent);flex:1;letter-spacing:0.05em;word-break:break-all}
+.pn-copy-btn{height:30px;padding:0 12px;border-radius:8px;background:var(--accent);color:var(--accent-text);border:none;cursor:pointer;font-size:12px;font-weight:600;transition:background 150ms ease;white-space:nowrap;font-family:'Plus Jakarta Sans',sans-serif;flex-shrink:0}
+.pn-copy-btn:hover{background:var(--accent-hover)}
+.pn-ref-stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+.pn-ref-stat{background:var(--bg-surface);border:1px solid var(--border);border-radius:14px;padding:16px}
+.pn-ref-stat-label{font-size:11px;font-weight:500;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.8px}
+.pn-ref-stat-val{font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;font-weight:700;color:var(--text-primary);font-variant-numeric:tabular-nums;letter-spacing:-0.02em}
+.pn-ref-stat-val.success{color:var(--success)}
+.pn-ref-list{background:var(--bg-surface);border:1px solid var(--border);border-radius:16px;overflow:hidden}
+.pn-ref-list-item{display:flex;align-items:center;justify-content:space-between;padding:13px 18px;border-bottom:0.5px solid var(--border)}
+.pn-ref-list-item:last-child{border-bottom:none}
+
 /* Responsive */
 @media (max-width:768px){
   .pn-sidebar{display:none}
@@ -482,6 +496,7 @@ html,body{overflow-x:hidden;max-width:100vw}
   .pn-stat-value{font-size:16px}
   .pn-balance-hero-amount{font-size:22px}
   .pn-content{padding:12px 10px 90px}
+  .pn-ref-stat-val{font-size:18px}
 }
 @media (min-width:769px){
   .pn-hamburger{display:none!important}
@@ -491,7 +506,6 @@ html,body{overflow-x:hidden;max-width:100vw}
 // ─── TOPBAR ───────────────────────────────────────────────────────────────────
 function Topbar({ onMenuClick }) {
   const { theme, setTheme } = useContext(ThemeCtx);
-  const user = useContext(UserCtx) || MOCK.user;
   const [showTip, setShowTip] = useState(false);
   const cycle = () => { const m = ['light','dark','system']; setTheme(m[(m.indexOf(theme)+1)%3]); };
   const icons = { light: 'ti-sun', dark: 'ti-moon', system: 'ti-device-laptop' };
@@ -499,17 +513,16 @@ function Topbar({ onMenuClick }) {
   return (
     <header className="pn-topbar">
       <button className="pn-hamburger" onClick={onMenuClick}><i className="ti ti-menu-2"/></button>
-      <div className="pn-topbar-brand">
+      <div className="pn-topbar-brand" style={{justifyContent:'center'}}>
         <div className="pn-brand-mark">P</div>
         <span className="pn-brand-name">PanelNG</span>
       </div>
-      <div style={{position:'relative'}} onMouseEnter={()=>setShowTip(true)} onMouseLeave={()=>setShowTip(false)}>
-        <button className="pn-theme-icon-btn" onClick={cycle}><i className={`ti ${icons[theme]}`}/></button>
-        {showTip && <div className="pn-tooltip">{labels[theme]}</div>}
-      </div>
-      <div className="pn-balance-chip">
-        <span className="pn-balance-chip-label">Balance</span>
-        <span className="pn-balance-chip-amount">{fmt(user.balance)}</span>
+      <div style={{display:'flex',alignItems:'center',gap:4,flexShrink:0}}>
+        <div style={{position:'relative'}} onMouseEnter={()=>setShowTip(true)} onMouseLeave={()=>setShowTip(false)}>
+          <button className="pn-theme-icon-btn" onClick={cycle}><i className={`ti ${icons[theme]}`}/></button>
+          {showTip && <div className="pn-tooltip">{labels[theme]}</div>}
+        </div>
+        <button className="pn-theme-icon-btn" aria-label="Notifications"><i className="ti ti-bell"/></button>
       </div>
     </header>
   );
@@ -525,6 +538,7 @@ function Sidebar({ page, setPage, isOpen, onClose, isMobile }) {
     { id:'accounts', icon:'ti-shopping-bag', label:'Buy Accounts' },
     { id:'orders', icon:'ti-receipt', label:'Order History' },
     { id:'funds', icon:'ti-wallet', label:'Add Funds' },
+    { id:'referral', icon:'ti-users', label:'Referral' },
     { id:'profile', icon:'ti-user-circle', label:'Profile' },
   ];
   return (
@@ -565,9 +579,9 @@ function BottomNav({ page, setPage }) {
   const items = [
     { id:'overview', icon:'ti-home', label:'Home' },
     { id:'neworder', icon:'ti-circle-plus', label:'Order' },
-    { id:'accounts', icon:'ti-shopping-bag', label:'Accounts' },
     { id:'sms', icon:'ti-device-mobile', label:'SMS' },
     { id:'funds', icon:'ti-wallet', label:'Funds' },
+    { id:'referral', icon:'ti-users', label:'Referral' },
   ];
   return (
     <nav className="pn-bottom-nav">
@@ -587,12 +601,15 @@ function Overview({ setPage }) {
   const user = useContext(UserCtx) || MOCK.user;
   const [recentOrders, setRecentOrders] = useState([]);
   const [ordersLoading, setOrdersLoading] = useState(true);
+  const [refBalance, setRefBalance] = useState(0);
+  const [refCount, setRefCount] = useState(0);
 
   useEffect(() => {
     Promise.all([
       api.get('/orders', { params: { limit: 5 } }).catch(() => ({ data: { orders: [] } })),
       api.get('/accszone/orders').catch(() => ({ data: [] })),
-    ]).then(([stdRes, accRes]) => {
+      api.get('/referral/stats').catch(() => ({ data: {} })),
+    ]).then(([stdRes, accRes, refRes]) => {
       const std = (stdRes.data.orders || []).map(o => ({
         ...o,
         amount: o.amount_paid || o.total_cost || 0,
@@ -605,38 +622,58 @@ function Overview({ setPage }) {
         .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
         .slice(0, 6);
       setRecentOrders(merged);
+      setRefBalance(Number(refRes.data?.referral_balance || 0));
+      setRefCount(Number(refRes.data?.referral_count || 0));
     }).finally(() => setOrdersLoading(false));
   }, []);
 
   return (
     <div>
+      {/* Greeting */}
       <div className="pn-greeting">
         <div className="pn-greeting-title">{greet()}, {user.name.split(' ')[0]}</div>
-        <div className="pn-greeting-sub">Here's what's happening on your account today.</div>
+        <div className="pn-greeting-sub">Here's your account summary.</div>
       </div>
-      <div className="pn-stat-grid">
-        <div className="pn-stat-card full">
-          <div className="pn-stat-icon accent"><i className="ti ti-wallet"/></div>
-          <div className="pn-stat-label">Wallet Balance</div>
-          <div className="pn-stat-value accent">{fmt(user.balance)}</div>
+
+      {/* Balance hero */}
+      <div className="pn-balance-hero" style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between',gap:12,flexWrap:'wrap'}}>
+        <div>
+          <div className="pn-balance-hero-label">Wallet Balance</div>
+          <div className="pn-balance-hero-amount">{fmt(user.balance)}</div>
         </div>
+        <button
+          className="pn-btn pn-btn-primary"
+          style={{height:38,padding:'0 18px',fontSize:13,borderRadius:10,flexShrink:0}}
+          onClick={()=>setPage('funds')}
+        >
+          <i className="ti ti-plus" style={{fontSize:15}}/>Add Funds
+        </button>
+      </div>
+
+      {/* Stats grid */}
+      <div className="pn-stat-grid" style={{marginBottom:16}}>
         <div className="pn-stat-card">
           <div className="pn-stat-icon success"><i className="ti ti-shopping-cart"/></div>
           <div className="pn-stat-label">Total Orders</div>
           <div className="pn-stat-value">{user.totalOrders}</div>
         </div>
-        <div className="pn-stat-card">
-          <div className="pn-stat-icon info"><i className="ti ti-trending-down"/></div>
-          <div className="pn-stat-label">Total Spent</div>
-          <div className="pn-stat-value">{fmt(user.totalSpent)}</div>
+        <div className="pn-stat-card" style={{cursor:'pointer'}} onClick={()=>setPage('referral')}>
+          <div className="pn-stat-icon" style={{background:'rgba(139,92,246,.1)',color:'#8B5CF6'}}><i className="ti ti-users"/></div>
+          <div className="pn-stat-label">Referral Earnings</div>
+          <div className="pn-stat-value" style={{color:'var(--success)',fontSize:18}}>{fmt(refBalance)}</div>
+          <div style={{fontSize:11,color:'var(--text-muted)',marginTop:3}}>{refCount} referral{refCount !== 1 ? 's' : ''}</div>
         </div>
       </div>
+
+      {/* Quick actions */}
       <div className="pn-actions">
         <button className="pn-action-pill" onClick={()=>setPage('neworder')}><i className="ti ti-circle-plus"/>New SMM Order</button>
         <button className="pn-action-pill" onClick={()=>setPage('sms')}><i className="ti ti-device-mobile"/>Buy SMS Number</button>
         <button className="pn-action-pill" onClick={()=>setPage('accounts')}><i className="ti ti-shopping-bag"/>Buy Accounts</button>
-        <button className="pn-action-pill" onClick={()=>setPage('funds')}><i className="ti ti-wallet"/>Add Funds</button>
+        <button className="pn-action-pill" onClick={()=>setPage('referral')}><i className="ti ti-users"/>Refer &amp; Earn</button>
       </div>
+
+      {/* Recent orders */}
       <div className="pn-section">
         <div className="pn-hrow">
           <span className="pn-section-label" style={{marginBottom:0}}>Recent Orders</span>
@@ -1811,6 +1848,140 @@ function SupportChat() {
   );
 }
 
+// ─── PAGE: REFERRAL ──────────────────────────────────────────────────────────
+function Referral() {
+  const user = useContext(UserCtx) || MOCK.user;
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [copied, setCopied] = useState(false);
+  const [withdrawing, setWithdrawing] = useState(false);
+  const [withdrawMsg, setWithdrawMsg] = useState('');
+
+  const referralLink = `${window.location.origin}/register?ref=${user.referral_code || ''}`;
+
+  const loadStats = () => {
+    setLoading(true);
+    api.get('/referral/stats')
+      .then(r => setStats(r.data))
+      .catch(() => setStats({ referral_code: user.referral_code, referral_count: 0, referral_balance: 0, referred_users: [] }))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { loadStats(); }, []);
+
+  const handleCopy = (text) => {
+    navigator.clipboard?.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }).catch(() => {});
+  };
+
+  const handleWithdraw = async () => {
+    if (withdrawing) return;
+    setWithdrawing(true); setWithdrawMsg('');
+    try {
+      const r = await api.post('/referral/withdraw');
+      setWithdrawMsg(r.data.message || 'Transferred to wallet!');
+      loadStats();
+      user.refreshUser?.();
+    } catch (err) {
+      setWithdrawMsg(err.response?.data?.error || 'Withdrawal failed.');
+    } finally {
+      setWithdrawing(false);
+    }
+  };
+
+  const refCode = stats?.referral_code || user.referral_code || '—';
+  const refCount = stats?.referral_count || 0;
+  const refBal = Number(stats?.referral_balance || 0);
+  const referredUsers = stats?.referred_users || [];
+
+  return (
+    <div>
+      <div className="pn-page-title">Referral Program</div>
+      <div className="pn-page-sub">Invite friends and earn when they join PanelNG.</div>
+
+      {/* Referral code card */}
+      <div className="pn-card" style={{marginBottom:16}}>
+        <div className="pn-section-label" style={{marginBottom:6}}>Your Referral Code</div>
+        <div className="pn-ref-code-row">
+          <span className="pn-ref-code-val">{refCode}</span>
+          <button className="pn-copy-btn" onClick={()=>handleCopy(refCode)}>
+            {copied ? <><i className="ti ti-check" style={{fontSize:12}}/> Copied</> : <><i className="ti ti-copy" style={{fontSize:12}}/> Copy</>}
+          </button>
+        </div>
+        <div className="pn-section-label" style={{marginTop:14,marginBottom:6}}>Referral Link</div>
+        <div className="pn-ref-code-row">
+          <span className="pn-ref-code-val" style={{fontSize:12,color:'var(--text-secondary)'}}>{referralLink}</span>
+          <button className="pn-copy-btn" onClick={()=>handleCopy(referralLink)}>
+            <i className="ti ti-link" style={{fontSize:12}}/> Copy
+          </button>
+        </div>
+      </div>
+
+      {/* Stats */}
+      {loading ? (
+        <div style={{textAlign:'center',padding:'24px 0'}}><i className="ti ti-loader-2" style={{fontSize:22,color:'var(--accent)',animation:'pn-spin 1s linear infinite'}}/></div>
+      ) : (
+        <>
+          <div className="pn-ref-stats">
+            <div className="pn-ref-stat">
+              <div className="pn-ref-stat-label">People Referred</div>
+              <div className="pn-ref-stat-val">{refCount}</div>
+            </div>
+            <div className="pn-ref-stat">
+              <div className="pn-ref-stat-label">Referral Earnings</div>
+              <div className={`pn-ref-stat-val${refBal > 0 ? ' success' : ''}`}>{fmt(refBal)}</div>
+            </div>
+          </div>
+
+          {/* Withdraw */}
+          {refBal > 0 && (
+            <div style={{marginBottom:16}}>
+              <button
+                className="pn-btn pn-btn-success pn-btn-full"
+                onClick={handleWithdraw}
+                disabled={withdrawing}
+              >
+                {withdrawing ? <><i className="ti ti-loader-2" style={{fontSize:15,animation:'pn-spin 1s linear infinite'}}/> Transferring…</> : <><i className="ti ti-wallet" style={{fontSize:15}}/>Withdraw {fmt(refBal)} to Wallet</>}
+              </button>
+              {withdrawMsg && (
+                <div style={{marginTop:10,padding:'10px 14px',borderRadius:10,background:'rgba(34,197,94,.08)',border:'1px solid rgba(34,197,94,.2)',fontSize:13,color:'var(--success)'}}>{withdrawMsg}</div>
+              )}
+            </div>
+          )}
+
+          {/* Referred users list */}
+          <div className="pn-section">
+            <span className="pn-section-label">People You've Referred</span>
+            {referredUsers.length === 0 ? (
+              <div className="pn-empty">
+                <i className="ti ti-users pn-empty-icon"/>
+                <div className="pn-empty-title">No referrals yet</div>
+                <div className="pn-empty-sub">Share your link and start earning when friends sign up</div>
+              </div>
+            ) : (
+              <div className="pn-ref-list">
+                {referredUsers.map((u, i) => (
+                  <div key={i} className="pn-ref-list-item">
+                    <div style={{display:'flex',alignItems:'center',gap:10}}>
+                      <div style={{width:34,height:34,borderRadius:8,background:'rgba(139,92,246,.12)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                        <i className="ti ti-user" style={{fontSize:16,color:'#8B5CF6'}}/>
+                      </div>
+                      <div>
+                        <div style={{fontSize:13,fontWeight:600,color:'var(--text-primary)'}}>{u.full_name || 'Anonymous'}</div>
+                        <div style={{fontSize:11,color:'var(--text-muted)'}}>{new Date(u.created_at).toLocaleDateString('en-NG')}</div>
+                      </div>
+                    </div>
+                    <span className="pn-badge pn-badge-success">Joined</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ─── APP ──────────────────────────────────────────────────────────────────────
 function App() {
   const { resolved } = useContext(ThemeCtx);
@@ -1823,7 +1994,7 @@ function App() {
     if (data?.new_balance != null) updateUser({ wallet_balance: data.new_balance });
     refreshUser();
   };
-  const PAGES = { overview: <Overview setPage={setPage}/>, neworder: <NewOrder/>, sms: <SmsVerify/>, accounts: <BuyAccounts balance={user.balance} token={localStorage.getItem('panelng_token')} onNavigate={navigate} onPurchaseComplete={handlePurchaseComplete}/>, orders: <OrderHistory/>, funds: <AddFunds/>, profile: <ProfileSettings/> };
+  const PAGES = { overview: <Overview setPage={setPage}/>, neworder: <NewOrder/>, sms: <SmsVerify/>, accounts: <BuyAccounts balance={user.balance} token={localStorage.getItem('panelng_token')} onNavigate={navigate} onPurchaseComplete={handlePurchaseComplete}/>, orders: <OrderHistory/>, funds: <AddFunds/>, referral: <Referral/>, profile: <ProfileSettings/> };
   return (
     <div className="pn-root" data-theme={resolved}>
       <div className="pn-shell">
@@ -1851,6 +2022,7 @@ export default function PanelNG() {
     balance: Number(authUser.wallet_balance || 0),
     totalOrders: Number(authUser.total_orders || 0),
     totalSpent: Number(authUser.total_spent || 0),
+    referral_code: authUser.referral_code || '',
     initials: (authUser.full_name || authUser.email || 'U')
       .split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase(),
     logout: logout || (() => {}),
