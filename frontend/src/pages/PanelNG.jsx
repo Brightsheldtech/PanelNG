@@ -512,8 +512,7 @@ function Topbar({ onMenuClick }) {
   const labels = { light: 'Light mode', dark: 'Dark mode', system: 'System mode' };
   return (
     <header className="pn-topbar" style={{justifyContent:'space-between'}}>
-      <button className="pn-hamburger" style={{display:'flex'}} onClick={onMenuClick}><i className="ti ti-menu-2"/></button>
-      <span style={{fontWeight:700,fontSize:17,color:'var(--text-primary)',letterSpacing:'-0.3px',position:'absolute',left:'50%',transform:'translateX(-50%)'}}>PanelNG</span>
+      <span style={{fontWeight:700,fontSize:17,color:'var(--text-primary)',letterSpacing:'-0.3px'}}>PanelNG</span>
       <div style={{display:'flex',alignItems:'center',gap:4,flexShrink:0}}>
         <div style={{position:'relative'}} onMouseEnter={()=>setShowTip(true)} onMouseLeave={()=>setShowTip(false)}>
           <button className="pn-theme-icon-btn" onClick={cycle}><i className={`ti ${icons[theme]}`}/></button>
@@ -533,9 +532,7 @@ function Sidebar({ page, setPage, isOpen, onClose, isMobile }) {
   const user = useContext(UserCtx) || MOCK.user;
   const NAV = [
     { id:'overview', icon:'ti-home', label:'Overview' },
-    { id:'neworder', icon:'ti-circle-plus', label:'New SMM Order' },
-    { id:'sms', icon:'ti-device-mobile', label:'SMS Verify' },
-    { id:'accounts', icon:'ti-shopping-bag', label:'Buy Accounts' },
+    { id:'neworder', icon:'ti-circle-plus', label:'New Order' },
     { id:'orders', icon:'ti-receipt', label:'Order History' },
     { id:'funds', icon:'ti-wallet', label:'Add Funds' },
     { id:'referral', icon:'ti-users', label:'Referral' },
@@ -599,32 +596,23 @@ function BottomNav({ page, setPage }) {
 // ─── PAGE: OVERVIEW ───────────────────────────────────────────────────────────
 function Overview({ setPage }) {
   const user = useContext(UserCtx) || MOCK.user;
-  const [recentOrders, setRecentOrders] = useState([]);
-  const [ordersLoading, setOrdersLoading] = useState(true);
+  const [recentTx, setRecentTx] = useState([]);
+  const [txLoading, setTxLoading] = useState(true);
   const [refBalance, setRefBalance] = useState(0);
   const [refCount, setRefCount] = useState(0);
   const [pendingCount, setPendingCount] = useState(0);
 
   useEffect(() => {
     Promise.all([
-      api.get('/orders', { params: { limit: 5 } }).catch(() => ({ data: { orders: [] } })),
-      api.get('/accszone/orders').catch(() => ({ data: [] })),
+      api.get('/wallet/transactions', { params: { limit: 5 } }).catch(() => ({ data: { transactions: [] } })),
       api.get('/referral/stats').catch(() => ({ data: {} })),
-    ]).then(([stdRes, accRes, refRes]) => {
-      const std = (stdRes.data.orders || []).map(o => ({
-        ...o, amount: o.amount_paid || o.total_cost || 0, phone: o.phone_number,
-      }));
-      const accs = (Array.isArray(accRes.data) ? accRes.data : []).slice(0, 5).map(o => ({
-        ...o, type: 'accounts', amount: o.total_cost,
-      }));
-      const merged = [...std, ...accs]
-        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-        .slice(0, 5);
-      setRecentOrders(merged);
-      setPendingCount(std.filter(o => (o.status||'').toLowerCase() === 'pending').length);
+    ]).then(([txRes, refRes]) => {
+      const txs = txRes.data?.transactions || [];
+      setRecentTx(txs);
+      setPendingCount(txs.filter(t => t.status === 'pending').length);
       setRefBalance(Number(refRes.data?.referral_balance || 0));
       setRefCount(Number(refRes.data?.referral_count || 0));
-    }).finally(() => setOrdersLoading(false));
+    }).finally(() => setTxLoading(false));
   }, []);
 
   const S = { card: {background:'var(--bg-surface)',border:'1px solid var(--border)',borderRadius:16} };
@@ -719,43 +707,47 @@ function Overview({ setPage }) {
         </button>
       </div>
 
-      {/* Recent Orders */}
+      {/* Recent Transactions */}
       <div style={{marginBottom:16}}>
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
-          <span style={{fontSize:14,fontWeight:700,color:'var(--text-primary)'}}>Recent Orders</span>
+          <span style={{fontSize:14,fontWeight:700,color:'var(--text-primary)'}}>Recent Transactions</span>
           <button className="pn-btn pn-btn-ghost pn-btn-sm" onClick={()=>setPage('orders')}>View all <i className="ti ti-arrow-right"/></button>
         </div>
         <div style={{...S.card,overflow:'hidden'}}>
-          {ordersLoading ? (
+          {txLoading ? (
             <div style={{padding:'24px 0',textAlign:'center'}}><i className="ti ti-loader-2" style={{fontSize:20,color:'var(--accent)',animation:'pn-spin 1s linear infinite'}}/></div>
-          ) : recentOrders.length === 0 ? (
-            <div className="pn-empty"><i className="ti ti-receipt pn-empty-icon"/><div className="pn-empty-title">No orders yet</div><div className="pn-empty-sub">Place your first order to get started</div></div>
-          ) : recentOrders.map((o, i) => (
-            <div
-              key={o.id}
-              onClick={()=>setPage('orders')}
-              style={{display:'flex',alignItems:'center',gap:10,padding:'11px 14px',borderBottom:i<recentOrders.length-1?'0.5px solid var(--border)':'none',cursor:'pointer',transition:'background 150ms ease'}}
-              onMouseEnter={e=>e.currentTarget.style.background='var(--bg-raised)'}
-              onMouseLeave={e=>e.currentTarget.style.background=''}
-            >
-              <div style={{width:34,height:34,borderRadius:9,background:'var(--bg-raised)',border:'1px solid var(--border)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
-                <i className="ti ti-package" style={{fontSize:15,color:'var(--text-secondary)'}}/>
-              </div>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:12,fontWeight:600,color:'var(--text-primary)',marginBottom:1}}>
-                  Order #{(o.id||'').slice(0,8)}
+          ) : recentTx.length === 0 ? (
+            <div className="pn-empty"><i className="ti ti-receipt pn-empty-icon"/><div className="pn-empty-title">No transactions yet</div><div className="pn-empty-sub">Your activity will appear here</div></div>
+          ) : recentTx.map((t, i) => {
+            const isCredit = t.type === 'credit';
+            const isPending = t.status === 'pending';
+            const isRejected = t.status === 'rejected';
+            const iconBg = isPending ? 'rgba(245,158,11,.1)' : isRejected ? 'rgba(248,113,113,.1)' : isCredit ? 'rgba(34,197,94,.1)' : 'rgba(248,113,113,.1)';
+            const iconColor = isPending ? 'var(--accent)' : isRejected ? 'var(--danger)' : isCredit ? 'var(--success)' : 'var(--danger)';
+            const icon = isPending ? 'ti-clock' : isRejected ? 'ti-x' : isCredit ? 'ti-arrow-down-left' : 'ti-arrow-up-right';
+            const amtColor = isCredit && !isRejected ? 'var(--success)' : 'var(--danger)';
+            const amtPrefix = isCredit && !isRejected ? '+' : '-';
+            return (
+              <div
+                key={t.id}
+                style={{display:'flex',alignItems:'center',gap:10,padding:'11px 14px',borderBottom:i<recentTx.length-1?'0.5px solid var(--border)':'none',transition:'background 150ms ease'}}
+                onMouseEnter={e=>e.currentTarget.style.background='var(--bg-raised)'}
+                onMouseLeave={e=>e.currentTarget.style.background=''}
+              >
+                <div style={{width:34,height:34,borderRadius:9,background:iconBg,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                  <i className={`ti ${icon}`} style={{fontSize:15,color:iconColor}}/>
                 </div>
-                <div style={{fontSize:11,color:'var(--text-muted)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
-                  {o.type==='accounts'?(o.product_name||o.platform):o.type==='sms'?`${o.platform} • ${o.country||''}`:(o.service_name||o.platform||'—')}
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:12,fontWeight:600,color:'var(--text-primary)',marginBottom:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.description}</div>
+                  <div style={{fontSize:10,color:'var(--text-muted)'}}>{t.created_at ? new Date(t.created_at).toLocaleDateString('en-NG',{month:'short',day:'numeric',year:'numeric'}) : ''}</div>
+                </div>
+                <div style={{flexShrink:0,textAlign:'right'}}>
+                  <div style={{fontSize:12,fontWeight:700,color:amtColor,fontVariantNumeric:'tabular-nums'}}>{amtPrefix}₦{Number(t.amount).toLocaleString('en-NG',{minimumFractionDigits:2})}</div>
+                  {(isPending||isRejected) && <div style={{fontSize:10,color:iconColor,fontWeight:500,textTransform:'capitalize'}}>{t.status}</div>}
                 </div>
               </div>
-              <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:3,flexShrink:0}}>
-                <Badge status={o.status}/>
-                <div style={{fontSize:10,color:'var(--text-muted)'}}>{o.created_at?new Date(o.created_at).toLocaleDateString('en-NG',{month:'short',day:'numeric',year:'numeric'}):''}</div>
-              </div>
-              <i className="ti ti-chevron-right" style={{fontSize:13,color:'var(--text-muted)',flexShrink:0}}/>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
@@ -1931,6 +1923,72 @@ function SupportChat() {
   );
 }
 
+// ─── PAGE: NEW ORDER SELECT ───────────────────────────────────────────────────
+function NewOrderSelect({ setPage }) {
+  const SERVICES = [
+    {
+      id: 'neworder',
+      icon: 'ti-social',
+      label: 'SMM Order',
+      desc: 'Boost followers, likes, views & more on any social platform',
+      color: '#6366F1',
+      bg: '#EEF2FF',
+    },
+    {
+      id: 'sms',
+      icon: 'ti-device-mobile-message',
+      label: 'SMS Verify',
+      desc: 'Get virtual numbers to verify any app or service instantly',
+      color: '#10B981',
+      bg: '#ECFDF5',
+    },
+    {
+      id: 'accounts',
+      icon: 'ti-shopping-bag',
+      label: 'Buy Accounts',
+      desc: 'Purchase aged, verified social media accounts in bulk',
+      color: '#F59E0B',
+      bg: '#FFFBEB',
+    },
+  ];
+  return (
+    <div style={{padding:'24px 16px',maxWidth:480,margin:'0 auto'}}>
+      <div style={{marginBottom:24}}>
+        <h2 style={{margin:0,fontSize:20,fontWeight:700,color:'var(--text-primary)'}}>New Order</h2>
+        <p style={{margin:'4px 0 0',fontSize:14,color:'var(--text-secondary)'}}>Choose a service to get started</p>
+      </div>
+      <div style={{display:'flex',flexDirection:'column',gap:14}}>
+        {SERVICES.map(s => (
+          <button
+            key={s.id}
+            onClick={() => setPage(s.id)}
+            style={{
+              display:'flex',alignItems:'center',gap:16,
+              background:'var(--bg-surface)',border:'1.5px solid var(--border)',
+              borderRadius:16,padding:'18px 20px',cursor:'pointer',
+              textAlign:'left',width:'100%',transition:'box-shadow 120ms',
+            }}
+            onMouseEnter={e=>e.currentTarget.style.boxShadow='0 4px 16px rgba(0,0,0,0.08)'}
+            onMouseLeave={e=>e.currentTarget.style.boxShadow='none'}
+          >
+            <div style={{
+              width:52,height:52,borderRadius:14,
+              background:s.bg,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,
+            }}>
+              <i className={`ti ${s.icon}`} style={{fontSize:26,color:s.color}}/>
+            </div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontWeight:700,fontSize:16,color:'var(--text-primary)',marginBottom:3}}>{s.label}</div>
+              <div style={{fontSize:13,color:'var(--text-secondary)',lineHeight:1.45}}>{s.desc}</div>
+            </div>
+            <i className="ti ti-chevron-right" style={{fontSize:18,color:'var(--text-secondary)',flexShrink:0}}/>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── PAGE: REFERRAL ──────────────────────────────────────────────────────────
 function Referral() {
   const user = useContext(UserCtx) || MOCK.user;
@@ -2077,7 +2135,7 @@ function App() {
     if (data?.new_balance != null) updateUser({ wallet_balance: data.new_balance });
     refreshUser();
   };
-  const PAGES = { overview: <Overview setPage={setPage}/>, neworder: <NewOrder/>, sms: <SmsVerify/>, accounts: <BuyAccounts balance={user.balance} token={localStorage.getItem('panelng_token')} onNavigate={navigate} onPurchaseComplete={handlePurchaseComplete}/>, orders: <OrderHistory/>, funds: <AddFunds/>, referral: <Referral/>, profile: <ProfileSettings/> };
+  const PAGES = { overview: <Overview setPage={setPage}/>, neworder: <NewOrderSelect setPage={navigate}/>, smm: <NewOrder/>, sms: <SmsVerify/>, accounts: <BuyAccounts balance={user.balance} token={localStorage.getItem('panelng_token')} onNavigate={navigate} onPurchaseComplete={handlePurchaseComplete}/>, orders: <OrderHistory/>, funds: <AddFunds/>, referral: <Referral/>, profile: <ProfileSettings/> };
   return (
     <div className="pn-root" data-theme={resolved}>
       <div className="pn-shell">

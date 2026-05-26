@@ -54,6 +54,15 @@ router.post('/withdraw', auth, async (req, res) => {
       .eq('id', req.user.id);
     if (updErr) throw updErr;
 
+    // Record in transaction history
+    await supabase.from('transactions').insert({
+      user_id: req.user.id,
+      type: 'credit',
+      amount,
+      reference: `REF-WITHDRAW-${Date.now()}`,
+      description: `Referral earnings withdrawal — ₦${amount.toFixed(2)}`,
+    }).catch(() => {});
+
     res.json({ message: `₦${amount.toFixed(2)} transferred to your wallet`, amount });
   } catch (err) {
     console.error('[referral/withdraw]:', err.message);
