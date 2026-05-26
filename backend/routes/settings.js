@@ -46,7 +46,7 @@ router.post('/upload/hero-image', auth, adminOnly, async (req, res) => {
     res.json({ url: publicUrl });
   } catch (err) {
     console.error('[hero upload]:', err.message);
-    res.status(500).json({ error: 'Upload failed' });
+    res.status(500).json({ error: err.message || 'Upload failed' });
   }
 });
 

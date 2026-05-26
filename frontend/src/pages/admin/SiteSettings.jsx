@@ -102,8 +102,9 @@ export default function SiteSettings() {
       setFileName('');
       if (fileRef.current) fileRef.current.value = '';
       showSuccess('Hero image updated. Changes are live on the landing page.');
-    } catch {
-      setError('Upload failed. Please try again.');
+    } catch (err) {
+      const msg = err?.response?.data?.error || err?.message || 'Upload failed';
+      setError(`Upload failed: ${msg}`);
     } finally {
       setUploading(false);
     }
