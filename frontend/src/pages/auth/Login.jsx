@@ -100,6 +100,7 @@ export default function Login() {
   };
 
   const handleGoogle = async () => {
+    if (!supabase) { alert('Google sign-in is not configured yet.'); return; }
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo: `${window.location.origin}/auth/callback` },

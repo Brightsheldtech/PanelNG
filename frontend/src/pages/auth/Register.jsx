@@ -181,6 +181,7 @@ export default function Register() {
   };
 
   const handleGoogle = async () => {
+    if (!supabase) { alert('Google sign-in is not configured yet.'); return; }
     if (form.referralCode) localStorage.setItem('panelng_pending_ref', form.referralCode);
     await supabase.auth.signInWithOAuth({
       provider: 'google',
