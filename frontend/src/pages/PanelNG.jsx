@@ -8,8 +8,8 @@ const ThemeCtx = createContext({ theme: 'system', setTheme: () => {}, resolved: 
 const UserCtx = createContext(null);
 
 function ThemeProvider({ children }) {
-  const [theme, setRaw] = useState(() => localStorage.getItem('panelng-theme') || 'system');
-  const [resolved, setResolved] = useState('dark');
+  const [theme, setRaw] = useState(() => localStorage.getItem('panelng-theme') || 'light');
+  const [resolved, setResolved] = useState('light');
   const setTheme = (t) => { setRaw(t); localStorage.setItem('panelng-theme', t); };
   useEffect(() => {
     const r = (t) => t === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : t;
@@ -685,8 +685,17 @@ function Overview({ setPage }) {
 
       {/* Refer & Earn card */}
       <div style={{...S.card,padding:'14px 16px',marginBottom:16,display:'flex',alignItems:'center',gap:12}}>
-        <div style={{width:42,height:42,borderRadius:12,background:'rgba(139,92,246,.1)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
-          <i className="ti ti-gift" style={{fontSize:20,color:'#8B5CF6'}}/>
+        <div style={{flexShrink:0,width:48,height:48}}>
+          <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+            <rect width="48" height="48" rx="13" fill="#ECFDF5"/>
+            <rect x="9" y="24" width="30" height="16" rx="2" fill="#10B981"/>
+            <rect x="8" y="18" width="32" height="7" rx="2" fill="#059669"/>
+            <rect x="21" y="18" width="6" height="22" fill="#F59E0B"/>
+            <rect x="8" y="20" width="32" height="3" fill="#F59E0B"/>
+            <path d="M21 18 C19 12 10 11 10 16 C10 20 17 20 21 18Z" fill="#FCD34D"/>
+            <path d="M27 18 C29 12 38 11 38 16 C38 20 31 20 27 18Z" fill="#FCD34D"/>
+            <circle cx="24" cy="18" r="3" fill="#F59E0B"/>
+          </svg>
         </div>
         <div style={{flex:1,minWidth:0}}>
           <div style={{fontSize:14,fontWeight:700,color:'var(--text-primary)',marginBottom:2}}>Refer &amp; Earn</div>
@@ -753,34 +762,36 @@ function Overview({ setPage }) {
       {/* Quick Actions */}
       <div>
         <div style={{fontSize:14,fontWeight:700,color:'var(--text-primary)',marginBottom:10}}>Quick Actions</div>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+        <div style={{display:'flex',flexDirection:'column',gap:10}}>
           <button
             onClick={()=>setPage('neworder')}
-            style={{display:'flex',alignItems:'center',gap:12,padding:'14px 16px',background:'var(--accent)',border:'none',borderRadius:14,cursor:'pointer',transition:'background 150ms ease',textAlign:'left'}}
-            onMouseEnter={e=>e.currentTarget.style.background='var(--accent-hover)'}
-            onMouseLeave={e=>e.currentTarget.style.background='var(--accent)'}
+            style={{display:'flex',alignItems:'center',gap:12,padding:'14px 16px',background:'#1A1917',border:'none',borderRadius:14,cursor:'pointer',transition:'opacity 150ms ease',textAlign:'left',width:'100%'}}
+            onMouseEnter={e=>e.currentTarget.style.opacity='0.9'}
+            onMouseLeave={e=>e.currentTarget.style.opacity='1'}
           >
-            <div style={{width:36,height:36,borderRadius:10,background:'rgba(255,255,255,.15)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
-              <i className="ti ti-shopping-cart" style={{fontSize:17,color:'var(--accent-text)'}}/>
+            <div style={{width:38,height:38,borderRadius:10,background:'rgba(255,255,255,.12)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+              <i className="ti ti-shopping-cart" style={{fontSize:18,color:'#fff'}}/>
             </div>
-            <div>
-              <div style={{fontSize:13,fontWeight:600,color:'var(--accent-text)',marginBottom:1}}>Place New Order</div>
-              <div style={{fontSize:11,color:'rgba(255,255,255,.7)'}}>Start a new order</div>
+            <div style={{flex:1,textAlign:'left'}}>
+              <div style={{fontSize:14,fontWeight:600,color:'#fff',marginBottom:2}}>Place New Order</div>
+              <div style={{fontSize:12,color:'rgba(255,255,255,.6)'}}>Start a new order</div>
             </div>
+            <i className="ti ti-chevron-right" style={{fontSize:16,color:'rgba(255,255,255,.5)',flexShrink:0}}/>
           </button>
           <button
             onClick={()=>setPage('funds')}
-            style={{display:'flex',alignItems:'center',gap:12,padding:'14px 16px',...S.card,cursor:'pointer',transition:'background 150ms ease',textAlign:'left'}}
+            style={{display:'flex',alignItems:'center',gap:12,padding:'14px 16px',...S.card,cursor:'pointer',transition:'background 150ms ease',textAlign:'left',width:'100%'}}
             onMouseEnter={e=>e.currentTarget.style.background='var(--bg-raised)'}
             onMouseLeave={e=>e.currentTarget.style.background='var(--bg-surface)'}
           >
-            <div style={{width:36,height:36,borderRadius:10,background:'rgba(245,158,11,.1)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
-              <i className="ti ti-wallet" style={{fontSize:17,color:'var(--accent)'}}/>
+            <div style={{width:38,height:38,borderRadius:10,background:'rgba(245,158,11,.1)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+              <i className="ti ti-wallet" style={{fontSize:18,color:'var(--accent)'}}/>
             </div>
-            <div>
-              <div style={{fontSize:13,fontWeight:600,color:'var(--text-primary)',marginBottom:1}}>Add Funds</div>
-              <div style={{fontSize:11,color:'var(--text-muted)'}}>Top up your wallet</div>
+            <div style={{flex:1,textAlign:'left'}}>
+              <div style={{fontSize:14,fontWeight:600,color:'var(--text-primary)',marginBottom:2}}>Add Funds</div>
+              <div style={{fontSize:12,color:'var(--text-muted)'}}>Top up your wallet</div>
             </div>
+            <i className="ti ti-chevron-right" style={{fontSize:16,color:'var(--text-muted)',flexShrink:0}}/>
           </button>
         </div>
       </div>
