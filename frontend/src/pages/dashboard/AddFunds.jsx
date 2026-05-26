@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
-  Wallet, ArrowRight, CreditCard, Clock, Building2,
-  Copy, CheckCircle, AlertCircle, ArrowLeft,
+  Wallet, ArrowRight, CreditCard, Building2,
+  Copy, CheckCircle, AlertCircle, ArrowLeft, Globe,
 } from 'lucide-react';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
@@ -34,6 +34,11 @@ export default function AddFunds() {
 
   // paystack state
   const [loadingPaystack, setLoadingPaystack] = useState(false);
+
+  // flutterwave state
+  const [loadingFlw, setLoadingFlw] = useState(false);
+  const [flwSuccess, setFlwSuccess] = useState(null);
+  const flwScriptLoaded = useRef(false);
 
   useEffect(() => {
     Promise.all([
@@ -92,6 +97,58 @@ export default function AddFunds() {
     setRef('');
   };
 
+  const loadFlwScript = () => new Promise((resolve) => {
+    if (window.FlutterwaveCheckout) { resolve(); return; }
+    if (flwScriptLoaded.current) { const t = setInterval(() => { if (window.FlutterwaveCheckout) { clearInterval(t); resolve(); } }, 100); return; }
+    flwScriptLoaded.current = true;
+    const s = document.createElement('script');
+    s.src = 'https://checkout.flutterwave.com/v3.js';
+    s.onload = resolve;
+    document.body.appendChild(s);
+  });
+
+  const handleFlutterwave = async (e) => {
+    e.preventDefault();
+    const naira = parseFloat(amount);
+    if (!naira || naira < 100) return toast.error('Minimum is ₦100');
+    setLoadingFlw(true);
+    try {
+      const res = await api.post('/payment/flutterwave/init', { amount: naira });
+      const cfg = res.data;
+      await loadFlwScript();
+      setLoadingFlw(false);
+      window.FlutterwaveCheckout({
+        public_key: cfg.public_key,
+        tx_ref: cfg.tx_ref,
+        amount: cfg.amount,
+        currency: 'NGN',
+        payment_options: 'card,mobilemoney,ussd,banktransfer',
+        customer: { email: cfg.customer_email, name: cfg.customer_name },
+        customizations: { title: 'PanelNG', description: 'Wallet funding' },
+        callback: async (data) => {
+          if (data.status === 'successful' || data.status === 'completed') {
+            try {
+              const vRes = await api.post('/payment/flutterwave/verify', {
+                transaction_id: data.transaction_id,
+                tx_ref: data.tx_ref,
+              });
+              setFlwSuccess({ amount: vRes.data.amount, already: vRes.data.already_processed });
+              setBalance(vRes.data.new_balance ?? balance);
+            } catch (err) {
+              toast.error(err.response?.data?.error || 'Verification failed — contact support');
+            }
+          } else {
+            toast.error('Payment was not completed');
+          }
+        },
+        onclose: () => {},
+      });
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Payment init failed');
+      setLoadingFlw(false);
+    }
+  };
+
   const handlePaystack = async (e) => {
     e.preventDefault();
     const naira = parseFloat(amount);
@@ -141,10 +198,10 @@ export default function AddFunds() {
         border: '1px solid var(--border)', borderRadius: 10,
         padding: 4, gap: 4, marginBottom: 16,
       }}>
-        {[['bank', Building2, 'Bank Transfer'], ['paystack', CreditCard, 'Paystack']].map(([key, Icon, label]) => (
+        {[['bank', Building2, 'Bank Transfer'], ['paystack', CreditCard, 'Paystack'], ['flutterwave', Globe, 'Card / Intl']].map(([key, Icon, label]) => (
           <button
             key={key}
-            onClick={() => { setTab(key); setStep(1); setAmount(''); setRef(''); }}
+            onClick={() => { setTab(key); setStep(1); setAmount(''); setRef(''); setFlwSuccess(null); }}
             style={{
               flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
               padding: '9px 12px', borderRadius: 7, border: 'none', cursor: 'pointer',
@@ -461,6 +518,112 @@ export default function AddFunds() {
               Secured by Paystack · Debit &amp; credit cards accepted
             </div>
           </form>
+        </div>
+      )}
+
+      {/* ── FLUTTERWAVE ── */}
+      {tab === 'flutterwave' && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          {flwSuccess ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20, padding: '12px 0', textAlign: 'center' }}>
+              <div style={{
+                width: 56, height: 56, borderRadius: '50%',
+                background: 'var(--green-dim)', border: '2px solid var(--green)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <CheckCircle size={26} color="var(--green)" />
+              </div>
+              <div>
+                <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--text)', fontFamily: 'var(--font-brand)', marginBottom: 8 }}>
+                  {flwSuccess.already ? 'Already Processed' : 'Wallet Credited!'}
+                </div>
+                <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.6, maxWidth: 280, margin: '0 auto', fontFamily: 'var(--font-body)' }}>
+                  <strong style={{ color: 'var(--green)', fontFamily: 'var(--font-mono)' }}>
+                    ₦{fmt(flwSuccess.amount)}
+                  </strong>{' '}has been added to your wallet.
+                </div>
+              </div>
+              <button className="btn btn-outline btn-sm" onClick={() => { setFlwSuccess(null); setAmount(''); }}>
+                Make Another Deposit
+              </button>
+            </div>
+          ) : (
+            <form onSubmit={handleFlutterwave} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px',
+                background: 'var(--surface2)', border: '1px solid var(--border)',
+                borderRadius: 8, fontSize: 12, color: 'var(--text2)', fontFamily: 'var(--font-body)',
+              }}>
+                <Globe size={13} style={{ flexShrink: 0 }} />
+                Supports cards from any country — Visa, Mastercard, mobile money &amp; more
+              </div>
+
+              <div>
+                <label style={{
+                  display: 'block', fontSize: 12, fontWeight: 500,
+                  color: 'var(--text2)', fontFamily: 'var(--font-body)', marginBottom: 6,
+                }}>
+                  Amount (₦)
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <div style={{
+                    position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)',
+                    fontFamily: 'var(--font-mono)', fontSize: 16, color: 'var(--text2)',
+                  }}>₦</div>
+                  <input
+                    type="number"
+                    className="form-input"
+                    placeholder="0.00"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    min={100}
+                    step={50}
+                    style={{ paddingLeft: 30, fontFamily: 'var(--font-mono)', fontSize: 20 }}
+                  />
+                </div>
+                <span style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--font-body)', marginTop: 4, display: 'block' }}>
+                  Minimum: ₦100
+                </span>
+              </div>
+
+              <div>
+                <div style={{
+                  fontSize: 10, fontWeight: 600, color: 'var(--text3)',
+                  textTransform: 'uppercase', letterSpacing: '1px',
+                  fontFamily: 'var(--font-body)', marginBottom: 8,
+                }}>
+                  Quick Amounts
+                </div>
+                <div className="quick-amounts">
+                  {QUICK_AMOUNTS.map((a) => (
+                    <button
+                      key={a}
+                      type="button"
+                      className={`quick-amount-btn${parseFloat(amount) === a ? ' selected' : ''}`}
+                      onClick={() => setAmount(String(a))}
+                    >
+                      ₦{a.toLocaleString()}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={loadingFlw}>
+                {loadingFlw
+                  ? <><span className="spinner" style={{ width: 15, height: 15 }} /> Loading…</>
+                  : <><Globe size={14} /> Pay with Flutterwave <ArrowRight size={13} /></>
+                }
+              </button>
+
+              <div style={{
+                display: 'flex', gap: 6, fontSize: 12, color: 'var(--text3)',
+                justifyContent: 'center', alignItems: 'center', fontFamily: 'var(--font-body)',
+              }}>
+                <CreditCard size={11} />
+                Secured by Flutterwave · International cards accepted
+              </div>
+            </form>
+          )}
         </div>
       )}
 
