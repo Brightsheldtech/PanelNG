@@ -511,18 +511,18 @@ function Topbar({ onMenuClick }) {
   const icons = { light: 'ti-sun', dark: 'ti-moon', system: 'ti-device-laptop' };
   const labels = { light: 'Light mode', dark: 'Dark mode', system: 'System mode' };
   return (
-    <header className="pn-topbar">
-      <button className="pn-hamburger" onClick={onMenuClick}><i className="ti ti-menu-2"/></button>
-      <div className="pn-topbar-brand" style={{justifyContent:'center'}}>
-        <div className="pn-brand-mark">P</div>
-        <span className="pn-brand-name">PanelNG</span>
-      </div>
+    <header className="pn-topbar" style={{justifyContent:'space-between'}}>
+      <button className="pn-hamburger" style={{display:'flex'}} onClick={onMenuClick}><i className="ti ti-menu-2"/></button>
+      <span style={{fontWeight:700,fontSize:17,color:'var(--text-primary)',letterSpacing:'-0.3px',position:'absolute',left:'50%',transform:'translateX(-50%)'}}>PanelNG</span>
       <div style={{display:'flex',alignItems:'center',gap:4,flexShrink:0}}>
         <div style={{position:'relative'}} onMouseEnter={()=>setShowTip(true)} onMouseLeave={()=>setShowTip(false)}>
           <button className="pn-theme-icon-btn" onClick={cycle}><i className={`ti ${icons[theme]}`}/></button>
           {showTip && <div className="pn-tooltip">{labels[theme]}</div>}
         </div>
-        <button className="pn-theme-icon-btn" aria-label="Notifications"><i className="ti ti-bell"/></button>
+        <div style={{position:'relative'}}>
+          <button className="pn-theme-icon-btn" aria-label="Notifications"><i className="ti ti-bell"/></button>
+          <span style={{position:'absolute',top:6,right:6,width:7,height:7,borderRadius:'50%',background:'var(--accent)',border:'2px solid var(--bg-surface)'}}/>
+        </div>
       </div>
     </header>
   );
@@ -577,11 +577,11 @@ function Sidebar({ page, setPage, isOpen, onClose, isMobile }) {
 // ─── BOTTOM NAV ───────────────────────────────────────────────────────────────
 function BottomNav({ page, setPage }) {
   const items = [
-    { id:'overview', icon:'ti-home', label:'Home' },
-    { id:'neworder', icon:'ti-circle-plus', label:'Order' },
-    { id:'sms', icon:'ti-device-mobile', label:'SMS' },
-    { id:'funds', icon:'ti-wallet', label:'Funds' },
+    { id:'overview', icon:'ti-layout-dashboard', label:'Dashboard' },
+    { id:'neworder', icon:'ti-circle-plus', label:'New Order' },
+    { id:'orders', icon:'ti-receipt', label:'Orders' },
     { id:'referral', icon:'ti-users', label:'Referral' },
+    { id:'profile', icon:'ti-user-circle', label:'Profile' },
   ];
   return (
     <nav className="pn-bottom-nav">
@@ -603,6 +603,7 @@ function Overview({ setPage }) {
   const [ordersLoading, setOrdersLoading] = useState(true);
   const [refBalance, setRefBalance] = useState(0);
   const [refCount, setRefCount] = useState(0);
+  const [pendingCount, setPendingCount] = useState(0);
 
   useEffect(() => {
     Promise.all([
@@ -611,108 +612,179 @@ function Overview({ setPage }) {
       api.get('/referral/stats').catch(() => ({ data: {} })),
     ]).then(([stdRes, accRes, refRes]) => {
       const std = (stdRes.data.orders || []).map(o => ({
-        ...o,
-        amount: o.amount_paid || o.total_cost || 0,
-        phone: o.phone_number,
+        ...o, amount: o.amount_paid || o.total_cost || 0, phone: o.phone_number,
       }));
       const accs = (Array.isArray(accRes.data) ? accRes.data : []).slice(0, 5).map(o => ({
         ...o, type: 'accounts', amount: o.total_cost,
       }));
       const merged = [...std, ...accs]
         .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-        .slice(0, 6);
+        .slice(0, 5);
       setRecentOrders(merged);
+      setPendingCount(std.filter(o => (o.status||'').toLowerCase() === 'pending').length);
       setRefBalance(Number(refRes.data?.referral_balance || 0));
       setRefCount(Number(refRes.data?.referral_count || 0));
     }).finally(() => setOrdersLoading(false));
   }, []);
 
+  const S = { card: {background:'var(--bg-surface)',border:'1px solid var(--border)',borderRadius:16} };
+
   return (
-    <div>
+    <div style={{paddingBottom:8}}>
+
       {/* Greeting */}
-      <div className="pn-greeting">
-        <div className="pn-greeting-title">{greet()}, {user.name.split(' ')[0]}</div>
-        <div className="pn-greeting-sub">Here's your account summary.</div>
+      <div style={{marginBottom:20}}>
+        <div style={{fontSize:22,fontWeight:700,color:'var(--text-primary)',marginBottom:3,letterSpacing:'-0.3px'}}>
+          {greet()}, {user.name.split(' ')[0]}! 👋
+        </div>
+        <div style={{fontSize:13,color:'var(--text-secondary)'}}>Here's what's happening with your account today.</div>
       </div>
 
-      {/* Balance hero */}
-      <div className="pn-balance-hero" style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between',gap:12,flexWrap:'wrap'}}>
-        <div>
-          <div className="pn-balance-hero-label">Wallet Balance</div>
-          <div className="pn-balance-hero-amount">{fmt(user.balance)}</div>
+      {/* Wallet + Referral balance row */}
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:12}}>
+        <div style={{...S.card,padding:'14px 16px'}}>
+          <div style={{fontSize:9,fontWeight:600,letterSpacing:'1.2px',textTransform:'uppercase',color:'var(--text-muted)',marginBottom:6}}>WALLET BALANCE</div>
+          <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:20,fontWeight:800,color:'var(--text-primary)',fontVariantNumeric:'tabular-nums',letterSpacing:'-0.03em'}}>{fmt(user.balance)}</div>
         </div>
-        <button
-          className="pn-btn pn-btn-primary"
-          style={{height:38,padding:'0 18px',fontSize:13,borderRadius:10,flexShrink:0}}
-          onClick={()=>setPage('funds')}
-        >
+        <div style={{...S.card,padding:'14px 16px',position:'relative'}}>
+          <div style={{fontSize:9,fontWeight:600,letterSpacing:'1.2px',textTransform:'uppercase',color:'var(--text-muted)',marginBottom:6}}>REFERRAL BALANCE</div>
+          <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:20,fontWeight:800,color:'var(--success)',fontVariantNumeric:'tabular-nums',letterSpacing:'-0.03em'}}>{fmt(refBalance)}</div>
+          <div style={{position:'absolute',top:12,right:12,width:28,height:28,borderRadius:8,background:'rgba(34,197,94,.1)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+            <i className="ti ti-wallet" style={{fontSize:14,color:'var(--success)'}}/>
+          </div>
+        </div>
+      </div>
+
+      {/* 4-column stat grid */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8,marginBottom:12}}>
+        {[
+          { label:'Total Orders',   value: user.totalOrders,      icon:'ti-shopping-cart', bg:'rgba(34,197,94,.1)',   color:'var(--success)', mono:false },
+          { label:'Total Spent',    value: fmt(user.totalSpent),  icon:'ti-chart-bar',     bg:'rgba(245,158,11,.1)', color:'var(--accent)',   mono:true  },
+          { label:'Pending Orders', value: pendingCount,          icon:'ti-clock',         bg:'rgba(248,113,113,.1)',color:'var(--danger)',   mono:false },
+          { label:'Wallet Balance', value: fmt(user.balance),     icon:'ti-credit-card',   bg:'rgba(96,165,250,.1)', color:'var(--info)',     mono:true  },
+        ].map(s => (
+          <div key={s.label} style={{...S.card,padding:'10px 8px',textAlign:'center'}}>
+            <div style={{width:28,height:28,borderRadius:7,background:s.bg,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 6px'}}>
+              <i className={`ti ${s.icon}`} style={{fontSize:13,color:s.color}}/>
+            </div>
+            <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:s.mono?10:14,fontWeight:700,color:'var(--text-primary)',fontVariantNumeric:'tabular-nums',letterSpacing:s.mono?'-0.02em':0,lineHeight:1.2}}>{s.value}</div>
+            <div style={{fontSize:9,color:'var(--text-muted)',marginTop:3,lineHeight:1.3}}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Add Funds + View Wallet buttons */}
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:16}}>
+        <button className="pn-btn pn-btn-primary pn-btn-full" style={{height:44,borderRadius:12,fontWeight:600}} onClick={()=>setPage('funds')}>
           <i className="ti ti-plus" style={{fontSize:15}}/>Add Funds
+        </button>
+        <button className="pn-btn pn-btn-secondary pn-btn-full" style={{height:44,borderRadius:12,fontWeight:600}} onClick={()=>setPage('funds')}>
+          View Wallet <i className="ti ti-arrow-right" style={{fontSize:15}}/>
         </button>
       </div>
 
-      {/* Stats grid */}
-      <div className="pn-stat-grid" style={{marginBottom:16}}>
-        <div className="pn-stat-card">
-          <div className="pn-stat-icon success"><i className="ti ti-shopping-cart"/></div>
-          <div className="pn-stat-label">Total Orders</div>
-          <div className="pn-stat-value">{user.totalOrders}</div>
+      {/* Refer & Earn card */}
+      <div style={{...S.card,padding:'14px 16px',marginBottom:16,display:'flex',alignItems:'center',gap:12}}>
+        <div style={{width:42,height:42,borderRadius:12,background:'rgba(139,92,246,.1)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+          <i className="ti ti-gift" style={{fontSize:20,color:'#8B5CF6'}}/>
         </div>
-        <div className="pn-stat-card" style={{cursor:'pointer'}} onClick={()=>setPage('referral')}>
-          <div className="pn-stat-icon" style={{background:'rgba(139,92,246,.1)',color:'#8B5CF6'}}><i className="ti ti-users"/></div>
-          <div className="pn-stat-label">Referral Earnings</div>
-          <div className="pn-stat-value" style={{color:'var(--success)',fontSize:18}}>{fmt(refBalance)}</div>
-          <div style={{fontSize:11,color:'var(--text-muted)',marginTop:3}}>{refCount} referral{refCount !== 1 ? 's' : ''}</div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:14,fontWeight:700,color:'var(--text-primary)',marginBottom:2}}>Refer &amp; Earn</div>
+          <div style={{fontSize:11,color:'var(--text-secondary)',marginBottom:6}}>Invite friends and earn commissions on their orders.</div>
+          <div style={{display:'flex',gap:16}}>
+            <div>
+              <div style={{fontSize:9,fontWeight:500,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'0.8px'}}>Referrals</div>
+              <div style={{fontSize:13,fontWeight:700,color:'var(--text-primary)'}}>{refCount}</div>
+            </div>
+            <div>
+              <div style={{fontSize:9,fontWeight:500,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'0.8px'}}>Earned</div>
+              <div style={{fontSize:13,fontWeight:700,color:'var(--text-primary)'}}>{fmt(refBalance)}</div>
+            </div>
+          </div>
         </div>
+        <button
+          onClick={()=>setPage('referral')}
+          style={{flexShrink:0,height:32,padding:'0 12px',borderRadius:8,background:'rgba(34,197,94,.12)',color:'var(--success)',border:'1px solid rgba(34,197,94,.25)',fontSize:12,fontWeight:600,cursor:'pointer',whiteSpace:'nowrap',display:'flex',alignItems:'center',gap:5,fontFamily:"'Plus Jakarta Sans',sans-serif"}}
+        >
+          <i className="ti ti-share" style={{fontSize:12}}/>Share Link
+        </button>
       </div>
 
-      {/* Quick actions */}
-      <div className="pn-actions">
-        <button className="pn-action-pill" onClick={()=>setPage('neworder')}><i className="ti ti-circle-plus"/>New SMM Order</button>
-        <button className="pn-action-pill" onClick={()=>setPage('sms')}><i className="ti ti-device-mobile"/>Buy SMS Number</button>
-        <button className="pn-action-pill" onClick={()=>setPage('accounts')}><i className="ti ti-shopping-bag"/>Buy Accounts</button>
-        <button className="pn-action-pill" onClick={()=>setPage('referral')}><i className="ti ti-users"/>Refer &amp; Earn</button>
-      </div>
-
-      {/* Recent orders */}
-      <div className="pn-section">
-        <div className="pn-hrow">
-          <span className="pn-section-label" style={{marginBottom:0}}>Recent Orders</span>
+      {/* Recent Orders */}
+      <div style={{marginBottom:16}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+          <span style={{fontSize:14,fontWeight:700,color:'var(--text-primary)'}}>Recent Orders</span>
           <button className="pn-btn pn-btn-ghost pn-btn-sm" onClick={()=>setPage('orders')}>View all <i className="ti ti-arrow-right"/></button>
         </div>
-        <div className="pn-card" style={{padding:0,overflow:'hidden'}}>
+        <div style={{...S.card,overflow:'hidden'}}>
           {ordersLoading ? (
-            <div style={{padding:'20px 0',textAlign:'center'}}><i className="ti ti-loader-2" style={{fontSize:20,color:'var(--accent)',animation:'pn-spin 1s linear infinite'}}/></div>
+            <div style={{padding:'24px 0',textAlign:'center'}}><i className="ti ti-loader-2" style={{fontSize:20,color:'var(--accent)',animation:'pn-spin 1s linear infinite'}}/></div>
           ) : recentOrders.length === 0 ? (
             <div className="pn-empty"><i className="ti ti-receipt pn-empty-icon"/><div className="pn-empty-title">No orders yet</div><div className="pn-empty-sub">Place your first order to get started</div></div>
           ) : recentOrders.map((o, i) => (
             <div
               key={o.id}
               onClick={()=>setPage('orders')}
-              style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'13px 18px',borderBottom:i<recentOrders.length-1?'0.5px solid var(--border)':'none',gap:12,cursor:'pointer',transition:'background 150ms ease'}}
+              style={{display:'flex',alignItems:'center',gap:10,padding:'11px 14px',borderBottom:i<recentOrders.length-1?'0.5px solid var(--border)':'none',cursor:'pointer',transition:'background 150ms ease'}}
               onMouseEnter={e=>e.currentTarget.style.background='var(--bg-raised)'}
               onMouseLeave={e=>e.currentTarget.style.background=''}
             >
-              <div style={{minWidth:0,flex:1}}>
-                <div style={{fontSize:13,fontWeight:600,color:'var(--text-primary)',marginBottom:3}}>
-                  {o.type==='accounts' ? (o.product_name||o.platform) :
-                   o.type==='sms' ? `${o.platform} • ${o.country||''}` :
-                   (o.service_name||o.platform||'—')}
+              <div style={{width:34,height:34,borderRadius:9,background:'var(--bg-raised)',border:'1px solid var(--border)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                <i className="ti ti-package" style={{fontSize:15,color:'var(--text-secondary)'}}/>
+              </div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:12,fontWeight:600,color:'var(--text-primary)',marginBottom:1}}>
+                  Order #{(o.id||'').slice(0,8)}
                 </div>
-                <div className="pn-mono" style={{fontSize:11,color:'var(--text-muted)'}}>
-                  {o.type==='accounts' ? `${o.quantity||1} account${(o.quantity||1)>1?'s':''}` :
-                   o.type==='sms' ? (o.phone||o.phone_number||'') :
-                   new Date(o.created_at).toLocaleDateString('en-NG')}
+                <div style={{fontSize:11,color:'var(--text-muted)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                  {o.type==='accounts'?(o.product_name||o.platform):o.type==='sms'?`${o.platform} • ${o.country||''}`:(o.service_name||o.platform||'—')}
                 </div>
               </div>
-              <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
-                <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:600,fontVariantNumeric:'tabular-nums',fontSize:12,color:'var(--danger)'}}>{fmt(o.amount)}</div>
+              <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:3,flexShrink:0}}>
                 <Badge status={o.status}/>
-                <i className="ti ti-chevron-right" style={{fontSize:13,color:'var(--text-muted)'}}/>
+                <div style={{fontSize:10,color:'var(--text-muted)'}}>{o.created_at?new Date(o.created_at).toLocaleDateString('en-NG',{month:'short',day:'numeric',year:'numeric'}):''}</div>
               </div>
+              <i className="ti ti-chevron-right" style={{fontSize:13,color:'var(--text-muted)',flexShrink:0}}/>
             </div>
           ))}
         </div>
       </div>
+
+      {/* Quick Actions */}
+      <div>
+        <div style={{fontSize:14,fontWeight:700,color:'var(--text-primary)',marginBottom:10}}>Quick Actions</div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+          <button
+            onClick={()=>setPage('neworder')}
+            style={{display:'flex',alignItems:'center',gap:12,padding:'14px 16px',background:'var(--accent)',border:'none',borderRadius:14,cursor:'pointer',transition:'background 150ms ease',textAlign:'left'}}
+            onMouseEnter={e=>e.currentTarget.style.background='var(--accent-hover)'}
+            onMouseLeave={e=>e.currentTarget.style.background='var(--accent)'}
+          >
+            <div style={{width:36,height:36,borderRadius:10,background:'rgba(255,255,255,.15)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+              <i className="ti ti-shopping-cart" style={{fontSize:17,color:'var(--accent-text)'}}/>
+            </div>
+            <div>
+              <div style={{fontSize:13,fontWeight:600,color:'var(--accent-text)',marginBottom:1}}>Place New Order</div>
+              <div style={{fontSize:11,color:'rgba(255,255,255,.7)'}}>Start a new order</div>
+            </div>
+          </button>
+          <button
+            onClick={()=>setPage('funds')}
+            style={{display:'flex',alignItems:'center',gap:12,padding:'14px 16px',...S.card,cursor:'pointer',transition:'background 150ms ease',textAlign:'left'}}
+            onMouseEnter={e=>e.currentTarget.style.background='var(--bg-raised)'}
+            onMouseLeave={e=>e.currentTarget.style.background='var(--bg-surface)'}
+          >
+            <div style={{width:36,height:36,borderRadius:10,background:'rgba(245,158,11,.1)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+              <i className="ti ti-wallet" style={{fontSize:17,color:'var(--accent)'}}/>
+            </div>
+            <div>
+              <div style={{fontSize:13,fontWeight:600,color:'var(--text-primary)',marginBottom:1}}>Add Funds</div>
+              <div style={{fontSize:11,color:'var(--text-muted)'}}>Top up your wallet</div>
+            </div>
+          </button>
+        </div>
+      </div>
+
     </div>
   );
 }
