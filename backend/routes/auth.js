@@ -111,7 +111,15 @@ router.post('/register', async (req, res) => {
         .select('id, referral_code, referral_count')
         .eq('referral_code', referral_code.toUpperCase())
         .maybeSingle();
-      if (referrer) {
+
+      // Guard: referrer must exist, must not be the registering user, and user must not already have a referral record
+      const { data: existingReferral } = await supabase
+        .from('referrals')
+        .select('id')
+        .eq('referee_id', user.id)
+        .maybeSingle();
+
+      if (referrer && referrer.id !== user.id && !existingReferral) {
         await supabase.from('users').update({ referred_by: referrer.referral_code }).eq('id', user.id);
         await supabase.from('users').update({
           referral_count: (Number(referrer.referral_count) || 0) + 1,
@@ -245,7 +253,14 @@ router.post('/supabase-sync', async (req, res) => {
       const pendingRef = req.body.pending_referral_code;
       if (pendingRef) {
         const { data: referrer } = await supabase.from('users').select('id, referral_code, referral_count').eq('referral_code', pendingRef.toUpperCase()).maybeSingle();
-        if (referrer) {
+
+        const { data: existingReferral } = await supabase
+          .from('referrals')
+          .select('id')
+          .eq('referee_id', user.id)
+          .maybeSingle();
+
+        if (referrer && referrer.id !== user.id && !existingReferral) {
           await supabase.from('users').update({ referred_by: referrer.referral_code }).eq('id', user.id);
           await supabase.from('users').update({ referral_count: (Number(referrer.referral_count) || 0) + 1 }).eq('id', referrer.id);
 
