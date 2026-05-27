@@ -6,7 +6,7 @@ import { Eye, EyeOff, UserPlus, CheckCircle, Wallet, ShoppingCart, Phone, ArrowR
 export default function Register() {
   const { register } = useAuth();
   const navigate = useNavigate();
-  const [form, setForm] = useState({ full_name: '', email: '', password: '', confirm: '' });
+  const [form, setForm] = useState({ full_name: '', email: '', password: '', confirm: '', referral_code: '' });
   const [show, setShow] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -21,7 +21,7 @@ export default function Register() {
     }
     setLoading(true);
     try {
-      const user = await register(form.email, form.full_name, form.password);
+      const user = await register(form.email, form.full_name, form.password, form.referral_code.trim());
       setWelcome({ name: user?.full_name || form.full_name });
     } catch (err) {
       setError(err.response?.data?.error || 'Registration failed. Try again.');
@@ -187,6 +187,17 @@ export default function Register() {
                 value={form.confirm}
                 onChange={(e) => setForm({ ...form, confirm: e.target.value })}
                 required
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Referral Code <span style={{ color: 'var(--text-dim)', fontWeight: 400 }}>(optional)</span></label>
+              <input
+                type="text"
+                className="form-input"
+                placeholder="e.g. ABC123"
+                value={form.referral_code}
+                onChange={(e) => setForm({ ...form, referral_code: e.target.value.toUpperCase() })}
+                style={{ fontFamily: 'var(--font-mono)', letterSpacing: '0.05em' }}
               />
             </div>
             <button type="submit" className="btn btn-primary btn-full btn-lg" disabled={loading} style={{ marginTop: 6 }}>

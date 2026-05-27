@@ -61,8 +61,8 @@ export function AuthProvider({ children }) {
     return user;
   };
 
-  const register = async (email, full_name, password) => {
-    const res = await api.post('/auth/register', { email, full_name, password });
+  const register = async (email, full_name, password, referral_code) => {
+    const res = await api.post('/auth/register', { email, full_name, password, ...(referral_code && { referral_code }) });
     const { user, token } = res.data;
     localStorage.setItem('panelng_token', token);
     localStorage.setItem('panelng_user', JSON.stringify(user));
