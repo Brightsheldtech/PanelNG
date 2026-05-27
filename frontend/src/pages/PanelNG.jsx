@@ -2025,14 +2025,35 @@ function Referral() {
 
   useEffect(() => { loadStats(); }, []);
 
+  const copyToClipboard = (text, onDone) => {
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).then(onDone).catch(() => {
+        // Fallback for browsers that block clipboard API
+        const el = document.createElement('textarea');
+        el.value = text; el.style.position = 'fixed'; el.style.opacity = '0';
+        document.body.appendChild(el); el.select();
+        document.execCommand('copy');
+        document.body.removeChild(el);
+        onDone();
+      });
+    } else {
+      const el = document.createElement('textarea');
+      el.value = text; el.style.position = 'fixed'; el.style.opacity = '0';
+      document.body.appendChild(el); el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+      onDone();
+    }
+  };
+
   const handleCopyCode = () => {
     const text = stats?.referral_code || user.referral_code || '';
     if (!text) return;
-    navigator.clipboard.writeText(text).then(() => { setCopiedCode(true); setTimeout(() => setCopiedCode(false), 2000); });
+    copyToClipboard(text, () => { setCopiedCode(true); setTimeout(() => setCopiedCode(false), 2000); });
   };
 
   const handleCopyLink = () => {
-    navigator.clipboard.writeText(referralLink).then(() => { setCopiedLink(true); setTimeout(() => setCopiedLink(false), 2000); });
+    copyToClipboard(referralLink, () => { setCopiedLink(true); setTimeout(() => setCopiedLink(false), 2000); });
   };
 
   const handleWithdraw = async () => {

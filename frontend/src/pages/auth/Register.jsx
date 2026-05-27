@@ -128,6 +128,7 @@ export default function Register() {
   const [loading, setLoading] = useState(false);
   const [serverError, setServerError] = useState('');
   const [pendingEmail, setPendingEmail] = useState('');
+  const [welcome, setWelcome] = useState(null);
   const [refAutoApplied, setRefAutoApplied] = useState(false);
   const [resending, setResending] = useState(false);
   const usernameTimer = useRef(null);
@@ -200,7 +201,7 @@ export default function Register() {
         password: form.password,
       });
       setSession({ user: res.data.user, token: res.data.token });
-      navigate('/dashboard');
+      setWelcome({ name: res.data.user?.full_name || form.fullName });
     } catch (err) {
       console.error('Registration error:', err);
       setServerError(err.response?.data?.error || err.message || 'Registration failed. Please try again.');
@@ -228,6 +229,58 @@ export default function Register() {
 
   const isFormValid = form.fullName.trim().length >= 2 && form.username.length >= 3 && form.email.includes('@') &&
     form.phone.length >= 10 && form.password.length >= 8 && form.password === form.confirmPassword && agreed;
+
+  if (welcome) {
+    return (
+      <>
+        <style>{css}</style>
+        <div className="ar-page">
+          <div className="ar-inner">
+            <div className="ar-card" style={{ textAlign: 'center' }}>
+              <Link to="/" className="ar-logo">
+                <div className="ar-logo-box">P</div>
+                <span className="ar-logo-word">PanelNG</span>
+              </Link>
+
+              {/* Green check circle */}
+              <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'rgba(22,163,74,0.1)', border: '1px solid rgba(22,163,74,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+                <Icon name="check" size={28} color="#16A34A" />
+              </div>
+
+              <h1 className="ar-heading" style={{ textAlign: 'center', marginBottom: 8 }}>
+                Welcome, {welcome.name.split(' ')[0]}!
+              </h1>
+              <p style={{ fontSize: 14, color: '#6B6860', lineHeight: 1.7, marginBottom: 28 }}>
+                Your PanelNG account is ready. You're now part of Nigeria's fastest-growing SMM network.
+              </p>
+
+              <div style={{ background: '#FAFAF8', border: '1px solid #E5E2D9', borderRadius: 10, padding: '16px 18px', marginBottom: 24, textAlign: 'left' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#A8A49C', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>What you can do now</div>
+                {[
+                  'Fund your wallet with Paystack',
+                  'Order 500+ SMM services instantly',
+                  'Buy virtual numbers for SMS verification',
+                ].map(item => (
+                  <div key={item} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: '#6B6860', marginBottom: 8 }}>
+                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#C9620A', flexShrink: 0 }} />
+                    {item}
+                  </div>
+                ))}
+              </div>
+
+              <button
+                className="ar-submit"
+                onClick={() => navigate('/dashboard')}
+                style={{ marginTop: 0 }}
+              >
+                Go to Dashboard →
+              </button>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   if (pendingEmail) {
     return (
