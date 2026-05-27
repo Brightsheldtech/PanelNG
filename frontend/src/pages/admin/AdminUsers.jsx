@@ -141,6 +141,14 @@ function CheckCircleIcon() {
   );
 }
 
+function TrashIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+    </svg>
+  );
+}
+
 function UsersIcon() {
   return (
     <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -158,6 +166,8 @@ export default function AdminUsers() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
+  const [deleteTarget, setDeleteTarget] = useState(null); // { id, full_name }
+  const [deleting, setDeleting] = useState(false);
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -212,6 +222,19 @@ export default function AdminUsers() {
     } catch { /* ignore */ }
   };
 
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await api.delete(`/admin/users/${deleteTarget.id}`);
+      setUsers(prev => prev.filter(u => u.id !== deleteTarget.id));
+      setTotal(prev => prev - 1);
+      setDeleteTarget(null);
+    } catch { /* ignore */ } finally {
+      setDeleting(false);
+    }
+  };
+
   const clearFilters = () => {
     setSearch('');
     setStatusFilter('all');
@@ -257,6 +280,41 @@ export default function AdminUsers() {
   return (
     <>
       <style>{css}</style>
+
+      {/* Delete confirmation modal */}
+      {deleteTarget && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div style={{ background: 'white', borderRadius: 16, padding: '32px 28px', maxWidth: 420, width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.15)' }}>
+            <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'rgba(220,38,38,0.08)', border: '1px solid rgba(220,38,38,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16, color: '#DC2626' }}>
+              <TrashIcon />
+            </div>
+            <h2 style={{ fontFamily: 'Cabinet Grotesk, sans-serif', fontWeight: 700, fontSize: 18, color: '#111110', margin: '0 0 8px' }}>Delete user permanently?</h2>
+            <p style={{ fontSize: 14, color: '#6B6860', lineHeight: 1.6, margin: '0 0 6px' }}>
+              You are about to delete <strong style={{ color: '#111110' }}>{deleteTarget.full_name}</strong>.
+            </p>
+            <p style={{ fontSize: 13, color: '#DC2626', margin: '0 0 24px' }}>
+              This will erase their account, orders, transactions, wallet, and all data. This cannot be undone.
+            </p>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                onClick={() => setDeleteTarget(null)}
+                disabled={deleting}
+                style={{ flex: 1, padding: '11px 0', border: '1px solid #E5E2D9', borderRadius: 10, background: 'white', fontFamily: 'Epilogue, sans-serif', fontWeight: 600, fontSize: 14, color: '#6B6860', cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                style={{ flex: 1, padding: '11px 0', border: 'none', borderRadius: 10, background: '#DC2626', fontFamily: 'Epilogue, sans-serif', fontWeight: 600, fontSize: 14, color: 'white', cursor: deleting ? 'not-allowed' : 'pointer', opacity: deleting ? 0.7 : 1 }}
+              >
+                {deleting ? 'Deleting…' : 'Delete permanently'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="au-page">
         {/* Header */}
         <div className="au-header">
@@ -360,6 +418,13 @@ export default function AdminUsers() {
                         >
                           {(u.status || 'active') === 'suspended' ? <CheckCircleIcon /> : <BanIcon />}
                         </button>
+                        <button
+                          className="au-icon-btn red"
+                          title="Delete user permanently"
+                          onClick={e => { e.stopPropagation(); setDeleteTarget({ id: u.id, full_name: u.full_name }); }}
+                        >
+                          <TrashIcon />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -409,7 +474,16 @@ export default function AdminUsers() {
                   <span className="au-mc-balance">{fmtMoney(u.wallet_balance)}</span>
                   <span className="au-mc-date">{fmtDate(u.created_at)}</span>
                 </div>
-                <button className="au-mc-view" onClick={e => { e.stopPropagation(); navigate(`/admin/users/${u.id}`); }}>View Profile</button>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="au-mc-view" style={{ flex: 1 }} onClick={e => { e.stopPropagation(); navigate(`/admin/users/${u.id}`); }}>View Profile</button>
+                  <button
+                    style={{ padding: '10px 14px', border: '1px solid rgba(220,38,38,0.3)', borderRadius: 9, background: 'white', color: '#DC2626', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                    onClick={e => { e.stopPropagation(); setDeleteTarget({ id: u.id, full_name: u.full_name }); }}
+                    title="Delete user"
+                  >
+                    <TrashIcon />
+                  </button>
+                </div>
               </div>
             ))
           )}

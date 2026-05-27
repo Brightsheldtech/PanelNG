@@ -95,6 +95,42 @@ router.get('/users/:userId', async (req, res) => {
   }
 });
 
+// DELETE /api/admin/users/:userId — permanently delete user and all their data
+router.delete('/users/:userId', async (req, res) => {
+  const { userId } = req.params;
+  if (userId === req.user.id) return res.status(400).json({ error: 'You cannot delete your own account' });
+
+  try {
+    const { data: user, error: userErr } = await supabase
+      .from('users').select('id, role').eq('id', userId).single();
+    if (userErr || !user) return res.status(404).json({ error: 'User not found' });
+    if (user.role === 'admin') return res.status(400).json({ error: 'Cannot delete admin accounts' });
+
+    // Cascade delete — child records first
+    const { data: convs } = await supabase.from('support_conversations').select('id').eq('user_id', userId);
+    if (convs?.length) {
+      await supabase.from('support_messages').delete().in('conversation_id', convs.map(c => c.id));
+    }
+    await supabase.from('support_messages').delete().eq('sender_id', userId);
+    await supabase.from('support_conversations').delete().eq('user_id', userId);
+    await supabase.from('wallet_adjustments').delete().eq('user_id', userId);
+    await supabase.from('transactions').delete().eq('user_id', userId);
+    await supabase.from('orders').delete().eq('user_id', userId);
+    await supabase.from('sms_orders').delete().eq('user_id', userId);
+    await supabase.from('payment_requests').delete().eq('user_id', userId);
+    await supabase.from('referrals').delete().or(`referrer_id.eq.${userId},referee_id.eq.${userId}`);
+    await supabase.from('accszone_orders').delete().eq('user_id', userId).catch(() => {});
+
+    const { error: deleteErr } = await supabase.from('users').delete().eq('id', userId);
+    if (deleteErr) throw deleteErr;
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('delete user error:', err.message);
+    res.status(500).json({ error: 'Failed to delete user' });
+  }
+});
+
 // PATCH /api/admin/users/:userId/status — suspend or activate account
 router.patch('/users/:userId/status', async (req, res) => {
   const { userId } = req.params;
