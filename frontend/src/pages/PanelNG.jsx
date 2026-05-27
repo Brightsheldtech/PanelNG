@@ -511,7 +511,8 @@ html,body{overflow-x:hidden;max-width:100vw}
   .pn-main{margin-left:0;overflow-x:hidden;width:100%}
   .pn-bottom-nav{display:block}
   .pn-content{padding:16px 12px 90px;overflow-x:hidden;width:100%;max-width:100%}
-  .pn-topbar{padding:0 12px;gap:8px;overflow:hidden}
+  .pn-topbar{padding:0 12px;gap:8px;overflow:visible}
+  .pn-notif-panel{position:fixed;top:60px;right:8px;left:8px;width:auto;max-width:none}
   .pn-topbar-brand{min-width:0;flex:1}
   .pn-brand-name{font-size:14px}
   .pn-balance-chip{padding:4px 8px}
@@ -1585,6 +1586,7 @@ function AddFunds() {
   const [selectedAmt, setSelectedAmt] = useState(null);
   const [successData, setSuccessData] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
+  const [loadingPayment, setLoadingPayment] = useState(false);
   const [transactions, setTransactions] = useState([]);
   const [txLoading, setTxLoading] = useState(true);
   const flwResult = useRef(null);
@@ -1600,11 +1602,14 @@ function AddFunds() {
 
   useEffect(() => { loadTx(); }, []);
 
-  const loadFlwScript = () => new Promise((resolve) => {
+  const loadFlwScript = () => new Promise((resolve, reject) => {
     if (window.FlutterwaveCheckout) { resolve(); return; }
     const s = document.createElement('script');
     s.src = 'https://checkout.flutterwave.com/v3.js';
     s.onload = resolve;
+    s.onerror = () => reject(new Error('Payment provider script failed to load. Check your internet connection and try again.'));
+    const timer = setTimeout(() => reject(new Error('Payment provider took too long to load. Check your connection and try again.')), 12000);
+    s.onload = () => { clearTimeout(timer); resolve(); };
     document.body.appendChild(s);
   });
 
@@ -1638,9 +1643,11 @@ function AddFunds() {
     const amt = parseFloat(amount);
     if (!amt || amt < 100) return;
     setErrorMsg('');
+    setLoadingPayment(true);
     try {
       const { data: cfg } = await api.post('/payment/flutterwave/init', { amount: amt });
       await loadFlwScript();
+      setLoadingPayment(false);
       flwResult.current = null;
       verifyStarted.current = false;
       window.FlutterwaveCheckout({
@@ -1677,7 +1684,8 @@ function AddFunds() {
         },
       });
     } catch (err) {
-      setErrorMsg(err.response?.data?.error || 'Could not start payment. Try again.');
+      setLoadingPayment(false);
+      setErrorMsg(err.response?.data?.error || err.message || 'Could not start payment. Try again.');
     }
   };
 
@@ -1742,8 +1750,14 @@ function AddFunds() {
                 <i className="ti ti-alert-circle" style={{marginRight:6}}/>{errorMsg}
               </div>
             )}
+            {loadingPayment && (
+              <div style={{display:'flex',alignItems:'center',gap:10,padding:'12px 14px',background:'rgba(245,158,11,.08)',border:'1px solid rgba(245,158,11,.2)',borderRadius:10,marginBottom:12}}>
+                <i className="ti ti-loader-2" style={{fontSize:16,color:'var(--accent)',animation:'pn-spin 1s linear infinite'}}/>
+                <span style={{fontSize:13,color:'var(--accent)',fontWeight:500}}>Opening payment — please wait…</span>
+              </div>
+            )}
             {METHODS.map(m=>(
-              <button key={m.key} onClick={()=>handlePayWith(m.option)} style={{width:'100%',display:'flex',alignItems:'center',gap:14,padding:'14px 16px',background:'var(--card-alt,rgba(255,255,255,.04))',border:'1px solid var(--border)',borderRadius:10,marginBottom:10,cursor:'pointer',textAlign:'left',transition:'border-color .15s'}}>
+              <button key={m.key} onClick={()=>handlePayWith(m.option)} disabled={loadingPayment} style={{width:'100%',display:'flex',alignItems:'center',gap:14,padding:'14px 16px',background:'var(--card-alt,rgba(255,255,255,.04))',border:'1px solid var(--border)',borderRadius:10,marginBottom:10,cursor:loadingPayment?'not-allowed':'pointer',textAlign:'left',transition:'border-color .15s',opacity:loadingPayment?.6:1}}>
                 <div style={{width:40,height:40,borderRadius:10,background:'rgba(245,158,11,.1)',border:'1px solid rgba(245,158,11,.2)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
                   <i className={`ti ${m.icon}`} style={{fontSize:18,color:'var(--accent)'}}/>
                 </div>
