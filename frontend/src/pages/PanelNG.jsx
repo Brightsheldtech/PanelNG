@@ -182,7 +182,7 @@ html,body{overflow-x:hidden;max-width:100vw}
 .pn-theme-icon-btn:hover{background:var(--bg-raised);color:var(--text-primary)}
 .pn-tooltip{position:absolute;top:calc(100% + 6px);right:0;background:var(--bg-surface);border:1px solid var(--border);border-radius:8px;padding:4px 8px;font-size:11px;color:var(--text-secondary);white-space:nowrap;box-shadow:var(--shadow-sm);pointer-events:none;z-index:100}
 /* Notification panel */
-.pn-notif-badge{position:absolute;top:4px;right:4px;min-width:16px;height:16px;background:var(--danger);border-radius:8px;border:2px solid var(--bg-surface);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;line-height:1;padding:0 3px}
+.pn-notif-badge{position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;background:#FF3B30;border-radius:9px;border:2px solid var(--bg-surface);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;line-height:1;padding:0 4px;pointer-events:none}
 .pn-notif-panel{position:absolute;top:calc(100% + 8px);right:0;width:340px;max-height:480px;background:var(--bg-surface);border:1px solid var(--border);border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,.18);z-index:200;display:flex;flex-direction:column;overflow:hidden}
 @media(max-width:400px){.pn-notif-panel{width:calc(100vw - 24px);right:-4px}}
 .pn-notif-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px;border-bottom:1px solid var(--border);flex-shrink:0}
@@ -545,13 +545,12 @@ function timeAgo(iso) {
   return `${Math.floor(diff/86400)}d ago`;
 }
 
-function Topbar({ onMenuClick }) {
+function Topbar({ onMenuClick, onLogoClick }) {
   const { theme, setTheme } = useContext(ThemeCtx);
   const user = useContext(UserCtx) || MOCK.user;
   const [showTip, setShowTip] = useState(false);
   const [showNotif, setShowNotif] = useState(false);
   const [notifs, setNotifs] = useState([]);
-  const [loadingNotifs, setLoadingNotifs] = useState(false);
   const panelRef = useRef(null);
 
   const unread = notifs.filter(n => !n.is_read).length;
@@ -593,7 +592,20 @@ function Topbar({ onMenuClick }) {
 
   return (
     <header className="pn-topbar" style={{justifyContent:'space-between'}}>
-      <span style={{fontWeight:700,fontSize:17,color:'var(--text-primary)',letterSpacing:'-0.3px'}}>PanelNG</span>
+      {/* Left: hamburger (mobile) + logo */}
+      <div style={{display:'flex',alignItems:'center',gap:8}}>
+        <button className="pn-hamburger" onClick={onMenuClick} aria-label="Open menu">
+          <i className="ti ti-menu-2" style={{fontSize:18}}/>
+        </button>
+        <button
+          onClick={onLogoClick}
+          style={{display:'flex',alignItems:'center',gap:8,background:'none',border:'none',cursor:'pointer',padding:0,textDecoration:'none'}}
+          aria-label="Go to Overview"
+        >
+          <div className="pn-brand-mark" style={{width:30,height:30,borderRadius:9,fontSize:15}}>P</div>
+          <span className="pn-brand-name" style={{fontWeight:700,fontSize:16,letterSpacing:'-0.3px'}}>PanelNG</span>
+        </button>
+      </div>
       <div style={{display:'flex',alignItems:'center',gap:4,flexShrink:0}}>
         <div style={{position:'relative'}} onMouseEnter={()=>setShowTip(true)} onMouseLeave={()=>setShowTip(false)}>
           <button className="pn-theme-icon-btn" onClick={cycle}><i className={`ti ${icons[theme]}`}/></button>
@@ -2369,7 +2381,7 @@ function App() {
         <div className={`pn-overlay${sidebarOpen?' show':''}`} onClick={()=>setSidebarOpen(false)}/>
         <Sidebar page={page} setPage={navigate} isOpen={sidebarOpen} onClose={()=>setSidebarOpen(false)} isMobile={true}/>
         <div className="pn-main">
-          <Topbar onMenuClick={()=>setSidebarOpen(true)}/>
+          <Topbar onMenuClick={()=>setSidebarOpen(true)} onLogoClick={()=>navigate('overview')}/>
           <div className="pn-content">{PAGES[page]}</div>
         </div>
         <BottomNav page={page} setPage={navigate}/>
