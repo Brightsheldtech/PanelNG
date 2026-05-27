@@ -54,36 +54,6 @@ export function AuthProvider({ children }) {
     };
   }, [!!user]); // restart only when logged-in state changes, not on every user update
 
-  // Inactivity timeout — logout after 30 min with no interaction
-  useEffect(() => {
-    if (!user) return;
-
-    const touch = () => localStorage.setItem(LAST_ACTIVE_KEY, Date.now().toString());
-    const check = () => {
-      const last = parseInt(localStorage.getItem(LAST_ACTIVE_KEY) || '0', 10);
-      if (last && Date.now() - last > INACTIVITY_MS) {
-        localStorage.removeItem(LAST_ACTIVE_KEY);
-        logout();
-      }
-    };
-
-    touch(); // record activity on mount / login
-
-    const EVENTS = ['mousedown', 'keydown', 'scroll', 'touchstart', 'click'];
-    EVENTS.forEach((e) => window.addEventListener(e, touch, { passive: true }));
-
-    const onVisible = () => { if (document.visibilityState === 'visible') check(); };
-    document.addEventListener('visibilitychange', onVisible);
-
-    const interval = setInterval(check, 60 * 1000); // check every minute
-
-    return () => {
-      EVENTS.forEach((e) => window.removeEventListener(e, touch));
-      document.removeEventListener('visibilitychange', onVisible);
-      clearInterval(interval);
-    };
-  }, [!!user, logout]);
-
   const login = async (identifier, password) => {
     const res = await api.post('/auth/login', { identifier, password });
     const { user, token } = res.data;
@@ -115,6 +85,37 @@ export function AuthProvider({ children }) {
     localStorage.removeItem(LAST_ACTIVE_KEY);
     setUser(null);
   }, []);
+
+  // Inactivity timeout — logout after 30 min with no interaction
+  // Must be declared AFTER logout to avoid TDZ in the dep array
+  useEffect(() => {
+    if (!user) return;
+
+    const touch = () => localStorage.setItem(LAST_ACTIVE_KEY, Date.now().toString());
+    const check = () => {
+      const last = parseInt(localStorage.getItem(LAST_ACTIVE_KEY) || '0', 10);
+      if (last && Date.now() - last > INACTIVITY_MS) {
+        localStorage.removeItem(LAST_ACTIVE_KEY);
+        logout();
+      }
+    };
+
+    touch();
+
+    const EVENTS = ['mousedown', 'keydown', 'scroll', 'touchstart', 'click'];
+    EVENTS.forEach((e) => window.addEventListener(e, touch, { passive: true }));
+
+    const onVisible = () => { if (document.visibilityState === 'visible') check(); };
+    document.addEventListener('visibilitychange', onVisible);
+
+    const interval = setInterval(check, 60 * 1000);
+
+    return () => {
+      EVENTS.forEach((e) => window.removeEventListener(e, touch));
+      document.removeEventListener('visibilitychange', onVisible);
+      clearInterval(interval);
+    };
+  }, [!!user, logout]);
 
   const updateUser = useCallback((updates) => {
     setUser((prev) => {
