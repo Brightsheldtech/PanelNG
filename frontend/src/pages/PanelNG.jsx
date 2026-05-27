@@ -1625,15 +1625,43 @@ function ProfileSettings() {
   const [name, setName] = useState(user.name);
   const [showPw, setShowPw] = useState({ cur:false, nw:false, cf:false });
   const [pw, setPw] = useState({ cur:'', nw:'', cf:'' });
-  const [saved, setSaved] = useState(false);
-  const handleSave = async () => {
-    try { await api.put('/auth/profile', { full_name: name }); } catch (_) {}
-    setSaved(true); setTimeout(()=>setSaved(false),2500);
+  const [nameSaving, setNameSaving] = useState(false);
+  const [nameMsg, setNameMsg] = useState(null); // { ok, text }
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwMsg, setPwMsg] = useState(null);
+  const [confirmSignOut, setConfirmSignOut] = useState(false);
+
+  const handleSaveName = async () => {
+    if (!name.trim()) return;
+    setNameSaving(true); setNameMsg(null);
+    try {
+      await api.patch('/auth/profile', { full_name: name.trim() });
+      setNameMsg({ ok: true, text: 'Name updated successfully.' });
+    } catch (e) {
+      setNameMsg({ ok: false, text: e.response?.data?.error || 'Failed to save. Try again.' });
+    } finally { setNameSaving(false); }
   };
+
+  const handleChangePw = async () => {
+    if (!pw.cur || !pw.nw || !pw.cf) return setPwMsg({ ok: false, text: 'All fields are required.' });
+    if (pw.nw !== pw.cf) return setPwMsg({ ok: false, text: 'New passwords do not match.' });
+    if (pw.nw.length < 8) return setPwMsg({ ok: false, text: 'Password must be at least 8 characters.' });
+    setPwSaving(true); setPwMsg(null);
+    try {
+      await api.patch('/auth/change-password', { current_password: pw.cur, new_password: pw.nw });
+      setPwMsg({ ok: true, text: 'Password changed successfully.' });
+      setPw({ cur:'', nw:'', cf:'' });
+    } catch (e) {
+      setPwMsg({ ok: false, text: e.response?.data?.error || 'Password change failed. Try again.' });
+    } finally { setPwSaving(false); }
+  };
+
   return (
     <div>
-      <div className="pn-page-title">Profile Settings</div>
-      <div className="pn-page-sub">Manage your account and preferences.</div>
+      <div className="pn-page-title">Account Settings</div>
+      <div className="pn-page-sub">Manage your profile, security, and preferences.</div>
+
+      {/* Profile card */}
       <div className="pn-card" style={{marginBottom:16}}>
         <div className="pn-profile-head">
           <div className="pn-avatar-lg">{user.initials}</div>
@@ -1641,7 +1669,7 @@ function ProfileSettings() {
           <div className="pn-profile-email">{user.email}</div>
           <div className="pn-meta-badges">
             <span className="pn-badge-role">{user.role}</span>
-            <span className="pn-balance-badge">{fmt(user.balance)}</span>
+            <span className="pn-balance-badge">₦{fmt(user.balance)}</span>
           </div>
         </div>
         <span className="pn-section-label">Personal Information</span>
@@ -1651,26 +1679,43 @@ function ProfileSettings() {
         </div>
         <div className="pn-input-wrap">
           <label className="pn-input-label">Email Address</label>
-          <input className="pn-input" value={user.email} disabled/>
+          <input className="pn-input" value={user.email} disabled style={{opacity:.45}}/>
           <div style={{fontSize:11,color:'var(--text-muted)',marginTop:4}}>Email cannot be changed</div>
         </div>
-        {saved && <div style={{background:'rgba(34,197,94,.08)',border:'1px solid rgba(34,197,94,.2)',borderRadius:10,padding:'10px 14px',fontSize:13,color:'var(--success)',marginBottom:12,display:'flex',alignItems:'center',gap:8}}><i className="ti ti-circle-check"/>Changes saved successfully</div>}
-        <button className="pn-btn pn-btn-primary pn-btn-full" onClick={handleSave}><i className="ti ti-device-floppy"/>Save Changes</button>
+        {nameMsg && (
+          <div style={{background:nameMsg.ok?'rgba(34,197,94,.08)':'rgba(220,38,38,.08)',border:`1px solid ${nameMsg.ok?'rgba(34,197,94,.2)':'rgba(220,38,38,.2)'}`,borderRadius:10,padding:'10px 14px',fontSize:13,color:nameMsg.ok?'var(--success)':'var(--danger)',marginBottom:12,display:'flex',alignItems:'center',gap:8}}>
+            <i className={`ti ${nameMsg.ok?'ti-circle-check':'ti-alert-circle'}`}/>{nameMsg.text}
+          </div>
+        )}
+        <button className="pn-btn pn-btn-primary pn-btn-full" onClick={handleSaveName} disabled={nameSaving}>
+          {nameSaving ? <><i className="ti ti-loader-2" style={{animation:'pn-spin 1s linear infinite'}}/>Saving…</> : <><i className="ti ti-device-floppy"/>Save Changes</>}
+        </button>
       </div>
+
+      {/* Change password card */}
       <div className="pn-card" style={{marginBottom:16}}>
         <span className="pn-section-label">Change Password</span>
         {(['cur','nw','cf']).map((k,i)=>(
           <div key={k} className="pn-input-wrap">
             <label className="pn-input-label">{['Current Password','New Password','Confirm New Password'][i]}</label>
             <div className="pn-input-eye-wrap">
-              <input className="pn-input" type={showPw[k]?'text':'password'} placeholder={['Your current password','Min. 6 characters','Repeat new password'][i]} value={pw[k]} onChange={e=>setPw({...pw,[k]:e.target.value})}/>
+              <input className="pn-input" type={showPw[k]?'text':'password'} placeholder={['Your current password','Min. 8 characters','Repeat new password'][i]} value={pw[k]} onChange={e=>setPw({...pw,[k]:e.target.value})}/>
               <button className="pn-input-eye" onClick={()=>setShowPw({...showPw,[k]:!showPw[k]})}><i className={`ti ${showPw[k]?'ti-eye-off':'ti-eye'}`}/></button>
             </div>
           </div>
         ))}
-        <button className="pn-btn pn-btn-secondary pn-btn-full"><i className="ti ti-lock"/>Update Password</button>
+        {pwMsg && (
+          <div style={{background:pwMsg.ok?'rgba(34,197,94,.08)':'rgba(220,38,38,.08)',border:`1px solid ${pwMsg.ok?'rgba(34,197,94,.2)':'rgba(220,38,38,.2)'}`,borderRadius:10,padding:'10px 14px',fontSize:13,color:pwMsg.ok?'var(--success)':'var(--danger)',marginBottom:12,display:'flex',alignItems:'center',gap:8}}>
+            <i className={`ti ${pwMsg.ok?'ti-circle-check':'ti-alert-circle'}`}/>{pwMsg.text}
+          </div>
+        )}
+        <button className="pn-btn pn-btn-secondary pn-btn-full" onClick={handleChangePw} disabled={pwSaving}>
+          {pwSaving ? <><i className="ti ti-loader-2" style={{animation:'pn-spin 1s linear infinite'}}/>Updating…</> : <><i className="ti ti-lock"/>Update Password</>}
+        </button>
       </div>
-      <div className="pn-card">
+
+      {/* Appearance card */}
+      <div className="pn-card" style={{marginBottom:16}}>
         <span className="pn-section-label">Appearance</span>
         <p style={{fontSize:13,color:'var(--text-secondary)',marginBottom:16}}>Choose how PanelNG looks to you.</p>
         <div className="pn-theme-toggle">
@@ -1680,6 +1725,27 @@ function ProfileSettings() {
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Sign Out card */}
+      <div className="pn-card">
+        <span className="pn-section-label">Account</span>
+        <p style={{fontSize:13,color:'var(--text-secondary)',marginBottom:16}}>You are signed in as <strong style={{color:'var(--text-primary)'}}>{user.email}</strong>.</p>
+        {!confirmSignOut ? (
+          <button className="pn-btn-signout" style={{width:'100%',justifyContent:'center',padding:'12px 16px',fontSize:14,borderRadius:12}} onClick={()=>setConfirmSignOut(true)}>
+            <i className="ti ti-logout"/>Sign Out
+          </button>
+        ) : (
+          <div style={{background:'rgba(220,38,38,.06)',border:'1px solid rgba(220,38,38,.15)',borderRadius:12,padding:16}}>
+            <div style={{fontSize:13,color:'var(--text-secondary)',marginBottom:14,textAlign:'center'}}>Are you sure you want to sign out?</div>
+            <div style={{display:'flex',gap:10}}>
+              <button className="pn-btn pn-btn-ghost pn-btn-full" onClick={()=>setConfirmSignOut(false)}>Cancel</button>
+              <button className="pn-btn pn-btn-full" style={{background:'var(--danger)',color:'#fff',border:'none',borderRadius:10,height:42,fontWeight:600,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:8}} onClick={user.logout}>
+                <i className="ti ti-logout"/>Yes, Sign Out
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
