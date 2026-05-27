@@ -4,6 +4,8 @@ import api from '../lib/api';
 const AuthContext = createContext(null);
 
 const BALANCE_POLL_MS = 15000;
+const INACTIVITY_MS = 30 * 60 * 1000; // 30 minutes
+const LAST_ACTIVE_KEY = 'panelng_last_active';
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -52,6 +54,36 @@ export function AuthProvider({ children }) {
     };
   }, [!!user]); // restart only when logged-in state changes, not on every user update
 
+  // Inactivity timeout — logout after 30 min with no interaction
+  useEffect(() => {
+    if (!user) return;
+
+    const touch = () => localStorage.setItem(LAST_ACTIVE_KEY, Date.now().toString());
+    const check = () => {
+      const last = parseInt(localStorage.getItem(LAST_ACTIVE_KEY) || '0', 10);
+      if (last && Date.now() - last > INACTIVITY_MS) {
+        localStorage.removeItem(LAST_ACTIVE_KEY);
+        logout();
+      }
+    };
+
+    touch(); // record activity on mount / login
+
+    const EVENTS = ['mousedown', 'keydown', 'scroll', 'touchstart', 'click'];
+    EVENTS.forEach((e) => window.addEventListener(e, touch, { passive: true }));
+
+    const onVisible = () => { if (document.visibilityState === 'visible') check(); };
+    document.addEventListener('visibilitychange', onVisible);
+
+    const interval = setInterval(check, 60 * 1000); // check every minute
+
+    return () => {
+      EVENTS.forEach((e) => window.removeEventListener(e, touch));
+      document.removeEventListener('visibilitychange', onVisible);
+      clearInterval(interval);
+    };
+  }, [!!user, logout]);
+
   const login = async (identifier, password) => {
     const res = await api.post('/auth/login', { identifier, password });
     const { user, token } = res.data;
@@ -80,6 +112,7 @@ export function AuthProvider({ children }) {
     try { await api.post('/auth/logout'); } catch (_) {}
     localStorage.removeItem('panelng_token');
     localStorage.removeItem('panelng_user');
+    localStorage.removeItem(LAST_ACTIVE_KEY);
     setUser(null);
   }, []);
 

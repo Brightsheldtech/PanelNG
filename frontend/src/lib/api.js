@@ -16,7 +16,9 @@ api.interceptors.response.use(
     if (err.response?.status === 401) {
       localStorage.removeItem('panelng_token');
       localStorage.removeItem('panelng_user');
-      window.location.href = '/login';
+      localStorage.removeItem('panelng_last_active');
+      const isMobile = window.innerWidth <= 768;
+      window.location.href = isMobile ? '/login' : '/';
     }
     return Promise.reject(err);
   }
