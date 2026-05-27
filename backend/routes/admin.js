@@ -106,19 +106,24 @@ router.delete('/users/:userId', async (req, res) => {
     if (userErr || !user) return res.status(404).json({ error: 'User not found' });
     if (user.role === 'admin') return res.status(400).json({ error: 'Cannot delete admin accounts' });
 
-    // Cascade delete — each wrapped so a missing table never blocks the user row deletion
-    const safe = (promise) => promise.catch(() => {});
+    // Null out non-cascade FK references where this user appears on the admin/confirmer side
+    await supabase.from('payment_requests').update({ confirmed_by: null }).eq('confirmed_by', userId).catch(() => {});
+    await supabase.from('wallet_adjustments').update({ admin_id: null }).eq('admin_id', userId).catch(() => {});
+
+    // Delete all records that reference this user as the owner
     const { data: convs } = await supabase.from('support_conversations').select('id').eq('user_id', userId).catch(() => ({ data: [] }));
-    if (convs?.length) await safe(supabase.from('support_messages').delete().in('conversation_id', convs.map(c => c.id)));
-    await safe(supabase.from('support_messages').delete().eq('sender_id', userId));
-    await safe(supabase.from('support_conversations').delete().eq('user_id', userId));
-    await safe(supabase.from('wallet_adjustments').delete().eq('user_id', userId));
-    await safe(supabase.from('transactions').delete().eq('user_id', userId));
-    await safe(supabase.from('orders').delete().eq('user_id', userId));
-    await safe(supabase.from('sms_orders').delete().eq('user_id', userId));
-    await safe(supabase.from('payment_requests').delete().eq('user_id', userId));
-    await safe(supabase.from('referrals').delete().or(`referrer_id.eq.${userId},referee_id.eq.${userId}`));
-    await safe(supabase.from('accszone_orders').delete().eq('user_id', userId));
+    if (convs?.length) {
+      await supabase.from('support_messages').delete().in('conversation_id', convs.map(c => c.id)).catch(() => {});
+    }
+    await supabase.from('support_messages').delete().eq('sender_id', userId).catch(() => {});
+    await supabase.from('support_conversations').delete().eq('user_id', userId).catch(() => {});
+    await supabase.from('wallet_adjustments').delete().eq('user_id', userId).catch(() => {});
+    await supabase.from('transactions').delete().eq('user_id', userId).catch(() => {});
+    await supabase.from('orders').delete().eq('user_id', userId).catch(() => {});
+    await supabase.from('sms_orders').delete().eq('user_id', userId).catch(() => {});
+    await supabase.from('payment_requests').delete().eq('user_id', userId).catch(() => {});
+    await supabase.from('referrals').delete().or(`referrer_id.eq.${userId},referee_id.eq.${userId}`).catch(() => {});
+    await supabase.from('accszone_orders').delete().eq('user_id', userId).catch(() => {});
 
     const { error: deleteErr } = await supabase.from('users').delete().eq('id', userId);
     if (deleteErr) throw deleteErr;
@@ -126,7 +131,7 @@ router.delete('/users/:userId', async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     console.error('delete user error:', err.message);
-    res.status(500).json({ error: 'Failed to delete user' });
+    res.status(500).json({ error: err.message || 'Failed to delete user' });
   }
 });
 
