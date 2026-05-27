@@ -598,13 +598,16 @@ function Overview({ setPage }) {
   const user = useContext(UserCtx) || MOCK.user;
   const [recentTx, setRecentTx] = useState([]);
   const [txLoading, setTxLoading] = useState(true);
+  const [txError, setTxError] = useState(false);
   const [refBalance, setRefBalance] = useState(0);
   const [refCount, setRefCount] = useState(0);
   const [pendingCount, setPendingCount] = useState(0);
 
-  useEffect(() => {
+  const loadOverview = () => {
+    setTxLoading(true);
+    setTxError(false);
     Promise.all([
-      api.get('/wallet/transactions', { params: { limit: 5 } }).catch(() => ({ data: { transactions: [] } })),
+      api.get('/wallet/transactions', { params: { limit: 5 } }),
       api.get('/referral/stats').catch(() => ({ data: {} })),
     ]).then(([txRes, refRes]) => {
       const txs = txRes.data?.transactions || [];
@@ -612,8 +615,12 @@ function Overview({ setPage }) {
       setPendingCount(txs.filter(t => t.status === 'pending').length);
       setRefBalance(Number(refRes.data?.referral_balance || 0));
       setRefCount(Number(refRes.data?.referral_count || 0));
+    }).catch(() => {
+      setTxError(true);
     }).finally(() => setTxLoading(false));
-  }, []);
+  };
+
+  useEffect(() => { loadOverview(); }, []);
 
   const S = { card: {background:'var(--bg-surface)',border:'1px solid var(--border)',borderRadius:16} };
 
@@ -716,6 +723,13 @@ function Overview({ setPage }) {
         <div style={{...S.card,overflow:'hidden'}}>
           {txLoading ? (
             <div style={{padding:'24px 0',textAlign:'center'}}><i className="ti ti-loader-2" style={{fontSize:20,color:'var(--accent)',animation:'pn-spin 1s linear infinite'}}/></div>
+          ) : txError ? (
+            <div className="pn-empty">
+              <i className="ti ti-wifi-off pn-empty-icon"/>
+              <div className="pn-empty-title">Could not load transactions</div>
+              <div className="pn-empty-sub">Check your connection</div>
+              <button className="pn-btn pn-btn-ghost pn-btn-sm" style={{marginTop:8}} onClick={loadOverview}><i className="ti ti-refresh"/>Retry</button>
+            </div>
           ) : recentTx.length === 0 ? (
             <div className="pn-empty"><i className="ti ti-receipt pn-empty-icon"/><div className="pn-empty-title">No transactions yet</div><div className="pn-empty-sub">Your activity will appear here</div></div>
           ) : recentTx.map((t, i) => {
@@ -1994,7 +2008,8 @@ function Referral() {
   const user = useContext(UserCtx) || MOCK.user;
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [copied, setCopied] = useState(false);
+  const [copiedCode, setCopiedCode] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
   const [withdrawing, setWithdrawing] = useState(false);
   const [withdrawMsg, setWithdrawMsg] = useState('');
 
@@ -2010,8 +2025,14 @@ function Referral() {
 
   useEffect(() => { loadStats(); }, []);
 
-  const handleCopy = (text) => {
-    navigator.clipboard?.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }).catch(() => {});
+  const handleCopyCode = () => {
+    const text = stats?.referral_code || user.referral_code || '';
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(() => { setCopiedCode(true); setTimeout(() => setCopiedCode(false), 2000); });
+  };
+
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(referralLink).then(() => { setCopiedLink(true); setTimeout(() => setCopiedLink(false), 2000); });
   };
 
   const handleWithdraw = async () => {
@@ -2044,15 +2065,15 @@ function Referral() {
         <div className="pn-section-label" style={{marginBottom:6}}>Your Referral Code</div>
         <div className="pn-ref-code-row">
           <span className="pn-ref-code-val">{refCode}</span>
-          <button className="pn-copy-btn" onClick={()=>handleCopy(refCode)}>
-            {copied ? <><i className="ti ti-check" style={{fontSize:12}}/> Copied</> : <><i className="ti ti-copy" style={{fontSize:12}}/> Copy</>}
+          <button className="pn-copy-btn" onClick={handleCopyCode}>
+            {copiedCode ? <><i className="ti ti-check" style={{fontSize:12}}/> Copied!</> : <><i className="ti ti-copy" style={{fontSize:12}}/> Copy</>}
           </button>
         </div>
         <div className="pn-section-label" style={{marginTop:14,marginBottom:6}}>Referral Link</div>
         <div className="pn-ref-code-row">
           <span className="pn-ref-code-val" style={{fontSize:12,color:'var(--text-secondary)'}}>{referralLink}</span>
-          <button className="pn-copy-btn" onClick={()=>handleCopy(referralLink)}>
-            <i className="ti ti-link" style={{fontSize:12}}/> Copy
+          <button className="pn-copy-btn" onClick={handleCopyLink} style={copiedLink ? {background:'var(--accent)',color:'#fff',borderColor:'var(--accent)'} : {}}>
+            {copiedLink ? <><i className="ti ti-check" style={{fontSize:12}}/> Copied!</> : <><i className="ti ti-link" style={{fontSize:12}}/> Copy Link</>}
           </button>
         </div>
       </div>
