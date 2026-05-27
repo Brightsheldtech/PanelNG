@@ -52,6 +52,10 @@ router.get('/transactions', auth, async (req, res) => {
         .limit(limit),
     ]);
 
+    if (txRes.error) console.error('[wallet/tx] transactions query error:', txRes.error.message);
+    if (prRes.error) console.error('[wallet/tx] payment_requests query error:', prRes.error.message);
+    if (azRes.error) console.error('[wallet/tx] accszone_orders query error:', azRes.error.message);
+
     const txData  = txRes.data  || [];
     const prData  = prRes.data  || [];
     const azData  = azRes.data  || [];

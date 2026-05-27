@@ -666,8 +666,8 @@ function Overview({ setPage }) {
         <button className="pn-btn pn-btn-primary pn-btn-full" style={{height:44,borderRadius:12,fontWeight:600}} onClick={()=>setPage('funds')}>
           <i className="ti ti-plus" style={{fontSize:15}}/>Add Funds
         </button>
-        <button className="pn-btn pn-btn-secondary pn-btn-full" style={{height:44,borderRadius:12,fontWeight:600}} onClick={()=>setPage('funds')}>
-          View Wallet <i className="ti ti-arrow-right" style={{fontSize:15}}/>
+        <button className="pn-btn pn-btn-secondary pn-btn-full" style={{height:44,borderRadius:12,fontWeight:600}} onClick={()=>setPage('neworder')}>
+          New Order <i className="ti ti-arrow-right" style={{fontSize:15}}/>
         </button>
       </div>
 
@@ -1927,7 +1927,7 @@ function SupportChat() {
 function NewOrderSelect({ setPage }) {
   const SERVICES = [
     {
-      id: 'neworder',
+      id: 'smm',
       icon: 'ti-social',
       label: 'SMM Order',
       desc: 'Boost followers, likes, views & more on any social platform',
