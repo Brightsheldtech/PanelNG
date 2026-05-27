@@ -61,7 +61,7 @@ router.post('/withdraw', auth, async (req, res) => {
       amount,
       reference: `REF-WITHDRAW-${Date.now()}`,
       description: `Referral earnings withdrawal — ₦${amount.toFixed(2)}`,
-    }).catch(() => {});
+    });
 
     res.json({ message: `₦${amount.toFixed(2)} transferred to your wallet`, amount });
   } catch (err) {
