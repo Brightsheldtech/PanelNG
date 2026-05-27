@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Eye, EyeOff, LogIn, BarChart2, MessageSquare, Wallet } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { Eye, EyeOff, LogIn, BarChart2, MessageSquare, Wallet, ArrowRight, Zap } from 'lucide-react';
 
 export default function Login() {
   const { login } = useAuth();
@@ -11,6 +10,7 @@ export default function Login() {
   const [show, setShow] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [session, setSession] = useState(null); // holds { name, role } after success
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -18,14 +18,59 @@ export default function Login() {
     setLoading(true);
     try {
       const user = await login(form.email, form.password);
-      toast.success(`Welcome back, ${user.full_name.split(' ')[0]}`);
-      navigate(user.role === 'admin' ? '/admin' : '/dashboard');
+      setSession({ name: user.full_name, role: user.role });
     } catch (err) {
       setError(err.response?.data?.error || 'Login failed. Check your credentials.');
     } finally {
       setLoading(false);
     }
   };
+
+  if (session) {
+    const dest = session.role === 'admin' ? '/admin' : '/dashboard';
+    return (
+      <div style={{
+        minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'var(--bg)', padding: 24,
+      }}>
+        <div style={{ position: 'fixed', top: '20%', left: '50%', transform: 'translateX(-50%)', width: 500, height: 300, borderRadius: '50%', background: 'rgba(240,165,0,0.07)', filter: 'blur(80px)', pointerEvents: 'none' }} />
+
+        <div style={{
+          background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 16,
+          padding: '48px 40px', maxWidth: 420, width: '100%', textAlign: 'center',
+          position: 'relative', zIndex: 1,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 32 }}>
+            <div style={{ width: 36, height: 36, background: 'var(--primary)', color: '#000', fontFamily: 'var(--font-brand)', fontWeight: 800, fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8 }}>P</div>
+            <span style={{ fontFamily: 'var(--font-brand)', fontWeight: 800, fontSize: 20 }}>PanelNG</span>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 20 }}>
+            <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'rgba(240,165,0,0.1)', border: '1px solid rgba(240,165,0,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Zap size={28} color="var(--primary)" />
+            </div>
+          </div>
+
+          <h1 style={{ fontFamily: 'var(--font-brand)', fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em', marginBottom: 8 }}>
+            Welcome back, {session.name.split(' ')[0]}!
+          </h1>
+          <p style={{ color: 'var(--text-muted)', fontSize: 14, lineHeight: 1.7, marginBottom: 32 }}>
+            {session.role === 'admin'
+              ? 'You\'re signed in as admin. Your panel is ready.'
+              : 'You\'re signed in. Your wallet and orders are ready.'}
+          </p>
+
+          <button
+            onClick={() => navigate(dest)}
+            className="btn btn-primary btn-full btn-lg"
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+          >
+            {session.role === 'admin' ? 'Go to Admin Panel' : 'Go to Dashboard'} <ArrowRight size={16} />
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="auth-shell">
