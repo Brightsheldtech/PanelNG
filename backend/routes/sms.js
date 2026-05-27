@@ -4,6 +4,7 @@ const herosms = require('../lib/herosms');
 const auth = require('../middleware/auth');
 const { getExchangeRate } = require('../lib/exchangeRate');
 const { handleFirstPurchase } = require('../lib/referralRewards');
+const { notify } = require('../lib/notify');
 const router = express.Router();
 
 // GET /api/sms/balance
@@ -157,6 +158,11 @@ router.post('/buy-number', auth, async (req, res) => {
 
     // Non-blocking referral reward check
     handleFirstPurchase(userId);
+    notify(userId, {
+      type: 'order_placed',
+      title: 'SMS Number Assigned',
+      message: `Your ${product} number ${numberData.number} is ready. Waiting for OTP.`,
+    });
 
     res.json({
       smsOrder,

@@ -3,6 +3,7 @@ const supabase = require('../lib/supabase');
 const jap = require('../lib/jap');
 const auth = require('../middleware/auth');
 const { handleFirstPurchase } = require('../lib/referralRewards');
+const { notify } = require('../lib/notify');
 const router = express.Router();
 
 // GET /api/smm/services — returns services from our DB (user-facing with sell_price)
@@ -125,6 +126,11 @@ router.post('/order', auth, async (req, res) => {
 
     // Non-blocking referral reward check
     handleFirstPurchase(userId);
+    notify(userId, {
+      type: 'order_placed',
+      title: 'SMM Order Placed',
+      message: `Your order for "${service.name}" × ${qty.toLocaleString()} has been placed and is being processed.`,
+    });
 
     res.json({ order, message: 'Order placed successfully' });
   } catch (err) {

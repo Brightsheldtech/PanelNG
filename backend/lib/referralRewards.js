@@ -1,4 +1,5 @@
 const supabase = require('./supabase');
+const { notify } = require('./notify');
 
 const REFERRER_REWARD = 500; // ₦500 credited to referrer's referral_balance
 const REFEREE_BONUS   = 200; // ₦200 welcome bonus to referee's wallet
@@ -37,6 +38,13 @@ async function handleFirstPurchase(userId) {
         .update({ status: 'completed', description: 'Referral reward — ₦500 (referee made first purchase)' })
         .eq('id', referral.reward_tx_id);
     }
+
+    // Notify referrer
+    notify(referral.referrer_id, {
+      type: 'referral_reward',
+      title: 'Referral Reward Unlocked!',
+      message: 'Your ₦500 referral reward has been credited — your referral just made their first purchase.',
+    });
   } catch (err) {
     console.error('[referralRewards] handleFirstPurchase:', err.message);
   }
@@ -84,6 +92,13 @@ async function handleFirstDeposit(userId) {
       reference: `WELCOME-${Date.now()}-${userId.slice(0, 6).toUpperCase()}`,
       description: '₦200 welcome bonus — thank you for your first deposit!',
       status: 'completed',
+    });
+
+    // Notify referee
+    notify(userId, {
+      type: 'welcome_bonus',
+      title: '₦200 Welcome Bonus Credited!',
+      message: 'You received a ₦200 welcome bonus for making your first deposit. Enjoy PanelNG!',
     });
   } catch (err) {
     console.error('[referralRewards] handleFirstDeposit:', err.message);

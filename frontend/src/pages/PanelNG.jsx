@@ -181,6 +181,28 @@ html,body{overflow-x:hidden;max-width:100vw}
 .pn-theme-icon-btn{width:34px;height:34px;display:flex;align-items:center;justify-content:center;background:none;border:none;cursor:pointer;color:var(--text-muted);border-radius:8px;transition:all 150ms ease;font-size:18px;position:relative}
 .pn-theme-icon-btn:hover{background:var(--bg-raised);color:var(--text-primary)}
 .pn-tooltip{position:absolute;top:calc(100% + 6px);right:0;background:var(--bg-surface);border:1px solid var(--border);border-radius:8px;padding:4px 8px;font-size:11px;color:var(--text-secondary);white-space:nowrap;box-shadow:var(--shadow-sm);pointer-events:none;z-index:100}
+/* Notification panel */
+.pn-notif-badge{position:absolute;top:4px;right:4px;min-width:16px;height:16px;background:var(--danger);border-radius:8px;border:2px solid var(--bg-surface);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;line-height:1;padding:0 3px}
+.pn-notif-panel{position:absolute;top:calc(100% + 8px);right:0;width:340px;max-height:480px;background:var(--bg-surface);border:1px solid var(--border);border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,.18);z-index:200;display:flex;flex-direction:column;overflow:hidden}
+@media(max-width:400px){.pn-notif-panel{width:calc(100vw - 24px);right:-4px}}
+.pn-notif-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px;border-bottom:1px solid var(--border);flex-shrink:0}
+.pn-notif-title{font-size:14px;font-weight:600;color:var(--text-primary)}
+.pn-notif-clear{font-size:11px;color:var(--accent);background:none;border:none;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;padding:0}
+.pn-notif-list{overflow-y:auto;flex:1;scrollbar-width:none}
+.pn-notif-list::-webkit-scrollbar{display:none}
+.pn-notif-item{display:flex;align-items:flex-start;gap:12px;padding:13px 16px;border-bottom:0.5px solid var(--border);transition:background 120ms ease;cursor:default}
+.pn-notif-item:last-child{border-bottom:none}
+.pn-notif-item.unread{background:rgba(245,158,11,.04)}
+.pn-notif-item:hover{background:var(--bg-raised)}
+.pn-notif-icon{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;margin-top:1px}
+.pn-notif-body{flex:1;min-width:0}
+.pn-notif-ntitle{font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:3px;line-height:1.3}
+.pn-notif-msg{font-size:12px;color:var(--text-secondary);line-height:1.45;margin-bottom:4px}
+.pn-notif-time{font-size:10px;color:var(--text-muted)}
+.pn-notif-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);flex-shrink:0;margin-top:6px}
+.pn-notif-empty{padding:40px 20px;text-align:center;color:var(--text-muted)}
+.pn-notif-empty i{font-size:32px;display:block;margin-bottom:10px;opacity:.4}
+.pn-notif-empty p{font-size:13px}
 
 /* Sidebar */
 .pn-sidebar-brand{display:flex;align-items:center;gap:10px;padding:20px 16px 16px;border-bottom:1px solid var(--border)}
@@ -504,12 +526,71 @@ html,body{overflow-x:hidden;max-width:100vw}
 `;
 
 // ─── TOPBAR ───────────────────────────────────────────────────────────────────
+const NOTIF_ICONS = {
+  wallet_credit:      { icon:'ti-wallet',          bg:'rgba(34,197,94,.12)',  color:'var(--success)' },
+  payment_confirmed:  { icon:'ti-circle-check',    bg:'rgba(34,197,94,.12)',  color:'var(--success)' },
+  payment_rejected:   { icon:'ti-alert-circle',    bg:'rgba(220,38,38,.12)',  color:'var(--danger)'  },
+  order_placed:       { icon:'ti-shopping-cart',   bg:'rgba(99,102,241,.12)', color:'#818cf8'        },
+  order_update:       { icon:'ti-refresh',         bg:'rgba(99,102,241,.12)', color:'#818cf8'        },
+  welcome_bonus:      { icon:'ti-gift',            bg:'rgba(245,158,11,.12)', color:'var(--accent)'  },
+  referral_reward:    { icon:'ti-users',           bg:'rgba(245,158,11,.12)', color:'var(--accent)'  },
+  info:               { icon:'ti-info-circle',     bg:'rgba(107,114,128,.12)',color:'var(--text-muted)'},
+};
+
+function timeAgo(iso) {
+  const diff = Math.floor((Date.now() - new Date(iso)) / 1000);
+  if (diff < 60)  return 'just now';
+  if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff/3600)}h ago`;
+  return `${Math.floor(diff/86400)}d ago`;
+}
+
 function Topbar({ onMenuClick }) {
   const { theme, setTheme } = useContext(ThemeCtx);
+  const user = useContext(UserCtx) || MOCK.user;
   const [showTip, setShowTip] = useState(false);
+  const [showNotif, setShowNotif] = useState(false);
+  const [notifs, setNotifs] = useState([]);
+  const [loadingNotifs, setLoadingNotifs] = useState(false);
+  const panelRef = useRef(null);
+
+  const unread = notifs.filter(n => !n.is_read).length;
+
+  const fetchNotifs = async () => {
+    if (!localStorage.getItem('panelng_token')) return;
+    try {
+      const { data } = await api.get('/notifications');
+      setNotifs(data || []);
+    } catch (_) {}
+  };
+
+  useEffect(() => {
+    fetchNotifs();
+    const id = setInterval(fetchNotifs, 30000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Close panel on outside click
+  useEffect(() => {
+    if (!showNotif) return;
+    const handler = (e) => { if (panelRef.current && !panelRef.current.contains(e.target)) setShowNotif(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showNotif]);
+
+  const openPanel = async () => {
+    setShowNotif(v => !v);
+    if (!showNotif && unread > 0) {
+      // Mark all read optimistically
+      setNotifs(prev => prev.map(n => ({ ...n, is_read: true })));
+      try { await api.post('/notifications/read-all'); } catch (_) {}
+    }
+  };
+
   const cycle = () => { const m = ['light','dark','system']; setTheme(m[(m.indexOf(theme)+1)%3]); };
   const icons = { light: 'ti-sun', dark: 'ti-moon', system: 'ti-device-laptop' };
   const labels = { light: 'Light mode', dark: 'Dark mode', system: 'System mode' };
+
   return (
     <header className="pn-topbar" style={{justifyContent:'space-between'}}>
       <span style={{fontWeight:700,fontSize:17,color:'var(--text-primary)',letterSpacing:'-0.3px'}}>PanelNG</span>
@@ -518,9 +599,47 @@ function Topbar({ onMenuClick }) {
           <button className="pn-theme-icon-btn" onClick={cycle}><i className={`ti ${icons[theme]}`}/></button>
           {showTip && <div className="pn-tooltip">{labels[theme]}</div>}
         </div>
-        <div style={{position:'relative'}}>
-          <button className="pn-theme-icon-btn" aria-label="Notifications"><i className="ti ti-bell"/></button>
-          <span style={{position:'absolute',top:6,right:6,width:7,height:7,borderRadius:'50%',background:'var(--accent)',border:'2px solid var(--bg-surface)'}}/>
+        <div style={{position:'relative'}} ref={panelRef}>
+          <button className="pn-theme-icon-btn" aria-label="Notifications" onClick={openPanel}>
+            <i className="ti ti-bell"/>
+            {unread > 0 && <span className="pn-notif-badge">{unread > 9 ? '9+' : unread}</span>}
+          </button>
+          {showNotif && (
+            <div className="pn-notif-panel">
+              <div className="pn-notif-head">
+                <span className="pn-notif-title">Notifications {unread > 0 && <span style={{color:'var(--text-muted)',fontWeight:400,fontSize:12}}>({unread} new)</span>}</span>
+                {notifs.length > 0 && (
+                  <button className="pn-notif-clear" onClick={async () => {
+                    setNotifs([]);
+                    try { await api.post('/notifications/read-all'); } catch (_) {}
+                  }}>Clear all</button>
+                )}
+              </div>
+              <div className="pn-notif-list">
+                {notifs.length === 0 ? (
+                  <div className="pn-notif-empty">
+                    <i className="ti ti-bell-off"/>
+                    <p>No notifications yet</p>
+                  </div>
+                ) : notifs.map(n => {
+                  const style = NOTIF_ICONS[n.type] || NOTIF_ICONS.info;
+                  return (
+                    <div key={n.id} className={`pn-notif-item${n.is_read ? '' : ' unread'}`}>
+                      <div className="pn-notif-icon" style={{background:style.bg,color:style.color}}>
+                        <i className={`ti ${style.icon}`}/>
+                      </div>
+                      <div className="pn-notif-body">
+                        <div className="pn-notif-ntitle">{n.title}</div>
+                        <div className="pn-notif-msg">{n.message}</div>
+                        <div className="pn-notif-time">{timeAgo(n.created_at)}</div>
+                      </div>
+                      {!n.is_read && <div className="pn-notif-dot"/>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </header>

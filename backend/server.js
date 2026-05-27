@@ -19,6 +19,7 @@ const accszoneRoutes = require('./routes/accszone');
 const settingsRoutes = require('./routes/settings');
 const supportRoutes = require('./routes/support');
 const referralRoutes = require('./routes/referral');
+const notificationRoutes = require('./routes/notifications');
 const { startImapPoller } = require('./lib/imap');
 
 const app = express();
@@ -58,6 +59,7 @@ app.use('/api/accszone', accszoneRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/support', supportRoutes);
 app.use('/api/referral', referralRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 app.get('/api/health', (req, res) =>
   res.json({ status: 'OK', service: 'PanelNG API', timestamp: new Date().toISOString() })

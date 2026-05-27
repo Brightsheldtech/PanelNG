@@ -6,6 +6,7 @@ const auth = require('../middleware/auth');
 const adminOnly = require('../middleware/admin');
 const { sendPaymentConfirmed, sendPaymentRejected, sendRefundNotification } = require('../lib/mailer');
 const { handleFirstDeposit } = require('../lib/referralRewards');
+const { notify } = require('../lib/notify');
 const router = express.Router();
 
 router.use(auth, adminOnly);
@@ -209,6 +210,13 @@ router.post('/users/:userId/wallet-adjust', async (req, res) => {
       type,
       amount: parsedAmount,
       reason: reason || null,
+    });
+
+    // In-app notification to the user
+    notify(userId, {
+      type: type === 'add' ? 'wallet_credit' : 'info',
+      title: type === 'add' ? 'Wallet Credited by Admin' : 'Wallet Deducted by Admin',
+      message: `₦${parsedAmount.toLocaleString('en-NG')} was ${type === 'add' ? 'added to' : 'deducted from'} your wallet by an admin.${reason ? ` Note: ${reason}` : ''}`,
     });
 
     res.json({ success: true, new_balance: newBalance });
@@ -504,7 +512,14 @@ router.patch('/payment-requests/:id/confirm', async (req, res) => {
       // Non-blocking welcome bonus check
       handleFirstDeposit(pr.user_id);
 
-      // Notify user their wallet has been credited (non-blocking)
+      // In-app notification
+      notify(pr.user_id, {
+        type: 'payment_confirmed',
+        title: 'Bank Deposit Confirmed',
+        message: `Your bank transfer of ₦${parseFloat(pr.amount).toLocaleString('en-NG')} has been confirmed and added to your wallet.`,
+      });
+
+      // Email notification
       sendPaymentConfirmed({
         toEmail: userRow.email,
         toName: userRow.full_name,
@@ -574,6 +589,11 @@ router.patch('/payment-requests/:id/reject', async (req, res) => {
       if (e2) throw e2;
 
       // Notify user (non-blocking)
+      notify(pr.user_id, {
+        type: 'payment_rejected',
+        title: 'Payment Request Rejected',
+        message: `Your deposit request of ₦${parseFloat(pr.amount).toLocaleString('en-NG')} was not confirmed.${reason ? ` Reason: ${reason}` : ' Contact support if you believe this is an error.'}`,
+      });
       supabase.from('users').select('email, full_name').eq('id', pr.user_id).single()
         .then(({ data: usr }) => {
           if (usr) sendPaymentRejected({ toEmail: usr.email, toName: usr.full_name, amount: pr.amount, reference: pr.reference, reason });
@@ -584,6 +604,11 @@ router.patch('/payment-requests/:id/reject', async (req, res) => {
     if (error) throw error;
 
     // Notify user (non-blocking)
+    notify(pr.user_id, {
+      type: 'payment_rejected',
+      title: 'Payment Request Rejected',
+      message: `Your deposit request of ₦${parseFloat(pr.amount).toLocaleString('en-NG')} was not confirmed.${reason ? ` Reason: ${reason}` : ' Contact support if you believe this is an error.'}`,
+    });
     supabase.from('users').select('email, full_name').eq('id', pr.user_id).single()
       .then(({ data: usr }) => {
         if (usr) sendPaymentRejected({ toEmail: usr.email, toName: usr.full_name, amount: pr.amount, reference: pr.reference, reason });
