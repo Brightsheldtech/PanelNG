@@ -186,7 +186,7 @@ const herosms = {
       const match = Object.entries(countries).find(
         ([, c]) => c.eng?.toLowerCase() === country.toLowerCase()
       );
-      if (!match) throw new Error(`Country not found: ${country}`);
+      if (!match) throw new Error('This service is not available in your region.');
       countryId = parseInt(match[0]);
     }
 
@@ -199,10 +199,10 @@ const herosms = {
 
     const msgs = {
       NO_NUMBERS: 'No numbers available for this service right now. Try another country.',
-      NO_BALANCE: 'HeroSMS account has no balance. Top up the API account.',
-      BAD_SERVICE: 'Unknown service code.',
+      NO_BALANCE: 'This service is temporarily unavailable. Please try again later.',
+      BAD_SERVICE: 'This service is not currently supported.',
     };
-    throw new Error(msgs[raw] || raw || 'Unknown error from HeroSMS');
+    throw new Error(msgs[raw] || 'Service unavailable. Please try again.');
   },
 
   async checkOrder(orderId) {
