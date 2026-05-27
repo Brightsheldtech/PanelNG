@@ -487,16 +487,17 @@ router.patch('/payment-requests/:id/confirm', async (req, res) => {
     if (!alreadyCredited) {
       const { data: userRow, error: userErr } = await supabase
         .from('users')
-        .select('wallet_balance, email, full_name')
+        .select('wallet_balance, total_funded, email, full_name')
         .eq('id', pr.user_id)
         .single();
       if (userErr) throw userErr;
 
-      const newBalance = parseFloat(userRow.wallet_balance || 0) + parseFloat(pr.amount);
+      const newBalance = parseFloat((parseFloat(userRow.wallet_balance || 0) + parseFloat(pr.amount)).toFixed(2));
+      const newFunded  = parseFloat((parseFloat(userRow.total_funded  || 0) + parseFloat(pr.amount)).toFixed(2));
 
       const { error: walletErr } = await supabase
         .from('users')
-        .update({ wallet_balance: newBalance })
+        .update({ wallet_balance: newBalance, total_funded: newFunded })
         .eq('id', pr.user_id);
       if (walletErr) throw walletErr;
 

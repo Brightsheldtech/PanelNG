@@ -5,6 +5,7 @@ const auth = require('../middleware/auth');
 const adminOnly = require('../middleware/admin');
 const { getExchangeRate } = require('../lib/exchangeRate');
 const { sendOrderDelivery } = require('../lib/mailer');
+const { notify } = require('../lib/notify');
 
 const router = express.Router();
 
@@ -268,14 +269,28 @@ router.post('/order', auth, async (req, res) => {
       });
     }
 
-    // Place order with ACCSZONE
-    const { data: orderResult } = await az.post('/purchase', { ad_id: Number(ad_id), quantity: Number(quantity) });
+    // Deduct wallet FIRST — if the API call fails we can refund; the reverse is unrecoverable
+    const currentBalance = parseFloat(Number(user.wallet_balance).toFixed(2));
+    const newBalance = parseFloat((currentBalance - totalCostNGN).toFixed(2));
+    const newSpent   = parseFloat((parseFloat(user.total_spent || 0) + totalCostNGN).toFixed(2));
 
-    // Deduct wallet (NGN)
-    await supabase
+    const { error: deductErr } = await supabase
       .from('users')
-      .update({ wallet_balance: Number(user.wallet_balance) - totalCostNGN })
+      .update({ wallet_balance: newBalance, total_spent: newSpent })
       .eq('id', req.user.id);
+    if (deductErr) throw deductErr;
+
+    // Place order with ACCSZONE — refund wallet if this fails
+    let orderResult;
+    try {
+      const { data } = await az.post('/purchase', { ad_id: Number(ad_id), quantity: Number(quantity) });
+      orderResult = data;
+    } catch (azErr) {
+      // Refund wallet
+      await supabase.from('users').update({ wallet_balance: currentBalance, total_spent: parseFloat(user.total_spent || 0) }).eq('id', req.user.id);
+      console.error('[accszone] purchase failed, wallet refunded:', azErr.response?.data || azErr.message);
+      return res.status(502).json({ error: 'Order could not be completed. Your wallet has been refunded.' });
+    }
 
     // Save order to Supabase (prices stored in NGN)
     const { data: savedOrder } = await supabase
@@ -295,9 +310,19 @@ router.post('/order', auth, async (req, res) => {
       .select()
       .single();
 
+    // Transaction record so the debit appears in the wallet feed immediately
+    await supabase.from('transactions').insert({
+      user_id: req.user.id,
+      type: 'debit',
+      amount: totalCostNGN,
+      reference: `ACCS-${savedOrder?.id || Date.now()}`,
+      description: `${productName} × ${Number(quantity)}`,
+      status: 'completed',
+    });
+
     const deliveredAccounts = orderResult?.accounts || orderResult?.data || [];
 
-    // Fire-and-forget delivery email — does not block the response
+    // Fire-and-forget delivery email and notification
     sendOrderDelivery({
       toEmail: user.email,
       toName: user.full_name,
@@ -308,17 +333,21 @@ router.post('/order', auth, async (req, res) => {
       deliveredAt: new Date().toISOString(),
       accounts: deliveredAccounts,
     });
+    notify(req.user.id, {
+      type: 'order_placed',
+      title: 'Order Delivered',
+      message: `Your order for "${productName}" × ${Number(quantity)} has been delivered. Check your orders for details.`,
+    });
 
     res.json({
       success: true,
       order: savedOrder,
       accounts: deliveredAccounts,
-      new_balance: Number(user.wallet_balance) - totalCostNGN,
+      new_balance: newBalance,
     });
   } catch (err) {
     console.error('[accszone] order:', err.response?.data || err.message);
-    const msg = err.response?.data?.message || err.response?.data?.error || 'Order failed. Your wallet was not charged.';
-    res.status(502).json({ error: msg });
+    res.status(502).json({ error: 'Order could not be completed. Please try again or contact support.' });
   }
 });
 

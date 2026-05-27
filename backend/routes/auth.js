@@ -71,11 +71,15 @@ router.post('/register', async (req, res) => {
       if (existingUsername) return res.status(400).json({ error: 'Username is already taken' });
     }
 
-    // Generate a unique referral code for this user
+    // Generate a unique referral code for this user (retry loop to handle collisions)
     const letters = full_name.replace(/[^a-zA-Z]/g, '').toUpperCase().slice(0, 3).padEnd(3, 'X');
-    let myReferralCode = `PNG-${letters}${Math.floor(100 + Math.random() * 900)}`;
-    const { data: codeConflict } = await supabase.from('users').select('id').eq('referral_code', myReferralCode).maybeSingle();
-    if (codeConflict) myReferralCode = `PNG-${letters}${Math.floor(100 + Math.random() * 900)}`;
+    let myReferralCode;
+    for (let i = 0; i < 10; i++) {
+      const candidate = `PNG-${letters}${Math.floor(100 + Math.random() * 9900)}`;
+      const { data: conflict } = await supabase.from('users').select('id').eq('referral_code', candidate).maybeSingle();
+      if (!conflict) { myReferralCode = candidate; break; }
+    }
+    if (!myReferralCode) throw new Error('Could not generate a unique referral code. Try again.');
 
     // Generate email verification token
     const verificationToken = crypto.randomBytes(32).toString('hex');
@@ -231,7 +235,13 @@ router.post('/supabase-sync', async (req, res) => {
     if (!user) {
       const fullName = sbUser.user_metadata?.full_name || sbUser.email.split('@')[0];
       const letters = fullName.replace(/[^a-zA-Z]/g, '').toUpperCase().slice(0, 3).padEnd(3, 'X');
-      const myReferralCode = `PNG-${letters}${Math.floor(100 + Math.random() * 900)}`;
+      let myReferralCode;
+      for (let i = 0; i < 10; i++) {
+        const candidate = `PNG-${letters}${Math.floor(100 + Math.random() * 9900)}`;
+        const { data: conflict } = await supabase.from('users').select('id').eq('referral_code', candidate).maybeSingle();
+        if (!conflict) { myReferralCode = candidate; break; }
+      }
+      if (!myReferralCode) throw new Error('Could not generate a unique referral code. Try again.');
 
       const { data: newUser, error: insertErr } = await supabase
         .from('users')

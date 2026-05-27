@@ -52,13 +52,15 @@ router.get('/transactions', auth, async (req, res) => {
         .limit(limit),
     ]);
 
-    if (txRes.error) console.error('[wallet/tx] transactions query error:', txRes.error.message);
-    if (prRes.error) console.error('[wallet/tx] payment_requests query error:', prRes.error.message);
-    if (azRes.error) console.error('[wallet/tx] accszone_orders query error:', azRes.error.message);
+    if (txRes.error) console.error('[wallet/tx] transactions error:', txRes.error.message);
+    if (prRes.error) console.error('[wallet/tx] payment_requests error:', prRes.error.message);
+    if (azRes.error) console.error('[wallet/tx] accszone_orders error:', azRes.error.message);
 
     const txData  = txRes.data  || [];
     const prData  = prRes.data  || [];
     const azData  = azRes.data  || [];
+
+    console.log(`[wallet/tx] user=${userId.slice(0,8)} tx=${txData.length} pr=${prData.length} az=${azData.length}`);
 
     // Collect references already in transactions so accszone orders don't duplicate
     const txRefs = new Set(txData.map(t => t.reference));

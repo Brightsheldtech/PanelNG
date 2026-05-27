@@ -28,7 +28,8 @@ router.post('/flutterwave/init', auth, async (req, res) => {
       .eq('id', req.user.id)
       .single();
 
-    const txRef = `FLW-PNG-${req.user.id.slice(0, 8).toUpperCase()}-${Date.now()}`;
+    // Full UUID without dashes so the webhook can reconstruct and do a direct eq lookup
+    const txRef = `FLW-PNG-${req.user.id.replace(/-/g, '').toUpperCase()}-${Date.now()}`;
 
     res.json({
       public_key: process.env.FLW_PUBLIC_KEY,
@@ -69,23 +70,24 @@ router.post('/flutterwave/verify', auth, async (req, res) => {
 
     const flwData = result.data;
 
-    // Confirm tx_ref belongs to this user (case-insensitive — Flutterwave may lowercase)
-    if (tx_ref && !flwData.tx_ref.toUpperCase().includes(req.user.id.slice(0, 8).toUpperCase())) {
+    // Confirm tx_ref belongs to this user — check the embedded UUID matches
+    if (tx_ref && !flwData.tx_ref.toUpperCase().includes(req.user.id.replace(/-/g, '').toUpperCase())) {
       return res.status(403).json({ error: 'Reference mismatch' });
     }
 
     const amount = parseFloat(flwData.amount);
 
-    // Credit wallet
+    // Credit wallet + update total_funded
     const { data: userRow } = await supabase
       .from('users')
-      .select('wallet_balance')
+      .select('wallet_balance, total_funded')
       .eq('id', req.user.id)
       .single();
 
     const newBalance = parseFloat((parseFloat(userRow.wallet_balance || 0) + amount).toFixed(2));
+    const newFunded = parseFloat((parseFloat(userRow.total_funded || 0) + amount).toFixed(2));
 
-    await supabase.from('users').update({ wallet_balance: newBalance }).eq('id', req.user.id);
+    await supabase.from('users').update({ wallet_balance: newBalance, total_funded: newFunded }).eq('id', req.user.id);
 
     await supabase.from('transactions').insert({
       user_id: req.user.id,
@@ -147,24 +149,26 @@ router.post('/flutterwave/webhook', express.raw({ type: '*/*' }), async (req, re
     // Extract user_id from tx_ref: FLW-PNG-{USER_ID_SLICE}-{timestamp}
     const txRef = flwData.tx_ref || '';
     const refParts = txRef.split('-');
-    // refParts: ['FLW', 'PNG', '{userId8chars}', '{timestamp}']
+    // refParts: ['FLW', 'PNG', '{fullUUID32hexNoDashes}', '{timestamp}']
     if (refParts.length < 3 || refParts[0] !== 'FLW' || refParts[1] !== 'PNG') {
       return res.sendStatus(200);
     }
 
-    const userIdSlice = refParts[2].toLowerCase();
+    // Reconstruct UUID with dashes from the 32-char hex string stored in tx_ref
+    const hex = refParts[2].toLowerCase();
+    const userId = `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
 
-    // Find user by partial ID match
-    const { data: users } = await supabase
+    const { data: user } = await supabase
       .from('users')
-      .select('id, wallet_balance')
-      .ilike('id', `${userIdSlice}%`);
+      .select('id, wallet_balance, total_funded')
+      .eq('id', userId)
+      .maybeSingle();
 
-    if (!users?.length) return res.sendStatus(200);
-    const user = users[0];
+    if (!user) return res.sendStatus(200);
 
     const newBalance = parseFloat((parseFloat(user.wallet_balance || 0) + amount).toFixed(2));
-    await supabase.from('users').update({ wallet_balance: newBalance }).eq('id', user.id);
+    const newFunded = parseFloat((parseFloat(user.total_funded || 0) + amount).toFixed(2));
+    await supabase.from('users').update({ wallet_balance: newBalance, total_funded: newFunded }).eq('id', user.id);
     await supabase.from('transactions').insert({
       user_id: user.id,
       type: 'credit',
