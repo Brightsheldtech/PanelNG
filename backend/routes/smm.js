@@ -2,6 +2,7 @@ const express = require('express');
 const supabase = require('../lib/supabase');
 const jap = require('../lib/jap');
 const auth = require('../middleware/auth');
+const { handleFirstPurchase } = require('../lib/referralRewards');
 const router = express.Router();
 
 // GET /api/smm/services — returns services from our DB (user-facing with sell_price)
@@ -91,7 +92,7 @@ router.post('/order', auth, async (req, res) => {
         .update({ wallet_balance: parseFloat((userData.wallet_balance).toFixed(2)) })
         .eq('id', userId);
       console.error('JAP order error:', japErr.message);
-      return res.status(502).json({ error: 'Panel order failed. Wallet refunded.' });
+      return res.status(502).json({ error: 'Order could not be placed at this time. Your wallet has been refunded.' });
     }
 
     // Create order record
@@ -121,6 +122,9 @@ router.post('/order', auth, async (req, res) => {
       reference: `SMM-${order.id}`,
       description: `${service.name} × ${qty.toLocaleString()}`,
     });
+
+    // Non-blocking referral reward check
+    handleFirstPurchase(userId);
 
     res.json({ order, message: 'Order placed successfully' });
   } catch (err) {

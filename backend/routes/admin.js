@@ -5,6 +5,7 @@ const herosms = require('../lib/herosms');
 const auth = require('../middleware/auth');
 const adminOnly = require('../middleware/admin');
 const { sendPaymentConfirmed, sendPaymentRejected, sendRefundNotification } = require('../lib/mailer');
+const { handleFirstDeposit } = require('../lib/referralRewards');
 const router = express.Router();
 
 router.use(auth, adminOnly);
@@ -499,6 +500,9 @@ router.patch('/payment-requests/:id/confirm', async (req, res) => {
         description: `Bank deposit confirmed — ${pr.reference}`,
       });
       if (txErr) throw txErr;
+
+      // Non-blocking welcome bonus check
+      handleFirstDeposit(pr.user_id);
 
       // Notify user their wallet has been credited (non-blocking)
       sendPaymentConfirmed({

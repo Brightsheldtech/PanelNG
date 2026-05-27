@@ -3,6 +3,7 @@ const supabase = require('../lib/supabase');
 const herosms = require('../lib/herosms');
 const auth = require('../middleware/auth');
 const { getExchangeRate } = require('../lib/exchangeRate');
+const { handleFirstPurchase } = require('../lib/referralRewards');
 const router = express.Router();
 
 // GET /api/sms/balance
@@ -154,6 +155,9 @@ router.post('/buy-number', auth, async (req, res) => {
       description: `SMS number — ${product} (${country})`,
     });
 
+    // Non-blocking referral reward check
+    handleFirstPurchase(userId);
+
     res.json({
       smsOrder,
       number: numberData.number,
@@ -161,7 +165,7 @@ router.post('/buy-number', auth, async (req, res) => {
     });
   } catch (err) {
     console.error('Buy number error:', err.message);
-    res.status(500).json({ error: err.message || 'Failed to buy number. Try again.' });
+    res.status(500).json({ error: 'Could not acquire a number at this time. Please try again.' });
   }
 });
 

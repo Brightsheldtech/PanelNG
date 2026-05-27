@@ -112,12 +112,34 @@ router.post('/register', async (req, res) => {
         .eq('referral_code', referral_code.toUpperCase())
         .maybeSingle();
       if (referrer) {
-        // Tag new user with who referred them
         await supabase.from('users').update({ referred_by: referrer.referral_code }).eq('id', user.id);
-        // Increment referrer's count
         await supabase.from('users').update({
           referral_count: (Number(referrer.referral_count) || 0) + 1,
         }).eq('id', referrer.id);
+
+        // Create referral record with pending reward
+        const { data: referralRecord } = await supabase.from('referrals').insert({
+          referrer_id: referrer.id,
+          referee_id: user.id,
+          status: 'pending',
+          referee_bonus_paid: false,
+        }).select('id').single();
+
+        if (referralRecord) {
+          // Pending ₦500 transaction — becomes active after referee's first purchase
+          const { data: pendingTx } = await supabase.from('transactions').insert({
+            user_id: referrer.id,
+            type: 'credit',
+            amount: 500,
+            reference: `REF-${referralRecord.id.slice(0, 8).toUpperCase()}-PENDING`,
+            description: 'Referral reward — ₦500 (pending: awaiting referee\'s first purchase)',
+            status: 'pending',
+          }).select('id').single();
+
+          if (pendingTx) {
+            await supabase.from('referrals').update({ reward_tx_id: pendingTx.id }).eq('id', referralRecord.id);
+          }
+        }
       }
     }
 
@@ -226,6 +248,19 @@ router.post('/supabase-sync', async (req, res) => {
         if (referrer) {
           await supabase.from('users').update({ referred_by: referrer.referral_code }).eq('id', user.id);
           await supabase.from('users').update({ referral_count: (Number(referrer.referral_count) || 0) + 1 }).eq('id', referrer.id);
+
+          const { data: referralRecord } = await supabase.from('referrals').insert({
+            referrer_id: referrer.id, referee_id: user.id, status: 'pending', referee_bonus_paid: false,
+          }).select('id').single();
+          if (referralRecord) {
+            const { data: pendingTx } = await supabase.from('transactions').insert({
+              user_id: referrer.id, type: 'credit', amount: 500,
+              reference: `REF-${referralRecord.id.slice(0, 8).toUpperCase()}-PENDING`,
+              description: 'Referral reward — ₦500 (pending: awaiting referee\'s first purchase)',
+              status: 'pending',
+            }).select('id').single();
+            if (pendingTx) await supabase.from('referrals').update({ reward_tx_id: pendingTx.id }).eq('id', referralRecord.id);
+          }
         }
       }
     }

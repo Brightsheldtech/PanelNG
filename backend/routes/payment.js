@@ -2,6 +2,7 @@ const express = require('express');
 const supabase = require('../lib/supabase');
 const flutterwave = require('../lib/flutterwave');
 const auth = require('../middleware/auth');
+const { handleFirstDeposit } = require('../lib/referralRewards');
 const router = express.Router();
 
 // ─── FLUTTERWAVE ──────────────────────────────────────────────────────────────
@@ -93,6 +94,9 @@ router.post('/flutterwave/verify', auth, async (req, res) => {
       description: `Wallet funding via card — ₦${amount.toLocaleString('en-NG')}`,
     });
 
+    // Non-blocking welcome bonus check
+    handleFirstDeposit(req.user.id);
+
     res.json({ message: 'Payment verified. Wallet credited.', amount, new_balance: newBalance });
   } catch (err) {
     console.error('FLW verify error:', err.message);
@@ -163,6 +167,7 @@ router.post('/flutterwave/webhook', express.raw({ type: '*/*' }), async (req, re
       description: `Wallet funding via card — ₦${amount.toLocaleString('en-NG')}`,
     });
 
+    handleFirstDeposit(user.id);
     console.log(`[webhook] FLW credited ₦${amount} to user ${user.id.slice(0, 8)}`);
   } catch (err) {
     console.error('[webhook] FLW error:', err.message);
