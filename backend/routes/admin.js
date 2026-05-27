@@ -199,7 +199,7 @@ router.post('/users/:userId/wallet-adjust', async (req, res) => {
       amount: parsedAmount,
       reference: txRef,
       description: `Admin ${type === 'add' ? 'top-up' : 'deduction'}${reason ? ': ' + reason : ''}`,
-    }).catch(() => {});
+    });
 
     // Audit log
     await supabase.from('wallet_adjustments').insert({
@@ -208,7 +208,7 @@ router.post('/users/:userId/wallet-adjust', async (req, res) => {
       type,
       amount: parsedAmount,
       reason: reason || null,
-    }).catch(() => {});
+    });
 
     res.json({ success: true, new_balance: newBalance });
   } catch (err) {
