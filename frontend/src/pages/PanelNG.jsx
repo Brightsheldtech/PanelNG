@@ -2460,9 +2460,9 @@ function Referral() {
 // ─── APP ──────────────────────────────────────────────────────────────────────
 function App() {
   const { resolved } = useContext(ThemeCtx);
+  const { updateUser, refreshUser } = useAuth();
   const [page, setPage] = useState('overview');
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
   const navigate = (p) => { setPage(p); setSidebarOpen(false); };
   const user = useContext(UserCtx) || MOCK.user;
   const handlePurchaseComplete = (data) => {
