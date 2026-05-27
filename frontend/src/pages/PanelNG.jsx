@@ -696,10 +696,6 @@ function Sidebar({ page, setPage, isOpen, onClose, isMobile }) {
         <span className="pn-brand-name">PanelNG</span>
         {isMobile && <button className="pn-close-btn" onClick={onClose}><i className="ti ti-x"/></button>}
       </div>
-      <div className="pn-sidebar-wallet">
-        <div className="pn-wallet-label">Wallet Balance</div>
-        <div className="pn-wallet-amount">{fmt(user.balance)}</div>
-      </div>
       <nav className="pn-sidebar-nav">
         <div className="pn-nav-label">Menu</div>
         {NAV.map(n => (
@@ -1260,13 +1256,6 @@ function SmsVerify() {
     <div>
       <div className="pn-page-title">SMS Verify</div>
       <div className="pn-page-sub">Virtual numbers for any platform. Code arrives automatically.</div>
-      <div style={{display:'inline-flex',alignItems:'center',gap:7,background:'rgba(245,158,11,.08)',border:'1px solid rgba(245,158,11,.25)',borderRadius:10,padding:'6px 12px',marginBottom:20}}>
-        <i className="ti ti-wallet" style={{color:'var(--accent)',fontSize:14}}/>
-        <div>
-          <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:8,textTransform:'uppercase',letterSpacing:'1.2px',color:'var(--accent)',lineHeight:1,fontWeight:600,opacity:.8}}>Balance</div>
-          <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:15,fontWeight:700,color:'var(--accent)',fontVariantNumeric:'tabular-nums',letterSpacing:'-0.02em'}}>{fmt(user?.balance || 0)}</div>
-        </div>
-      </div>
 
       {active && (
         <div style={{background:'rgba(34,197,94,.06)',border:'1px solid rgba(34,197,94,.2)',borderRadius:16,padding:20,marginBottom:20}}>
@@ -1710,10 +1699,6 @@ function AddFunds() {
     <div>
       <div className="pn-page-title">Add Funds</div>
       <div className="pn-page-sub">Fund your wallet to place orders instantly.</div>
-      <div className="pn-balance-hero">
-        <div className="pn-balance-hero-label">Current Balance</div>
-        <div className="pn-balance-hero-amount">{fmt(user?.balance || 0)}</div>
-      </div>
 
       <div className="pn-card">
         {step === 'amount' && (
@@ -1792,10 +1777,7 @@ function AddFunds() {
             {successData?.amount > 0 && (
               <div className="pn-mono" style={{fontSize:26,fontWeight:800,color:'var(--success)',marginBottom:4}}>{fmt(successData.amount)}</div>
             )}
-            <div style={{fontSize:13,color:'var(--text-secondary)',marginBottom:successData?.new_balance != null ? 6 : 20}}>Your wallet has been credited instantly.</div>
-            {successData?.new_balance != null && (
-              <div style={{fontSize:13,color:'var(--text-muted)',marginBottom:20}}>New balance: <strong className="pn-mono" style={{color:'var(--accent)'}}>{fmt(successData.new_balance)}</strong></div>
-            )}
+            <div style={{fontSize:13,color:'var(--text-secondary)',marginBottom:20}}>Your wallet has been credited instantly.</div>
             <button className="pn-btn pn-btn-secondary" onClick={reset}>Fund Again</button>
           </div>
         )}
@@ -1895,7 +1877,6 @@ function ProfileSettings() {
           <div className="pn-profile-email">{user.email}</div>
           <div className="pn-meta-badges">
             <span className="pn-badge-role">{user.role}</span>
-            <span className="pn-balance-badge">₦{fmt(user.balance)}</span>
           </div>
         </div>
         <span className="pn-section-label">Personal Information</span>
