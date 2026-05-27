@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../lib/api';
 import { useAdminGuard } from '../../hooks/useAdminGuard';
+import toast from 'react-hot-toast';
 
 function fmtDate(d) {
   if (!d) return '—';
@@ -168,6 +169,7 @@ export default function AdminUsers() {
   const [page, setPage] = useState(0);
   const [deleteTarget, setDeleteTarget] = useState(null); // { id, full_name }
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -225,12 +227,17 @@ export default function AdminUsers() {
   const handleDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
+    setDeleteError('');
     try {
       await api.delete(`/admin/users/${deleteTarget.id}`);
+      const deletedName = deleteTarget.full_name;
       setUsers(prev => prev.filter(u => u.id !== deleteTarget.id));
       setTotal(prev => prev - 1);
       setDeleteTarget(null);
-    } catch { /* ignore */ } finally {
+      toast.success(`${deletedName} has been permanently deleted.`);
+    } catch (err) {
+      setDeleteError(err.response?.data?.error || 'Failed to delete user. Try again.');
+    } finally {
       setDeleting(false);
     }
   };
@@ -292,12 +299,17 @@ export default function AdminUsers() {
             <p style={{ fontSize: 14, color: '#6B6860', lineHeight: 1.6, margin: '0 0 6px' }}>
               You are about to delete <strong style={{ color: '#111110' }}>{deleteTarget.full_name}</strong>.
             </p>
-            <p style={{ fontSize: 13, color: '#DC2626', margin: '0 0 24px' }}>
+            <p style={{ fontSize: 13, color: '#DC2626', margin: '0 0 16px' }}>
               This will erase their account, orders, transactions, wallet, and all data. This cannot be undone.
             </p>
+            {deleteError && (
+              <div style={{ background: 'rgba(220,38,38,0.06)', border: '1px solid rgba(220,38,38,0.2)', borderRadius: 8, padding: '10px 12px', fontSize: 13, color: '#DC2626', marginBottom: 16 }}>
+                {deleteError}
+              </div>
+            )}
             <div style={{ display: 'flex', gap: 10 }}>
               <button
-                onClick={() => setDeleteTarget(null)}
+                onClick={() => { setDeleteTarget(null); setDeleteError(''); }}
                 disabled={deleting}
                 style={{ flex: 1, padding: '11px 0', border: '1px solid #E5E2D9', borderRadius: 10, background: 'white', fontFamily: 'Epilogue, sans-serif', fontWeight: 600, fontSize: 14, color: '#6B6860', cursor: 'pointer' }}
               >
