@@ -1693,6 +1693,10 @@ function AddFunds() {
   const flwResult = useRef(null);
   const verifyStarted = useRef(false);
   const QUICK = [500, 1000, 2000, 5000, 10000, 20000];
+  const [bankDetails, setBankDetails] = useState([]);
+  const [refCode, setRefCode] = useState('');
+  const [submitLoading, setSubmitLoading] = useState(false);
+  const [copiedRef, setCopiedRef] = useState(false);
 
   const loadTx = () => {
     api.get('/wallet/transactions')
@@ -1701,15 +1705,25 @@ function AddFunds() {
       .finally(() => setTxLoading(false));
   };
 
-  useEffect(() => { loadTx(); }, []);
+  useEffect(() => {
+    loadTx();
+    api.get('/bank/details').then(r => setBankDetails(Array.isArray(r.data) ? r.data : [])).catch(() => {});
+  }, []);
+
+  const genRefCode = () => {
+    const letters = ((user?.full_name || user?.email || '').replace(/[^A-Za-z]/g, '').toUpperCase().slice(0, 3)) || 'PNG';
+    return `PNG-${Math.floor(1000 + Math.random() * 9000)}-${letters}`;
+  };
+
+  const enterDirectBank = () => { setRefCode(r => r || genRefCode()); setStep('direct'); };
 
   const loadFlwScript = () => new Promise((resolve, reject) => {
     if (window.FlutterwaveCheckout) { resolve(); return; }
     const s = document.createElement('script');
     s.src = 'https://checkout.flutterwave.com/v3.js';
-    s.onload = resolve;
-    s.onerror = () => reject(new Error('Payment provider script failed to load. Check your internet connection and try again.'));
-    const timer = setTimeout(() => reject(new Error('Payment provider took too long to load. Check your connection and try again.')), 12000);
+    const flwErr = () => { clearTimeout(timer); reject(Object.assign(new Error('Online payment is not available in your region.'), { flwFailed: true })); };
+    const timer = setTimeout(flwErr, 12000);
+    s.onerror = flwErr;
     s.onload = () => { clearTimeout(timer); resolve(); };
     document.body.appendChild(s);
   });
@@ -1786,14 +1800,31 @@ function AddFunds() {
       });
     } catch (err) {
       setLoadingPayment(false);
-      setErrorMsg(err.response?.data?.error || err.message || 'Could not start payment. Try again.');
+      if (err.flwFailed) {
+        enterDirectBank();
+        setErrorMsg('Online payment is not available in your region. Bank Deposit below works from any country.');
+      } else {
+        setErrorMsg(err.response?.data?.error || err.message || 'Could not start payment. Try again.');
+      }
     }
   };
 
   const reset = () => {
     setStep('amount'); setAmount(''); setSelectedAmt(null);
-    setSuccessData(null); setErrorMsg('');
+    setSuccessData(null); setErrorMsg(''); setRefCode(''); setSubmitLoading(false);
     flwResult.current = null; verifyStarted.current = false;
+  };
+
+  const handleBankSubmit = async () => {
+    setSubmitLoading(true); setErrorMsg('');
+    try {
+      await api.post('/bank/request', { amount: parseFloat(amount), reference: refCode });
+      setStep('submitted');
+    } catch (err) {
+      setErrorMsg(err.response?.data?.error || 'Failed to submit. Please try again.');
+    } finally {
+      setSubmitLoading(false);
+    }
   };
 
   const fmtDate = (d) => new Date(d).toLocaleDateString('en-NG', { day:'2-digit', month:'short', year:'numeric' });
@@ -1872,7 +1903,82 @@ function AddFunds() {
             <div style={{textAlign:'center',marginTop:8,fontSize:12,color:'var(--text-muted)',display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
               <i className="ti ti-shield-check" style={{fontSize:14}}/>Secured by Flutterwave
             </div>
+            <div style={{display:'flex',alignItems:'center',gap:10,margin:'16px 0 10px'}}>
+              <div style={{flex:1,height:1,background:'var(--border)'}}/>
+              <span style={{fontSize:11,color:'var(--text-muted)',fontWeight:500,whiteSpace:'nowrap'}}>or pay manually</span>
+              <div style={{flex:1,height:1,background:'var(--border)'}}/>
+            </div>
+            <button onClick={enterDirectBank} disabled={loadingPayment} style={{width:'100%',display:'flex',alignItems:'center',gap:14,padding:'14px 16px',background:'var(--bg-raised)',border:'1px solid var(--border)',borderRadius:10,cursor:loadingPayment?'not-allowed':'pointer',textAlign:'left',transition:'border-color .15s',opacity:loadingPayment?.6:1}}>
+              <div style={{width:40,height:40,borderRadius:10,background:'rgba(34,197,94,.1)',border:'1px solid rgba(34,197,94,.2)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                <i className="ti ti-building-bank" style={{fontSize:18,color:'var(--success)'}}/>
+              </div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontWeight:600,fontSize:14,color:'var(--text-primary)',marginBottom:2}}>Bank Deposit</div>
+                <div style={{fontSize:12,color:'var(--text-muted)'}}>Works from any country · Credited within 2 hours</div>
+              </div>
+              <i className="ti ti-chevron-right" style={{color:'var(--text-muted)',flexShrink:0}}/>
+            </button>
           </>
+        )}
+
+        {step === 'direct' && (
+          <>
+            <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:20}}>
+              <button className="pn-btn pn-btn-secondary" style={{padding:'6px 12px',minWidth:'unset'}} onClick={()=>setStep('method')}><i className="ti ti-arrow-left"/></button>
+              <div>
+                <div style={{fontWeight:600,fontSize:15}}>Bank Deposit</div>
+                <div style={{fontSize:12,color:'var(--text-muted)'}}>Sending <strong className="pn-mono">{fmt(parseFloat(amount))}</strong></div>
+              </div>
+            </div>
+            {errorMsg && (
+              <div style={{background:'rgba(245,158,11,.06)',border:'1px solid rgba(245,158,11,.2)',borderRadius:10,padding:'10px 14px',fontSize:12,color:'var(--accent)',marginBottom:14,display:'flex',gap:8,alignItems:'flex-start'}}>
+                <i className="ti ti-info-circle" style={{flexShrink:0,marginTop:1}}/>{errorMsg}
+              </div>
+            )}
+            <span className="pn-section-label">1 — Your Unique Reference</span>
+            <div style={{background:'rgba(34,197,94,.06)',border:'1px solid rgba(34,197,94,.2)',borderRadius:12,padding:'14px 16px',marginBottom:16,position:'relative'}}>
+              <div style={{fontSize:10,fontWeight:600,letterSpacing:1,textTransform:'uppercase',color:'var(--success)',marginBottom:8}}>Use as Transfer Narration</div>
+              <div style={{fontFamily:"'Geist Mono','Courier New',monospace",fontSize:22,fontWeight:500,color:'var(--success)',letterSpacing:'0.06em'}}>{refCode}</div>
+              <button onClick={()=>{navigator.clipboard.writeText(refCode);setCopiedRef(true);setTimeout(()=>setCopiedRef(false),2000);}} style={{position:'absolute',top:12,right:12,background:'none',border:'none',cursor:'pointer',color:'var(--success)',fontSize:16,padding:'6px',borderRadius:6,display:'flex',alignItems:'center'}}>
+                <i className={`ti ${copiedRef?'ti-check':'ti-copy'}`}/>
+              </button>
+            </div>
+            <span className="pn-section-label">2 — Send This Exact Amount</span>
+            <div style={{background:'rgba(245,158,11,.08)',border:'1px solid rgba(245,158,11,.25)',borderRadius:12,padding:'16px 20px',textAlign:'center',marginBottom:16}}>
+              <div style={{fontSize:10,fontWeight:600,letterSpacing:'1.2px',textTransform:'uppercase',color:'var(--accent)',marginBottom:6}}>Transfer Exactly</div>
+              <div style={{fontFamily:"'Geist Mono','Courier New',monospace",fontSize:28,fontWeight:500,color:'var(--text-primary)'}}>{fmt(parseFloat(amount))}</div>
+            </div>
+            <span className="pn-section-label">3 — Bank Account</span>
+            {bankDetails.length === 0 ? (
+              <div style={{fontSize:13,color:'var(--text-muted)',padding:'8px 0',marginBottom:12}}>Loading bank details…</div>
+            ) : bankDetails.map(b => (
+              <div key={b.id} style={{background:'var(--bg-raised)',border:'1px solid var(--border)',borderRadius:12,padding:'14px 16px',marginBottom:10}}>
+                <div style={{fontSize:10,fontWeight:600,letterSpacing:'.8px',textTransform:'uppercase',color:'var(--text-muted)',marginBottom:6}}>{b.bank_name}</div>
+                <div style={{fontFamily:"'Geist Mono','Courier New',monospace",fontSize:20,fontWeight:500,color:'var(--text-primary)',letterSpacing:'.05em',marginBottom:3}}>{b.account_number}</div>
+                <div style={{fontSize:13,color:'var(--text-secondary)',fontWeight:500}}>{b.account_name}</div>
+              </div>
+            ))}
+            <div style={{background:'var(--bg-raised)',border:'1px solid var(--border)',borderRadius:10,padding:'12px 14px',fontSize:12,color:'var(--text-secondary)',lineHeight:1.6,marginBottom:14}}>
+              <i className="ti ti-info-circle" style={{marginRight:6,color:'var(--accent)'}}/>
+              After sending, click below. Your wallet is credited within 2 hours (business hours: 8am–9pm WAT).
+            </div>
+            <button className="pn-btn pn-btn-primary pn-btn-full" onClick={handleBankSubmit} disabled={submitLoading}>
+              {submitLoading ? <><i className="ti ti-loader-2" style={{animation:'pn-spin 1s linear infinite'}}/>Submitting…</> : <><i className="ti ti-check"/>I've Made the Transfer</>}
+            </button>
+          </>
+        )}
+
+        {step === 'submitted' && (
+          <div style={{textAlign:'center',padding:'20px 0'}}>
+            <div style={{width:56,height:56,borderRadius:'50%',background:'rgba(245,158,11,.12)',border:'2px solid var(--accent)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px'}}>
+              <i className="ti ti-clock" style={{fontSize:28,color:'var(--accent)'}}/>
+            </div>
+            <div style={{fontSize:17,fontWeight:700,color:'var(--text-primary)',marginBottom:6}}>Transfer Submitted</div>
+            <div className="pn-mono" style={{fontSize:26,fontWeight:800,color:'var(--accent)',marginBottom:8}}>{fmt(parseFloat(amount))}</div>
+            <div style={{fontSize:12,color:'var(--text-muted)',marginBottom:4}}>Reference: <span style={{fontFamily:'monospace',color:'var(--text-primary)',fontWeight:600}}>{refCode}</span></div>
+            <div style={{fontSize:13,color:'var(--text-secondary)',marginBottom:20}}>We'll review and credit your wallet within 2 hours.</div>
+            <button className="pn-btn pn-btn-secondary" onClick={reset}>Done</button>
+          </div>
         )}
 
         {step === 'verifying' && (
