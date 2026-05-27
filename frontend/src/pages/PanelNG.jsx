@@ -95,14 +95,6 @@ const MOCK = {
 
 const ALL_SERVICES = Object.values(MOCK.services).flat();
 const PLATFORMS = ['All', 'Facebook', 'Instagram', 'TikTok', 'YouTube', 'Twitter', 'Telegram', 'WhatsApp', 'Snapchat', 'Spotify', 'Threads', 'LinkedIn'];
-const SMS_APPS = [
-  'WhatsApp', 'Telegram', 'Instagram', 'TikTok', 'Facebook', 'Twitter',
-  'Gmail', 'Microsoft', 'Snapchat', 'Viber', 'Discord', 'Spotify',
-  'Netflix', 'Amazon', 'PayPal', 'Binance', 'Tinder', 'Uber', 'Airbnb',
-  'VPN', 'NordVPN', 'ExpressVPN', 'Proxy',
-  'Other',
-];
-
 // ─── UTILS ────────────────────────────────────────────────────────────────────
 const fmt = (n) => '₦' + Number(n || 0).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const greet = () => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; };
@@ -140,6 +132,51 @@ function PlatformIcon({ name, size = 20 }) {
     Other: <svg width={s} height={s} viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#6B6860"/><circle cx="8" cy="12" r="1.5" fill="white"/><circle cx="12" cy="12" r="1.5" fill="white"/><circle cx="16" cy="12" r="1.5" fill="white"/></svg>,
   };
   return icons[name] || icons['Other'];
+}
+
+function svcToIconName(name) {
+  const n = (name || '').toLowerCase();
+  if (n.includes('whatsapp')) return 'WhatsApp';
+  if (n.includes('telegram')) return 'Telegram';
+  if (n.includes('instagram')) return 'Instagram';
+  if (n.includes('tiktok') || n.includes('tik tok') || n.includes('douyin')) return 'TikTok';
+  if (n.includes('facebook')) return 'Facebook';
+  if (n.includes('twitter') || n === 'x') return 'Twitter';
+  if (n.includes('youtube')) return 'YouTube';
+  if (n.includes('snapchat')) return 'Snapchat';
+  if (n.includes('viber')) return 'Viber';
+  if (n.includes('tinder')) return 'Tinder';
+  if (n.includes('netflix')) return 'Netflix';
+  if (n.includes('uber eats')) return 'Uber';
+  if (n.includes('uber')) return 'Uber';
+  if (n.includes('airbnb')) return 'Airbnb';
+  if (n.includes('paypal')) return 'PayPal';
+  if (n.includes('binance')) return 'Binance';
+  if (n.includes('discord')) return 'Discord';
+  if (n.includes('spotify')) return 'Spotify';
+  if (n.includes('threads')) return 'Threads';
+  if (n.includes('linkedin')) return 'LinkedIn';
+  if (n.includes('nordvpn')) return 'NordVPN';
+  if (n.includes('expressvpn')) return 'ExpressVPN';
+  if (n.includes('vpn')) return 'VPN';
+  if (n.includes('microsoft')) return 'Microsoft';
+  if (n.includes('amazon')) return 'Amazon';
+  if (n.includes('gmail') || n.includes('google')) return 'Gmail';
+  if (n.includes('proxy')) return 'Proxy';
+  return 'Other';
+}
+
+function ServiceIcon({ name, size = 36 }) {
+  const iconName = svcToIconName(name);
+  if (iconName !== 'Other') return <PlatformIcon name={iconName} size={size}/>;
+  const COLORS = ['#6366F1','#8B5CF6','#EC4899','#F59E0B','#10B981','#3B82F6','#EF4444','#14B8A6','#F97316','#84CC16'];
+  const color = COLORS[(name?.charCodeAt(0) || 0) % COLORS.length];
+  const r = Math.max(6, size * 0.22);
+  return (
+    <div style={{width:size,height:size,borderRadius:r,background:color,display:'flex',alignItems:'center',justifyContent:'center',fontSize:Math.round(size*0.44),fontWeight:700,color:'#fff',flexShrink:0,fontFamily:'Plus Jakarta Sans,system-ui,sans-serif'}}>
+      {(name || '?')[0].toUpperCase()}
+    </div>
+  );
 }
 
 // ─── BADGE ────────────────────────────────────────────────────────────────────
@@ -355,14 +392,26 @@ html,body{overflow-x:hidden;max-width:100vw}
 .pn-summary-value{font-weight:500;color:var(--text-primary)}
 .pn-summary-total .pn-summary-value{font-family:'Geist Mono','Courier New',monospace;color:var(--accent);font-size:16px;font-weight:600}
 
-/* SMS grid */
-.pn-sms-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
-.pn-sms-tile{background:var(--bg-surface);border:1px solid var(--border);border-radius:14px;padding:14px 8px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;transition:all 150ms ease;min-height:72px;font-family:'Plus Jakarta Sans',sans-serif}
-.pn-sms-tile:hover{border-color:var(--accent);background:var(--bg-raised)}
-.pn-sms-tile.active{border-color:var(--accent);background:rgba(245,158,11,.06)}
-.pn-root[data-theme="light"] .pn-sms-tile.active{background:rgba(217,119,6,.05)}
-.pn-sms-tile-name{font-size:11px;font-weight:500;color:var(--text-secondary)}
-.pn-sms-tile.active .pn-sms-tile-name{color:var(--accent);font-weight:600}
+/* SMS service list */
+.pn-svc-search-wrap{position:relative;margin-bottom:12px}
+.pn-svc-search{width:100%;height:44px;background:var(--bg-input);border:1px solid var(--border);border-radius:22px;padding:0 16px 0 42px;font-size:14px;color:var(--text-primary);font-family:'Plus Jakarta Sans',sans-serif;outline:none;transition:border-color 150ms ease,box-shadow 150ms ease}
+.pn-svc-search:focus{border-color:var(--accent);box-shadow:0 0 0 2px rgba(245,158,11,.12)}
+.pn-root[data-theme="light"] .pn-svc-search:focus{box-shadow:0 0 0 2px rgba(217,119,6,.1)}
+.pn-svc-search::placeholder{color:var(--text-muted)}
+.pn-svc-search-icon{position:absolute;left:14px;top:50%;transform:translateY(-50%);font-size:16px;color:var(--text-muted);pointer-events:none}
+.pn-svc-list{background:var(--bg-surface);border:1px solid var(--border);border-radius:16px;overflow:hidden;max-height:54vh;overflow-y:auto;scrollbar-width:none;margin-bottom:16px}
+.pn-svc-list::-webkit-scrollbar{display:none}
+.pn-svc-row{display:flex;align-items:center;gap:12px;padding:13px 16px;border-bottom:0.5px solid var(--border);cursor:pointer;transition:background 120ms ease}
+.pn-svc-row:last-child{border-bottom:none}
+.pn-svc-row:hover{background:var(--bg-raised)}
+.pn-svc-row.active{background:rgba(245,158,11,.06)}
+.pn-root[data-theme="light"] .pn-svc-row.active{background:rgba(217,119,6,.05)}
+.pn-svc-info{flex:1;min-width:0}
+.pn-svc-name{font-size:14px;font-weight:500;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pn-svc-row.active .pn-svc-name{color:var(--accent);font-weight:600}
+.pn-svc-meta{font-size:11px;color:var(--text-muted);margin-top:2px}
+.pn-svc-chevron{color:var(--border-strong);font-size:14px;flex-shrink:0}
+.pn-svc-row.active .pn-svc-chevron{color:var(--accent)}
 
 /* Amount chips grid */
 .pn-amount-chips{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
@@ -523,7 +572,6 @@ html,body{overflow-x:hidden;max-width:100vw}
   .pn-stat-grid{grid-template-columns:1fr 1fr;gap:10px}
   .pn-stat-value{font-size:18px}
   .pn-stat-card{padding:14px}
-  .pn-sms-grid{grid-template-columns:repeat(3,1fr)}
   .pn-order-header,.pn-order-row{grid-template-columns:68px 48px 1fr 56px;gap:6px;padding:10px 12px;font-size:11px}
   .pn-actions{gap:6px;flex-wrap:wrap}
   .pn-action-pill{height:32px;padding:0 12px;font-size:12px}
@@ -534,7 +582,6 @@ html,body{overflow-x:hidden;max-width:100vw}
   .pn-card{padding:16px}
 }
 @media (max-width:480px){
-  .pn-sms-grid{grid-template-columns:repeat(2,1fr)}
   .pn-order-header,.pn-order-row{grid-template-columns:58px 40px 1fr 52px;gap:4px;padding:9px 10px}
   .pn-stat-value{font-size:16px}
   .pn-balance-hero-amount{font-size:22px}
@@ -1186,12 +1233,21 @@ function NewOrder() {
 // ─── PAGE: SMS VERIFY ─────────────────────────────────────────────────────────
 function SmsVerify() {
   const user = useContext(UserCtx);
-  const [app, setApp] = useState('');
+
+  // Service list
+  const [services, setServices] = useState([]);
+  const [loadingSvcs, setLoadingSvcs] = useState(true);
+  const [query, setQuery] = useState('');
+
+  // Selected service & purchase flow
+  const [selectedSvc, setSelectedSvc] = useState(null);
   const [prices, setPrices] = useState([]);
   const [loadingPrices, setLoadingPrices] = useState(false);
   const [country, setCountry] = useState('');
   const [buying, setBuying] = useState(false);
   const [buyError, setBuyError] = useState('');
+
+  // Active number state
   const [active, setActive] = useState(null);
   const [activeOrderId, setActiveOrderId] = useState(null);
   const [code, setCode] = useState('');
@@ -1200,13 +1256,20 @@ function SmsVerify() {
   const pollRef = useRef(null);
 
   useEffect(() => {
-    if (!app) { setPrices([]); setCountry(''); return; }
+    api.get('/sms/services')
+      .then(r => setServices(Array.isArray(r.data) ? r.data : []))
+      .catch(() => setServices([]))
+      .finally(() => setLoadingSvcs(false));
+  }, []);
+
+  useEffect(() => {
+    if (!selectedSvc) { setPrices([]); setCountry(''); return; }
     setLoadingPrices(true); setCountry(''); setPrices([]);
-    api.get(`/sms/prices/${encodeURIComponent(app.toLowerCase())}`)
+    api.get(`/sms/prices/${encodeURIComponent(selectedSvc.code)}`)
       .then(r => setPrices(Array.isArray(r.data) ? r.data : []))
       .catch(() => setPrices([]))
       .finally(() => setLoadingPrices(false));
-  }, [app]);
+  }, [selectedSvc]);
 
   useEffect(() => {
     if (!activeOrderId || code) return;
@@ -1225,15 +1288,24 @@ function SmsVerify() {
     return () => { clearInterval(pollRef.current); setPolling(false); };
   }, [activeOrderId, code]);
 
+  const filtered = query.trim()
+    ? services.filter(s => s.name.toLowerCase().includes(query.trim().toLowerCase()))
+    : services;
+
   const selectedCountry = prices.find(p => String(p.countryId ?? p.countryCode ?? p.country) === String(country));
   const cost = selectedCountry ? Number(selectedCountry.price || selectedCountry.cost || 0) : 0;
 
+  const handleSelectSvc = (svc) => {
+    setSelectedSvc(prev => prev?.code === svc.code ? null : svc);
+    setBuyError('');
+  };
+
   const handleGet = async () => {
-    if (!app || !country) return;
+    if (!selectedSvc || !country) return;
     setBuying(true); setBuyError('');
     try {
-      const res = await api.post('/sms/buy-number', { product: app.toLowerCase(), country });
-      setActive({ number: res.data.number || res.data.phone, app, country });
+      const res = await api.post('/sms/buy-number', { product: selectedSvc.code, country });
+      setActive({ number: res.data.number || res.data.phone, app: selectedSvc.name, country });
       setActiveOrderId(res.data.orderId || res.data.order_id);
       setCode('');
       user?.refreshUser?.();
@@ -1253,6 +1325,7 @@ function SmsVerify() {
   };
 
   const handleCopy = (text) => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(()=>setCopied(false),2000); };
+
   return (
     <div>
       <div className="pn-page-title">SMS Verify</div>
@@ -1290,23 +1363,59 @@ function SmsVerify() {
 
       {!active && (
         <>
-          <span className="pn-section-label">1 — Pick an App</span>
-          <div className="pn-sms-grid">
-            {SMS_APPS.map(a => (
-              <button key={a} className={`pn-sms-tile${app===a?' active':''}`} onClick={()=>setApp(a)}>
-                <PlatformIcon name={a} size={28}/>
-                <span className="pn-sms-tile-name">{a}</span>
-              </button>
-            ))}
+          <div className="pn-svc-search-wrap">
+            <i className="ti ti-search pn-svc-search-icon"/>
+            <input
+              className="pn-svc-search"
+              placeholder="Search WhatsApp, Google, TikTok…"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+            />
           </div>
 
-          {app && (
+          {loadingSvcs ? (
+            <div style={{padding:'48px 0',textAlign:'center'}}>
+              <i className="ti ti-loader-2" style={{fontSize:26,color:'var(--accent)',animation:'pn-spin 1s linear infinite'}}/>
+              <div style={{fontSize:13,color:'var(--text-muted)',marginTop:10}}>Loading services…</div>
+            </div>
+          ) : (
+            <div className="pn-svc-list">
+              {filtered.length === 0 ? (
+                <div className="pn-empty" style={{padding:'32px 20px'}}>
+                  <i className="ti ti-search pn-empty-icon"/>
+                  <div className="pn-empty-title">No services found</div>
+                  <div className="pn-empty-sub">Try a different search term</div>
+                </div>
+              ) : filtered.map(svc => (
+                <div
+                  key={svc.code}
+                  className={`pn-svc-row${selectedSvc?.code===svc.code?' active':''}`}
+                  onClick={() => handleSelectSvc(svc)}
+                >
+                  <ServiceIcon name={svc.name} size={38}/>
+                  <div className="pn-svc-info">
+                    <div className="pn-svc-name">{svc.name}</div>
+                    <div className="pn-svc-meta">{svc.countryCount} countries · {svc.totalCount.toLocaleString()} available</div>
+                  </div>
+                  <i className={`ti ${selectedSvc?.code===svc.code?'ti-chevron-down':'ti-chevron-right'} pn-svc-chevron`}/>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {selectedSvc && (
             <div className="pn-card">
-              <span className="pn-section-label">2 — Select Country</span>
+              <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:16}}>
+                <ServiceIcon name={selectedSvc.name} size={30}/>
+                <div>
+                  <div style={{fontSize:14,fontWeight:600,color:'var(--text-primary)'}}>{selectedSvc.name}</div>
+                  <div style={{fontSize:11,color:'var(--text-muted)'}}>Select a country for your number</div>
+                </div>
+              </div>
               {loadingPrices ? (
                 <div style={{padding:'20px 0',textAlign:'center'}}><i className="ti ti-loader-2" style={{fontSize:22,color:'var(--accent)',animation:'pn-spin 1s linear infinite'}}/></div>
               ) : prices.length === 0 ? (
-                <div style={{fontSize:13,color:'var(--text-muted)',padding:'12px 0'}}>No countries available for {app}. Try another app.</div>
+                <div style={{fontSize:13,color:'var(--text-muted)',padding:'12px 0'}}>No countries available for {selectedSvc.name}. Try another service.</div>
               ) : (
                 <div className="pn-input-wrap">
                   <select className="pn-input" value={country} onChange={e=>setCountry(e.target.value)} style={{cursor:'pointer'}}>
@@ -1331,17 +1440,9 @@ function SmsVerify() {
                   {user?.balance < cost && <span style={{color:'var(--danger)',marginLeft:8}}>Insufficient balance</span>}
                 </div>
               )}
-              <button className="pn-btn pn-btn-primary pn-btn-full" onClick={handleGet} disabled={!country||buying||user?.balance<cost} style={{opacity:(!country||buying)?.5:1}}>
-                {buying ? <><i className="ti ti-loader-2" style={{animation:'pn-spin 1s linear infinite'}}/>Getting number…</> : <><i className="ti ti-device-mobile"/>Get Number for {app}</>}
+              <button className="pn-btn pn-btn-primary pn-btn-full" onClick={handleGet} disabled={!country||buying||(user?.balance<cost&&cost>0)}>
+                {buying ? <><i className="ti ti-loader-2" style={{animation:'pn-spin 1s linear infinite'}}/>Getting number…</> : <><i className="ti ti-device-mobile"/>Get Number for {selectedSvc.name}</>}
               </button>
-            </div>
-          )}
-
-          {!app && (
-            <div className="pn-empty">
-              <i className="ti ti-message-circle pn-empty-icon"/>
-              <div className="pn-empty-title">Pick an app above</div>
-              <div className="pn-empty-sub">Select a platform to see available countries and prices</div>
             </div>
           )}
         </>

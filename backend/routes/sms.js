@@ -7,6 +7,9 @@ const { handleFirstPurchase } = require('../lib/referralRewards');
 const { notify } = require('../lib/notify');
 const router = express.Router();
 
+let _servicesCache = null;
+let _servicesCacheAt = 0;
+
 // GET /api/sms/balance
 router.get('/balance', auth, async (req, res) => {
   try {
@@ -24,6 +27,22 @@ router.get('/products', auth, async (req, res) => {
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: 'Failed to get products' });
+  }
+});
+
+// GET /api/sms/services — all available services with counts (10-min cache)
+router.get('/services', auth, async (req, res) => {
+  try {
+    if (_servicesCache && Date.now() - _servicesCacheAt < 10 * 60 * 1000) {
+      return res.json(_servicesCache);
+    }
+    const data = await herosms.getAllServices();
+    _servicesCache = data;
+    _servicesCacheAt = Date.now();
+    res.json(data);
+  } catch (err) {
+    console.error('getAllServices error:', err.message);
+    res.status(500).json({ error: 'Failed to get services' });
   }
 });
 
