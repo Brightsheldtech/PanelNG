@@ -435,6 +435,26 @@ html,body{overflow-x:hidden;max-width:100vw}
 .pn-divider{height:0.5px;background:var(--border);margin:16px 0}
 
 /* Empty state */
+/* Transaction detail sheet */
+.pn-tx-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:300;display:flex;align-items:flex-end;justify-content:center}
+@media(min-width:600px){.pn-tx-backdrop{align-items:center}}
+.pn-tx-sheet{background:var(--bg-surface);width:100%;max-width:480px;border-radius:22px 22px 0 0;padding:0 0 32px;box-shadow:0 -8px 40px rgba(0,0,0,.25);animation:pn-sheet-up 220ms cubic-bezier(0.34,1.26,0.64,1)}
+@media(min-width:600px){.pn-tx-sheet{border-radius:20px;margin:16px}}
+@keyframes pn-sheet-up{from{transform:translateY(60px);opacity:0}to{transform:translateY(0);opacity:1}}
+.pn-tx-sheet-drag{width:36px;height:4px;border-radius:2px;background:var(--border);margin:12px auto 0}
+.pn-tx-sheet-head{display:flex;align-items:center;justify-content:space-between;padding:16px 20px 12px}
+.pn-tx-sheet-close{width:28px;height:28px;border-radius:50%;background:var(--bg-raised);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text-muted);font-size:14px}
+.pn-tx-sheet-body{padding:0 20px}
+.pn-tx-amount-hero{text-align:center;padding:20px 0 24px}
+.pn-tx-amount-icon{width:56px;height:56px;border-radius:16px;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-size:24px}
+.pn-tx-amount-val{font-family:'Plus Jakarta Sans',sans-serif;font-size:34px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-0.04em;margin-bottom:6px}
+.pn-tx-amount-label{font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;font-weight:500}
+.pn-tx-details{background:var(--bg-raised);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+.pn-tx-row-d{display:flex;align-items:flex-start;justify-content:space-between;padding:13px 16px;border-bottom:0.5px solid var(--border);gap:16px}
+.pn-tx-row-d:last-child{border-bottom:none}
+.pn-tx-row-label{font-size:12px;color:var(--text-muted);font-weight:500;flex-shrink:0}
+.pn-tx-row-val{font-size:12px;color:var(--text-primary);font-weight:600;text-align:right;word-break:break-all}
+.pn-tx-status-pill{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600}
 .pn-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 24px;text-align:center}
 .pn-empty-icon{font-size:36px;color:var(--text-muted);margin-bottom:12px}
 .pn-empty-title{font-size:15px;font-weight:600;color:var(--text-secondary);margin-bottom:6px}
@@ -724,6 +744,70 @@ function BottomNav({ page, setPage }) {
   );
 }
 
+// ─── TRANSACTION DETAIL MODAL ─────────────────────────────────────────────────
+function TxDetailSheet({ tx, onClose }) {
+  const isCredit = tx.type === 'credit';
+  const isPending = tx.status === 'pending';
+  const isRejected = tx.status === 'rejected';
+  const amtColor = isCredit && !isRejected ? 'var(--success)' : 'var(--danger)';
+  const iconBg  = isPending ? 'rgba(245,158,11,.15)' : isRejected ? 'rgba(220,38,38,.15)' : isCredit ? 'rgba(34,197,94,.15)' : 'rgba(220,38,38,.15)';
+  const iconColor = isPending ? 'var(--accent)' : isRejected ? 'var(--danger)' : isCredit ? 'var(--success)' : 'var(--danger)';
+  const icon = isPending ? 'ti-clock' : isRejected ? 'ti-x' : isCredit ? 'ti-arrow-down-left' : 'ti-arrow-up-right';
+  const statusColors = { completed:['rgba(34,197,94,.12)','var(--success)'], pending:['rgba(245,158,11,.12)','var(--accent)'], rejected:['rgba(220,38,38,.12)','var(--danger)'] };
+  const [sBg, sFg] = statusColors[tx.status || 'completed'] || statusColors.completed;
+  const fmtDate = (iso) => iso ? new Date(iso).toLocaleString('en-NG',{weekday:'short',day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
+
+  return (
+    <div className="pn-tx-backdrop" onClick={onClose}>
+      <div className="pn-tx-sheet" onClick={e=>e.stopPropagation()}>
+        <div className="pn-tx-sheet-drag"/>
+        <div className="pn-tx-sheet-head">
+          <span style={{fontSize:15,fontWeight:700,color:'var(--text-primary)'}}>Transaction Details</span>
+          <button className="pn-tx-sheet-close" onClick={onClose}><i className="ti ti-x"/></button>
+        </div>
+        <div className="pn-tx-sheet-body">
+          {/* Amount hero */}
+          <div className="pn-tx-amount-hero">
+            <div className="pn-tx-amount-icon" style={{background:iconBg,color:iconColor}}>
+              <i className={`ti ${icon}`}/>
+            </div>
+            <div className="pn-tx-amount-val" style={{color:amtColor}}>
+              {isCredit && !isRejected ? '+' : '-'}₦{Number(tx.amount).toLocaleString('en-NG',{minimumFractionDigits:2})}
+            </div>
+            <div className="pn-tx-amount-label">{isCredit ? 'Money received' : 'Money sent'}</div>
+          </div>
+          {/* Detail rows */}
+          <div className="pn-tx-details">
+            <div className="pn-tx-row-d">
+              <span className="pn-tx-row-label">Description</span>
+              <span className="pn-tx-row-val">{tx.description || '—'}</span>
+            </div>
+            <div className="pn-tx-row-d">
+              <span className="pn-tx-row-label">Reference</span>
+              <span className="pn-tx-row-val" style={{fontFamily:'monospace',fontSize:11}}>{tx.reference || '—'}</span>
+            </div>
+            <div className="pn-tx-row-d">
+              <span className="pn-tx-row-label">Date</span>
+              <span className="pn-tx-row-val">{fmtDate(tx.created_at)}</span>
+            </div>
+            <div className="pn-tx-row-d">
+              <span className="pn-tx-row-label">Type</span>
+              <span className="pn-tx-row-val" style={{textTransform:'capitalize'}}>{tx.type}</span>
+            </div>
+            <div className="pn-tx-row-d">
+              <span className="pn-tx-row-label">Status</span>
+              <span className="pn-tx-status-pill" style={{background:sBg,color:sFg}}>
+                <i className={`ti ${isPending?'ti-clock':isRejected?'ti-x':'ti-circle-check'}`} style={{fontSize:11}}/>
+                {(tx.status || 'completed').charAt(0).toUpperCase() + (tx.status || 'completed').slice(1)}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── PAGE: OVERVIEW ───────────────────────────────────────────────────────────
 function Overview({ setPage }) {
   const user = useContext(UserCtx) || MOCK.user;
@@ -733,6 +817,7 @@ function Overview({ setPage }) {
   const [refBalance, setRefBalance] = useState(0);
   const [refCount, setRefCount] = useState(0);
   const [pendingCount, setPendingCount] = useState(0);
+  const [selectedTx, setSelectedTx] = useState(null);
 
   const loadOverview = () => {
     setTxLoading(true);
@@ -875,7 +960,11 @@ function Overview({ setPage }) {
             return (
               <div
                 key={t.id}
-                style={{display:'flex',alignItems:'center',gap:10,padding:'11px 14px',borderBottom:i<recentTx.length-1?'0.5px solid var(--border)':'none',transition:'background 150ms ease'}}
+                role="button"
+                tabIndex={0}
+                onClick={()=>setSelectedTx(t)}
+                onKeyDown={e=>e.key==='Enter'&&setSelectedTx(t)}
+                style={{display:'flex',alignItems:'center',gap:10,padding:'11px 14px',borderBottom:i<recentTx.length-1?'0.5px solid var(--border)':'none',transition:'background 150ms ease',cursor:'pointer'}}
                 onMouseEnter={e=>e.currentTarget.style.background='var(--bg-raised)'}
                 onMouseLeave={e=>e.currentTarget.style.background=''}
               >
@@ -886,9 +975,12 @@ function Overview({ setPage }) {
                   <div style={{fontSize:12,fontWeight:600,color:'var(--text-primary)',marginBottom:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.description}</div>
                   <div style={{fontSize:10,color:'var(--text-muted)'}}>{t.created_at ? new Date(t.created_at).toLocaleDateString('en-NG',{month:'short',day:'numeric',year:'numeric'}) : ''}</div>
                 </div>
-                <div style={{flexShrink:0,textAlign:'right'}}>
-                  <div style={{fontSize:12,fontWeight:700,color:amtColor,fontVariantNumeric:'tabular-nums'}}>{amtPrefix}₦{Number(t.amount).toLocaleString('en-NG',{minimumFractionDigits:2})}</div>
-                  {(isPending||isRejected) && <div style={{fontSize:10,color:iconColor,fontWeight:500,textTransform:'capitalize'}}>{t.status}</div>}
+                <div style={{flexShrink:0,textAlign:'right',display:'flex',alignItems:'center',gap:6}}>
+                  <div>
+                    <div style={{fontSize:12,fontWeight:700,color:amtColor,fontVariantNumeric:'tabular-nums'}}>{amtPrefix}₦{Number(t.amount).toLocaleString('en-NG',{minimumFractionDigits:2})}</div>
+                    {(isPending||isRejected) && <div style={{fontSize:10,color:iconColor,fontWeight:500,textTransform:'capitalize'}}>{t.status}</div>}
+                  </div>
+                  <i className="ti ti-chevron-right" style={{fontSize:14,color:'var(--text-muted)',opacity:.5}}/>
                 </div>
               </div>
             );
@@ -932,6 +1024,9 @@ function Overview({ setPage }) {
           </button>
         </div>
       </div>
+
+      {/* Transaction detail sheet */}
+      {selectedTx && <TxDetailSheet tx={selectedTx} onClose={()=>setSelectedTx(null)}/>}
 
     </div>
   );
