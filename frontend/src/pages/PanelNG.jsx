@@ -733,6 +733,7 @@ function Sidebar({ page, setPage, isOpen, onClose, isMobile }) {
     { id:'overview', icon:'ti-home', label:'Overview' },
     { id:'neworder', icon:'ti-circle-plus', label:'New Order' },
     { id:'orders', icon:'ti-receipt', label:'Order History' },
+    { id:'transactions', icon:'ti-clock-dollar', label:'Transactions' },
     { id:'funds', icon:'ti-wallet', label:'Add Funds' },
     { id:'referral', icon:'ti-users', label:'Referral' },
     { id:'profile', icon:'ti-user-circle', label:'Profile' },
@@ -797,8 +798,8 @@ function TxDetailSheet({ tx, onClose }) {
   const iconBg  = isPending ? 'rgba(245,158,11,.15)' : isRejected ? 'rgba(220,38,38,.15)' : isCredit ? 'rgba(34,197,94,.15)' : 'rgba(220,38,38,.15)';
   const iconColor = isPending ? 'var(--accent)' : isRejected ? 'var(--danger)' : isCredit ? 'var(--success)' : 'var(--danger)';
   const icon = isPending ? 'ti-clock' : isRejected ? 'ti-x' : isCredit ? 'ti-arrow-down-left' : 'ti-arrow-up-right';
-  const statusColors = { completed:['rgba(34,197,94,.12)','var(--success)'], pending:['rgba(245,158,11,.12)','var(--accent)'], rejected:['rgba(220,38,38,.12)','var(--danger)'] };
-  const [sBg, sFg] = statusColors[tx.status || 'completed'] || statusColors.completed;
+  const statusColors = { success:['rgba(34,197,94,.12)','var(--success)'], completed:['rgba(34,197,94,.12)','var(--success)'], pending:['rgba(245,158,11,.12)','var(--accent)'], rejected:['rgba(220,38,38,.12)','var(--danger)'], processing:['rgba(96,165,250,.12)','var(--info)'], cancelled:['rgba(220,38,38,.12)','var(--danger)'] };
+  const [sBg, sFg] = statusColors[tx.status] || statusColors.success;
   const fmtDate = (iso) => iso ? new Date(iso).toLocaleString('en-NG',{weekday:'short',day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
 
   return (
@@ -842,7 +843,7 @@ function TxDetailSheet({ tx, onClose }) {
               <span className="pn-tx-row-label">Status</span>
               <span className="pn-tx-status-pill" style={{background:sBg,color:sFg}}>
                 <i className={`ti ${isPending?'ti-clock':isRejected?'ti-x':'ti-circle-check'}`} style={{fontSize:11}}/>
-                {(tx.status || 'completed').charAt(0).toUpperCase() + (tx.status || 'completed').slice(1)}
+                {({'success':'Successful','completed':'Successful','pending':'Pending','rejected':'Rejected','processing':'Processing','cancelled':'Cancelled'}[tx.status] || 'Successful')}
               </span>
             </div>
           </div>
@@ -978,7 +979,7 @@ function Overview({ setPage }) {
       <div style={{marginBottom:16}}>
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
           <span style={{fontSize:14,fontWeight:700,color:'var(--text-primary)'}}>Recent Transactions</span>
-          <button className="pn-btn pn-btn-ghost pn-btn-sm" onClick={()=>setPage('orders')}>View all <i className="ti ti-arrow-right"/></button>
+          <button className="pn-btn pn-btn-ghost pn-btn-sm" onClick={()=>setPage('transactions')}>View all <i className="ti ti-arrow-right"/></button>
         </div>
         <div style={{...S.card,overflow:'hidden'}}>
           {txLoading ? (
@@ -1020,9 +1021,14 @@ function Overview({ setPage }) {
                   <div style={{fontSize:10,color:'var(--text-muted)'}}>{t.created_at ? new Date(t.created_at).toLocaleDateString('en-NG',{month:'short',day:'numeric',year:'numeric'}) : ''}</div>
                 </div>
                 <div style={{flexShrink:0,textAlign:'right',display:'flex',alignItems:'center',gap:6}}>
-                  <div>
+                  <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:3}}>
                     <div style={{fontSize:12,fontWeight:700,color:amtColor,fontVariantNumeric:'tabular-nums'}}>{amtPrefix}₦{Number(t.amount).toLocaleString('en-NG',{minimumFractionDigits:2})}</div>
-                    {(isPending||isRejected) && <div style={{fontSize:10,color:iconColor,fontWeight:500,textTransform:'capitalize'}}>{t.status}</div>}
+                    {(() => {
+                      const st = t.status || 'success';
+                      const statusPill = { success:['rgba(34,197,94,.12)','var(--success)','Successful'], completed:['rgba(34,197,94,.12)','var(--success)','Successful'], pending:['rgba(245,158,11,.12)','var(--accent)','Pending'], rejected:['rgba(220,38,38,.12)','var(--danger)','Rejected'], processing:['rgba(96,165,250,.12)','var(--info)','Processing'], cancelled:['rgba(220,38,38,.12)','var(--danger)','Cancelled'] };
+                      const [bg,fg,label] = statusPill[st] || statusPill.success;
+                      return <span style={{fontSize:9,fontWeight:600,padding:'2px 6px',borderRadius:10,background:bg,color:fg,letterSpacing:'0.02em'}}>{label}</span>;
+                    })()}
                   </div>
                   <i className="ti ti-chevron-right" style={{fontSize:14,color:'var(--text-muted)',opacity:.5}}/>
                 </div>
@@ -2047,6 +2053,74 @@ function AddFunds() {
   );
 }
 
+// ─── PAGE: TRANSACTIONS ───────────────────────────────────────────────────────
+function TransactionHistory() {
+  const [txns, setTxns] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState(null);
+
+  useEffect(() => {
+    api.get('/wallet/transactions', { params: { limit: 100 } })
+      .then(r => setTxns(Array.isArray(r.data?.transactions) ? r.data.transactions : []))
+      .catch(() => setTxns([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString('en-NG',{day:'numeric',month:'short',year:'numeric'}) : '';
+
+  return (
+    <div className="pn-page">
+      <div style={{marginBottom:20}}>
+        <div style={{fontSize:18,fontWeight:800,color:'var(--text-primary)',marginBottom:4}}>All Transactions</div>
+        <div style={{fontSize:13,color:'var(--text-secondary)'}}>Your complete wallet activity</div>
+      </div>
+
+      <div className="pn-card" style={{padding:'0 4px',overflow:'hidden'}}>
+        {loading ? (
+          <div style={{padding:'32px 0',textAlign:'center'}}><i className="ti ti-loader-2" style={{fontSize:22,color:'var(--accent)',animation:'pn-spin 1s linear infinite'}}/></div>
+        ) : txns.length === 0 ? (
+          <div className="pn-empty"><i className="ti ti-receipt pn-empty-icon"/><div className="pn-empty-title">No transactions yet</div><div className="pn-empty-sub">Your activity will appear here</div></div>
+        ) : txns.map((t, i) => {
+          const isCredit = t.type === 'credit';
+          const st = t.status || 'success';
+          const statusPill = { success:['rgba(34,197,94,.12)','var(--success)','Successful'], completed:['rgba(34,197,94,.12)','var(--success)','Successful'], pending:['rgba(245,158,11,.12)','var(--accent)','Pending'], rejected:['rgba(220,38,38,.12)','var(--danger)','Rejected'], processing:['rgba(96,165,250,.12)','var(--info)','Processing'], cancelled:['rgba(220,38,38,.12)','var(--danger)','Cancelled'] };
+          const [pillBg, pillFg, pillLabel] = statusPill[st] || statusPill.success;
+          const iconBg = st === 'pending' ? 'rgba(245,158,11,.1)' : st === 'rejected' ? 'rgba(248,113,113,.1)' : isCredit ? 'rgba(34,197,94,.1)' : 'rgba(248,113,113,.1)';
+          const iconColor = st === 'pending' ? 'var(--accent)' : st === 'rejected' ? 'var(--danger)' : isCredit ? 'var(--success)' : 'var(--danger)';
+          const icon = st === 'pending' ? 'ti-clock' : st === 'rejected' ? 'ti-x' : isCredit ? 'ti-arrow-down-left' : 'ti-arrow-up-right';
+          const amtColor = isCredit && st !== 'rejected' ? 'var(--success)' : 'var(--danger)';
+          return (
+            <div
+              key={t.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => setSelected(t)}
+              onKeyDown={e => e.key === 'Enter' && setSelected(t)}
+              style={{display:'flex',alignItems:'center',gap:10,padding:'12px 16px',borderBottom:i<txns.length-1?'0.5px solid var(--border)':'none',cursor:'pointer',transition:'background 150ms ease'}}
+              onMouseEnter={e=>e.currentTarget.style.background='var(--bg-raised)'}
+              onMouseLeave={e=>e.currentTarget.style.background=''}
+            >
+              <div style={{width:36,height:36,borderRadius:10,background:iconBg,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                <i className={`ti ${icon}`} style={{fontSize:15,color:iconColor}}/>
+              </div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:12,fontWeight:600,color:'var(--text-primary)',marginBottom:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.description || t.reference}</div>
+                <div style={{fontSize:10,color:'var(--text-muted)'}}>{fmtDate(t.created_at)}</div>
+              </div>
+              <div style={{flexShrink:0,textAlign:'right',display:'flex',flexDirection:'column',alignItems:'flex-end',gap:3}}>
+                <div style={{fontSize:13,fontWeight:700,color:amtColor,fontVariantNumeric:'tabular-nums'}}>{isCredit && st !== 'rejected' ? '+' : '-'}₦{Number(t.amount).toLocaleString('en-NG',{minimumFractionDigits:2})}</div>
+                <span style={{fontSize:9,fontWeight:600,padding:'2px 6px',borderRadius:10,background:pillBg,color:pillFg,letterSpacing:'0.02em'}}>{pillLabel}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {selected && <TxDetailSheet tx={selected} onClose={() => setSelected(null)}/>}
+    </div>
+  );
+}
+
 // ─── PAGE: PROFILE ────────────────────────────────────────────────────────────
 function ProfileSettings() {
   const { theme, setTheme } = useContext(ThemeCtx);
@@ -2671,7 +2745,7 @@ function App() {
     if (data?.new_balance != null) updateUser({ wallet_balance: data.new_balance });
     refreshUser();
   };
-  const PAGES = { overview: <Overview setPage={setPage}/>, neworder: <NewOrderSelect setPage={navigate}/>, smm: <NewOrder/>, sms: <SmsVerify/>, accounts: <BuyAccounts balance={user.balance} token={localStorage.getItem('panelng_token')} onNavigate={navigate} onPurchaseComplete={handlePurchaseComplete}/>, orders: <OrderHistory/>, funds: <AddFunds/>, referral: <Referral/>, profile: <ProfileSettings/> };
+  const PAGES = { overview: <Overview setPage={setPage}/>, neworder: <NewOrderSelect setPage={navigate}/>, smm: <NewOrder/>, sms: <SmsVerify/>, accounts: <BuyAccounts balance={user.balance} token={localStorage.getItem('panelng_token')} onNavigate={navigate} onPurchaseComplete={handlePurchaseComplete}/>, orders: <OrderHistory/>, funds: <AddFunds/>, transactions: <TransactionHistory/>, referral: <Referral/>, profile: <ProfileSettings/> };
   return (
     <div className="pn-root" data-theme={resolved}>
       <div className="pn-shell">

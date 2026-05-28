@@ -72,7 +72,7 @@ router.get('/transactions', auth, async (req, res) => {
         amount: Number(t.amount),
         description: t.description,
         reference: t.reference,
-        status: 'success',
+        status: (t.status && t.status !== 'completed') ? t.status : 'success',
         created_at: t.created_at,
         source: 'transaction',
       })),
