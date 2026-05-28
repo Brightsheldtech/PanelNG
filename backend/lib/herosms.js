@@ -29,7 +29,7 @@ const SERVICE_CODES = {
   yahoo: 'ya',
 };
 
-// Full code → readable name mapping (covers all known sms-activate codes)
+// Full code → readable name mapping (covers all known sms-activate / HeroSMS codes)
 const CODE_TO_NAME = {
   // Messaging & Social
   wa: 'WhatsApp', tg: 'Telegram', ig: 'Instagram', tt: 'TikTok',
@@ -41,9 +41,13 @@ const CODE_TO_NAME = {
   on: 'OnlyFans', vk: 'VKontakte', ok: 'Odnoklassniki', mm: 'Mail.ru',
   sn: 'Sina Weibo', dy: 'Douyin (Chinese TikTok)', ks: 'Kuaishou',
   zp: 'Zepeto', nx: '9GAG', me: 'MeWe',
+  ds: 'Discord', mo: 'Bumble', qv: 'Badoo', yl: 'Yalla', mj: 'Zalo',
+  dc: 'YikYak', mx: 'SoulApp', xs: 'GroupMe', vy: 'Meta',
+  lk: 'Pure', pu: 'Justdating',
   // Google / Apple / Microsoft
   go: 'Google / Gmail', ms: 'Microsoft', ap: 'Apple / iCloud',
   gh: 'GitHub', zo: 'Zoom', sl: 'Slack', dr: 'Dropbox',
+  wx: 'Apple', ma: 'Mail.ru',
   // E-Commerce & Delivery
   am: 'Amazon', ep: 'eBay', sh: 'Shopify', wm: 'Walmart',
   al: 'AliExpress', ta: 'Taobao', jd: 'JD.com', lz: 'Lazada',
@@ -51,7 +55,11 @@ const CODE_TO_NAME = {
   pm: 'Poshmark', ra: 'Rappi', gl: 'Glovo', wp: 'Wolt',
   ue: 'Uber Eats', dt: 'DoorDash', lf: 'Lyft', ub: 'Uber',
   gr: 'Grab', gj: 'GoJek', cr: 'Careem', sb2: 'Swiggy',
-  ab: 'Airbnb',
+  ab: 'Airbnb', uk: 'Airbnb', hw: 'Alipay / Alibaba',
+  ac: 'DoorDash', dl: 'Lazada', wr: 'Walmart',
+  ka: 'Shopee', kh: 'Bukalapak', ni: 'Gojek', xk: 'DiDi',
+  ws: 'Indodax', bc: 'GCash', bp: 'GoFundMe', yu: 'Xiaomi', sg: 'Ozon',
+  fr: 'Dana', ls: 'Careem', do: 'Leboncoin', mk: 'LongHu',
   // Finance & Payments
   pp: 'PayPal', bn: 'Binance', cb: 'Coinbase', oi: 'OKX',
   cy: 'Crypto.com', kc: 'KuCoin', kp: 'Kraken', rc: 'Revolut',
@@ -59,17 +67,32 @@ const CODE_TO_NAME = {
   ve: 'Venmo', cs: 'Cash App', rb: 'Robinhood', mt: 'Mercado Pago',
   qr: 'QIWI Wallet', pi: 'PhonePe', pt: 'Paytm', mb: 'Mobikwik',
   fi: 'Fi Money', sy: 'Swyftx', gg: 'Google Pay', st: 'Stripe',
+  it: 'Cash App', nc: 'Payoneer', qb: 'Payberry',
   // Entertainment & Gaming
   nf: 'Netflix', sp: 'Spotify', hu: 'Hulu', hs: 'Hotstar (Disney+)',
   ps: 'PlayStation Network', xb: 'Xbox', sx: 'Steam',
   pb: 'PUBG Mobile', rl: 'Roblox', su: 'Supercell (Clash of Clans)',
+  ah: 'Escape From Tarkov', bz: 'Blizzard', uf: 'Eneba',
+  gb: 'YouStar', gp: 'Ticketmaster', zy: 'Nttgame', pc: 'Casino / Gambling',
+  // Food & Dining
+  sd: 'DodoPizza', dz: 'Dominos Pizza', ry: 'McDonalds',
+  fz: 'KFC', ip: 'Burger King', sr: 'Starbucks', ea: 'JamesDelivery',
+  // Transport
+  ua: 'BlaBlaCar', tx: 'Bolt', sv: 'Dostavista', gt: 'Gett',
+  // Fuel
+  afk: 'Chevron',
+  // Food Delivery
+  aq: 'Glovo',
+  // Other services
+  xx: 'Joyride',
   // Russia / Eastern Europe
   oz: 'Ozon', av: 'Avito', ym: 'Yandex', ya: 'Yahoo',
-  fo: 'Fotostrana', fd: 'Mamba Dating',
+  fo: 'Fotostrana', fd: 'Mamba Dating', rs: 'Lotus',
   // Tech & Misc
   di: 'Discord', uc: 'Udemy', up: 'Upwork', ub2: 'Uber',
   em: 'Emirates Airlines', hy: 'Hyundai', xi: 'Xiaomi', bl: 'Bolt',
   sb: 'Starbucks', oi2: 'OKX', up2: 'Upwork',
+  gs: 'Samsung Shop', lu: 'Crickpe', oo: 'LigaPro',
   // Asian Apps
   hs2: 'HotStar', gj2: 'GoJek',
   // African-relevant
