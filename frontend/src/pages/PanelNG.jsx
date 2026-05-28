@@ -2361,50 +2361,76 @@ function SupportChat() {
   const handleKey = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } };
   const reset = () => { setPhase('greeting'); setSelectedTopic(null); setConvId(null); setMessages([]); setInput(''); };
 
-  // Keep posRef current so native event handlers always read latest position
+  // Always keep posRef in sync so drag closures read the latest position
   posRef.current = pos;
 
-  // Native DOM pointer events — bypasses React synthetic event limitations with pointer capture
   useEffect(() => {
     const btn = btnRef.current;
     if (!btn) return;
     let drag = null;
 
-    const onDown = (e) => {
-      btn.setPointerCapture(e.pointerId);
-      drag = { sx: e.clientX, sy: e.clientY, l: posRef.current.left, t: posRef.current.top, moved: false };
-      e.preventDefault();
+    // ── touch (mobile) ──────────────────────────────────────────────
+    const tStart = (e) => {
+      const t = e.touches[0];
+      drag = { x: t.clientX, y: t.clientY, l: posRef.current.left, tp: posRef.current.top, moved: false };
+      e.preventDefault(); // stop browser treating this as a scroll
     };
 
-    const onMove = (e) => {
+    const tMove = (e) => {
       if (!drag) return;
-      const dx = e.clientX - drag.sx;
-      const dy = e.clientY - drag.sy;
-      if (Math.abs(dx) > 5 || Math.abs(dy) > 5) drag.moved = true;
+      const t = e.touches[0];
+      const dx = t.clientX - drag.x, dy = t.clientY - drag.y;
+      if (Math.abs(dx) > 4 || Math.abs(dy) > 4) drag.moved = true;
       if (drag.moved) {
+        e.preventDefault();
         setPos({
           left: Math.max(0, Math.min(window.innerWidth - 52, drag.l + dx)),
-          top: Math.max(0, Math.min(window.innerHeight - 52, drag.t + dy)),
+          top:  Math.max(0, Math.min(window.innerHeight - 52, drag.tp + dy)),
         });
       }
     };
 
-    const onUp = () => {
+    const tEnd = () => {
       if (!drag) return;
       const moved = drag.moved;
       drag = null;
-      if (!moved) setOpen(o => !o);
+      if (!moved) setOpen(v => !v);
     };
 
-    btn.addEventListener('pointerdown', onDown);
-    btn.addEventListener('pointermove', onMove);
-    btn.addEventListener('pointerup', onUp);
-    btn.addEventListener('pointercancel', onUp);
+    // ── mouse (desktop) ─────────────────────────────────────────────
+    const mStart = (e) => {
+      drag = { x: e.clientX, y: e.clientY, l: posRef.current.left, tp: posRef.current.top, moved: false };
+    };
+
+    const mMove = (e) => {
+      if (!drag) return;
+      const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+      if (Math.abs(dx) > 4 || Math.abs(dy) > 4) drag.moved = true;
+      if (drag.moved) {
+        setPos({
+          left: Math.max(0, Math.min(window.innerWidth - 52, drag.l + dx)),
+          top:  Math.max(0, Math.min(window.innerHeight - 52, drag.tp + dy)),
+        });
+      }
+    };
+
+    btn.addEventListener('touchstart',  tStart, { passive: false });
+    document.addEventListener('touchmove',   tMove,  { passive: false });
+    document.addEventListener('touchend',    tEnd);
+    document.addEventListener('touchcancel', tEnd);
+
+    btn.addEventListener('mousedown',   mStart);
+    document.addEventListener('mousemove',   mMove);
+    document.addEventListener('mouseup',     tEnd);
+
     return () => {
-      btn.removeEventListener('pointerdown', onDown);
-      btn.removeEventListener('pointermove', onMove);
-      btn.removeEventListener('pointerup', onUp);
-      btn.removeEventListener('pointercancel', onUp);
+      btn.removeEventListener('touchstart',  tStart);
+      document.removeEventListener('touchmove',   tMove);
+      document.removeEventListener('touchend',    tEnd);
+      document.removeEventListener('touchcancel', tEnd);
+      btn.removeEventListener('mousedown',   mStart);
+      document.removeEventListener('mousemove',   mMove);
+      document.removeEventListener('mouseup',     tEnd);
     };
   }, []);
 
