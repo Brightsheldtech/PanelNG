@@ -2365,12 +2365,35 @@ function SupportChat() {
     if (!btn) return;
     let drag = null;
 
-    // ── TOUCH (all listeners on document, filter by btn.contains) ────
+    // ── helpers ──────────────────────────────────────────────────────
+    // We move the button via CSS transform (translate) rather than touching
+    // left/top.  React owns left/top in the JSX style prop and would reset
+    // them on any re-render (hover state change, polling, etc.).  React never
+    // sets transform on this element, so our writes survive every re-render.
+    const applyTranslate = (dx, dy) => {
+      // Clamp so button never leaves viewport
+      const r = drag.baseRect;
+      const clampedX = Math.max(-r.left, Math.min(window.innerWidth  - BTN - r.left, dx));
+      const clampedY = Math.max(-r.top,  Math.min(window.innerHeight - BTN - r.top,  dy));
+      btn.style.transform = `translate(${clampedX}px,${clampedY}px)`;
+      drag.lastX = clampedX;
+      drag.lastY = clampedY;
+    };
+
+    const commitDrag = () => {
+      // Freeze the new position into React state, clear the transform
+      const r = drag.baseRect;
+      const newLeft = r.left + (drag.lastX || 0);
+      const newTop  = r.top  + (drag.lastY || 0);
+      btn.style.transform = '';
+      setPos({ left: newLeft, top: newTop });
+    };
+
+    // ── TOUCH ────────────────────────────────────────────────────────
     const onTouchStart = (e) => {
       if (!btn.contains(e.target)) return;
       const t = e.changedTouches[0];
-      const r = btn.getBoundingClientRect();
-      drag = { id: t.identifier, sx: t.clientX, sy: t.clientY, sl: r.left, st: r.top, moved: false };
+      drag = { id: t.identifier, sx: t.clientX, sy: t.clientY, baseRect: btn.getBoundingClientRect(), moved: false, lastX: 0, lastY: 0 };
     };
 
     const onTouchMove = (e) => {
@@ -2382,37 +2405,31 @@ function SupportChat() {
       if (!t) return;
       const dx = t.clientX - drag.sx, dy = t.clientY - drag.sy;
       if (!drag.moved && (Math.abs(dx) > 4 || Math.abs(dy) > 4)) drag.moved = true;
-      if (drag.moved) {
-        // Direct DOM write — no React re-render during drag
-        btn.style.left = Math.max(0, Math.min(window.innerWidth  - BTN, drag.sl + dx)) + 'px';
-        btn.style.top  = Math.max(0, Math.min(window.innerHeight - BTN, drag.st + dy)) + 'px';
-      }
+      if (drag.moved) applyTranslate(dx, dy);
     };
 
     const onTouchEnd = (e) => {
       if (!drag) return;
-      if (e.type === 'touchcancel') { drag = null; return; }
+      if (e.type === 'touchcancel') {
+        btn.style.transform = '';
+        drag = null;
+        return;
+      }
       let t = null;
       for (let i = 0; i < e.changedTouches.length; i++) {
         if (e.changedTouches[i].identifier === drag.id) { t = e.changedTouches[i]; break; }
       }
-      if (!t) { drag = null; return; }
+      if (!t) { btn.style.transform = ''; drag = null; return; }
       const moved = drag.moved;
+      if (moved) commitDrag();
       drag = null;
-      if (moved) {
-        // Sync React state so chat panel follows on next render
-        const r = btn.getBoundingClientRect();
-        setPos({ left: r.left, top: r.top });
-      } else {
-        setOpen(v => !v);
-      }
+      if (!moved) setOpen(v => !v);
     };
 
     // ── MOUSE ────────────────────────────────────────────────────────
     const onMouseDown = (e) => {
       if (!btn.contains(e.target)) return;
-      const r = btn.getBoundingClientRect();
-      drag = { id: 'mouse', sx: e.clientX, sy: e.clientY, sl: r.left, st: r.top, moved: false };
+      drag = { id: 'mouse', sx: e.clientX, sy: e.clientY, baseRect: btn.getBoundingClientRect(), moved: false, lastX: 0, lastY: 0 };
       e.preventDefault();
     };
 
@@ -2420,26 +2437,17 @@ function SupportChat() {
       if (!drag || drag.id !== 'mouse') return;
       const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
       if (!drag.moved && (Math.abs(dx) > 4 || Math.abs(dy) > 4)) drag.moved = true;
-      if (drag.moved) {
-        btn.style.left = Math.max(0, Math.min(window.innerWidth  - BTN, drag.sl + dx)) + 'px';
-        btn.style.top  = Math.max(0, Math.min(window.innerHeight - BTN, drag.st + dy)) + 'px';
-      }
+      if (drag.moved) applyTranslate(dx, dy);
     };
 
     const onMouseUp = () => {
       if (!drag || drag.id !== 'mouse') return;
       const moved = drag.moved;
+      if (moved) commitDrag();
       drag = null;
-      if (moved) {
-        const r = btn.getBoundingClientRect();
-        setPos({ left: r.left, top: r.top });
-      } else {
-        setOpen(v => !v);
-      }
+      if (!moved) setOpen(v => !v);
     };
 
-    // passive:true on touch so we don't fight browser scroll-start detection;
-    // touch-action:none on the button already prevents page scroll for this touch sequence
     document.addEventListener('touchstart',  onTouchStart,  { passive: true });
     document.addEventListener('touchmove',   onTouchMove,   { passive: true });
     document.addEventListener('touchend',    onTouchEnd,    { passive: true });
