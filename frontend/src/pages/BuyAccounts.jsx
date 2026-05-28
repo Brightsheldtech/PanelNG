@@ -796,13 +796,6 @@ export default function BuyAccounts({ balance = 0, token = '', onNavigate, onPur
             <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.5px', marginBottom: 4 }}>Buy Accounts</div>
             <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Instant delivery. Pre-verified. Ready to use.</div>
           </div>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: 'rgba(245,158,11,.08)', border: '1px solid rgba(245,158,11,.25)', borderRadius: 10, padding: '6px 12px' }}>
-            <i className="ti ti-wallet" style={{ color: 'var(--accent)', fontSize: 14 }} />
-            <div>
-              <div style={{ fontFamily: "'Plus Jakarta Sans',sans-serif", fontSize: 8, textTransform: 'uppercase', letterSpacing: '1.2px', color: 'var(--accent)', lineHeight: 1, fontWeight: 600, opacity: .8 }}>Balance</div>
-              <div style={{ fontFamily: "'Plus Jakarta Sans',sans-serif", fontSize: 15, fontWeight: 700, color: 'var(--accent)', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>{fmt(balance)}</div>
-            </div>
-          </div>
         </div>
       </div>
 
