@@ -2381,11 +2381,15 @@ function SupportChat() {
     };
 
     const commitDrag = () => {
-      // Freeze the new position into React state, clear the transform
       const r = drag.baseRect;
       const newLeft = r.left + (drag.lastX || 0);
       const newTop  = r.top  + (drag.lastY || 0);
+      // Set left/top in DOM BEFORE clearing transform so the button never
+      // flashes to the old base position while React re-renders.
+      btn.style.left      = newLeft + 'px';
+      btn.style.top       = newTop  + 'px';
       btn.style.transform = '';
+      // Sync React state so the chat panel also re-anchors to the new position
       setPos({ left: newLeft, top: newTop });
     };
 
