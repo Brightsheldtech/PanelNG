@@ -2365,8 +2365,6 @@ function SupportChat() {
     if (!btn) return;
     let drag = null;
 
-    // Move the button via CSS transform so React's left/top reconciliation
-    // (which runs on every re-render) cannot override the drag position.
     const applyTranslate = (dx, dy) => {
       const r = drag.baseRect;
       const cx = Math.max(-r.left, Math.min(window.innerWidth  - BTN - r.left, dx));
@@ -2385,45 +2383,85 @@ function SupportChat() {
       setPos({ left: newLeft, top: newTop });
     };
 
-    // Pointer Events + setPointerCapture: once the finger is down on the button
-    // the browser routes ALL subsequent pointermove/pointerup events here,
-    // even when the finger slides far from the button.  This is the only truly
-    // reliable cross-browser drag API on both Android and iOS.
-    const onPointerDown = (e) => {
-      e.preventDefault();
-      btn.setPointerCapture(e.pointerId);
-      drag = { sx: e.clientX, sy: e.clientY, baseRect: btn.getBoundingClientRect(), moved: false, lastX: 0, lastY: 0 };
+    // ── TOUCH ────────────────────────────────────────────────────────
+    // Per the Touch Events spec, touchmove is always dispatched to the
+    // same element that received touchstart, even after the finger moves
+    // off the button.  So all three listeners go on the button itself —
+    // no document-level listeners needed.
+    const onTouchStart = (e) => {
+      const t = e.changedTouches[0];
+      drag = { id: t.identifier, sx: t.clientX, sy: t.clientY,
+               baseRect: btn.getBoundingClientRect(), moved: false, lastX: 0, lastY: 0 };
     };
 
-    const onPointerMove = (e) => {
+    const onTouchMove = (e) => {
+      if (!drag) return;
+      // Prevent page scroll only once we know this is a drag, not a tap
+      let t = null;
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        if (e.changedTouches[i].identifier === drag.id) { t = e.changedTouches[i]; break; }
+      }
+      if (!t) return;
+      const dx = t.clientX - drag.sx, dy = t.clientY - drag.sy;
+      if (!drag.moved && (Math.abs(dx) > 4 || Math.abs(dy) > 4)) drag.moved = true;
+      if (drag.moved) {
+        e.preventDefault(); // stop page scroll only during actual drag
+        applyTranslate(dx, dy);
+      }
+    };
+
+    const onTouchEnd = (e) => {
+      if (!drag) return;
+      // Check the lifted touch matches ours
+      let matched = false;
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        if (e.changedTouches[i].identifier === drag.id) { matched = true; break; }
+      }
+      if (e.type === 'touchcancel' || matched) {
+        const moved = drag.moved;
+        if (moved) commitDrag(); else btn.style.transform = '';
+        drag = null;
+        if (!moved && e.type !== 'touchcancel') setOpen(v => !v);
+      }
+    };
+
+    // ── MOUSE (desktop) ──────────────────────────────────────────────
+    const onMouseDown = (e) => {
+      e.preventDefault();
+      drag = { id: 'mouse', sx: e.clientX, sy: e.clientY,
+               baseRect: btn.getBoundingClientRect(), moved: false, lastX: 0, lastY: 0 };
+      window.addEventListener('mousemove', onMouseMove);
+      window.addEventListener('mouseup',   onMouseUp, { once: true });
+    };
+    const onMouseMove = (e) => {
       if (!drag) return;
       const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
       if (!drag.moved && (Math.abs(dx) > 4 || Math.abs(dy) > 4)) drag.moved = true;
       if (drag.moved) applyTranslate(dx, dy);
     };
-
-    const onPointerUp = () => {
+    const onMouseUp = () => {
       if (!drag) return;
       const moved = drag.moved;
       if (moved) commitDrag(); else btn.style.transform = '';
       drag = null;
+      window.removeEventListener('mousemove', onMouseMove);
       if (!moved) setOpen(v => !v);
     };
 
-    const onPointerCancel = () => {
-      if (drag) { btn.style.transform = ''; drag = null; }
-    };
-
-    btn.addEventListener('pointerdown',   onPointerDown);
-    btn.addEventListener('pointermove',   onPointerMove);
-    btn.addEventListener('pointerup',     onPointerUp);
-    btn.addEventListener('pointercancel', onPointerCancel);
+    btn.addEventListener('touchstart',  onTouchStart,  { passive: true });
+    btn.addEventListener('touchmove',   onTouchMove,   { passive: false });
+    btn.addEventListener('touchend',    onTouchEnd,    { passive: true });
+    btn.addEventListener('touchcancel', onTouchEnd,    { passive: true });
+    btn.addEventListener('mousedown',   onMouseDown);
 
     return () => {
-      btn.removeEventListener('pointerdown',   onPointerDown);
-      btn.removeEventListener('pointermove',   onPointerMove);
-      btn.removeEventListener('pointerup',     onPointerUp);
-      btn.removeEventListener('pointercancel', onPointerCancel);
+      btn.removeEventListener('touchstart',  onTouchStart);
+      btn.removeEventListener('touchmove',   onTouchMove);
+      btn.removeEventListener('touchend',    onTouchEnd);
+      btn.removeEventListener('touchcancel', onTouchEnd);
+      btn.removeEventListener('mousedown',   onMouseDown);
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup',   onMouseUp);
     };
   }, []);
 
@@ -2593,8 +2631,9 @@ function SupportChat() {
           zIndex:9999,
           transition:'opacity 200ms ease, box-shadow 180ms ease',
           opacity: open || hovered ? 1 : 0.75,
-          touchAction:'none',
+          touchAction:'manipulation',
           userSelect:'none',
+          WebkitUserSelect:'none',
         }}
         aria-label={open?'Close support chat':'Open support chat'}
       >
