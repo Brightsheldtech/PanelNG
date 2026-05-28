@@ -2275,7 +2275,8 @@ function SupportChat() {
   const [hovered, setHovered] = useState(false);
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
-  const dragRef = useRef({ moved: false });
+  const btnRef = useRef(null);
+  const posRef = useRef(null);
 
   const BTN = 52;
   const [pos, setPos] = useState(() => {
@@ -2360,30 +2361,52 @@ function SupportChat() {
   const handleKey = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } };
   const reset = () => { setPhase('greeting'); setSelectedTopic(null); setConvId(null); setMessages([]); setInput(''); };
 
-  // Drag: setPointerCapture keeps events on the button even when finger moves fast
-  const onPointerDown = (e) => {
-    e.currentTarget.setPointerCapture(e.pointerId);
-    dragRef.current = { clientX: e.clientX, clientY: e.clientY, origLeft: pos.left, origTop: pos.top, moved: false };
-    e.preventDefault();
-  };
+  // Keep posRef current so native event handlers always read latest position
+  posRef.current = pos;
 
-  const onPointerMove = (e) => {
-    if (!dragRef.current || !e.currentTarget.hasPointerCapture(e.pointerId)) return;
-    const dx = e.clientX - dragRef.current.clientX;
-    const dy = e.clientY - dragRef.current.clientY;
-    if (Math.abs(dx) > 5 || Math.abs(dy) > 5) dragRef.current.moved = true;
-    setPos({
-      left: Math.max(0, Math.min(window.innerWidth - BTN, dragRef.current.origLeft + dx)),
-      top: Math.max(0, Math.min(window.innerHeight - BTN, dragRef.current.origTop + dy)),
-    });
-  };
+  // Native DOM pointer events — bypasses React synthetic event limitations with pointer capture
+  useEffect(() => {
+    const btn = btnRef.current;
+    if (!btn) return;
+    let drag = null;
 
-  const onPointerUp = () => {
-    if (!dragRef.current) return;
-    const moved = dragRef.current.moved;
-    dragRef.current = null;
-    if (!moved) setOpen(o => !o);
-  };
+    const onDown = (e) => {
+      btn.setPointerCapture(e.pointerId);
+      drag = { sx: e.clientX, sy: e.clientY, l: posRef.current.left, t: posRef.current.top, moved: false };
+      e.preventDefault();
+    };
+
+    const onMove = (e) => {
+      if (!drag) return;
+      const dx = e.clientX - drag.sx;
+      const dy = e.clientY - drag.sy;
+      if (Math.abs(dx) > 5 || Math.abs(dy) > 5) drag.moved = true;
+      if (drag.moved) {
+        setPos({
+          left: Math.max(0, Math.min(window.innerWidth - 52, drag.l + dx)),
+          top: Math.max(0, Math.min(window.innerHeight - 52, drag.t + dy)),
+        });
+      }
+    };
+
+    const onUp = () => {
+      if (!drag) return;
+      const moved = drag.moved;
+      drag = null;
+      if (!moved) setOpen(o => !o);
+    };
+
+    btn.addEventListener('pointerdown', onDown);
+    btn.addEventListener('pointermove', onMove);
+    btn.addEventListener('pointerup', onUp);
+    btn.addEventListener('pointercancel', onUp);
+    return () => {
+      btn.removeEventListener('pointerdown', onDown);
+      btn.removeEventListener('pointermove', onMove);
+      btn.removeEventListener('pointerup', onUp);
+      btn.removeEventListener('pointercancel', onUp);
+    };
+  }, []);
 
   return (
     <>
@@ -2531,9 +2554,7 @@ function SupportChat() {
 
       {/* Floating button — draggable, tap to open/close */}
       <button
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
+        ref={btnRef}
         onMouseEnter={()=>setHovered(true)}
         onMouseLeave={()=>setHovered(false)}
         style={{
