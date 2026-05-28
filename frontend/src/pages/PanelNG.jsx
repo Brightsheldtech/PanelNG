@@ -2365,109 +2365,65 @@ function SupportChat() {
     if (!btn) return;
     let drag = null;
 
-    // ── helpers ──────────────────────────────────────────────────────
-    // We move the button via CSS transform (translate) rather than touching
-    // left/top.  React owns left/top in the JSX style prop and would reset
-    // them on any re-render (hover state change, polling, etc.).  React never
-    // sets transform on this element, so our writes survive every re-render.
+    // Move the button via CSS transform so React's left/top reconciliation
+    // (which runs on every re-render) cannot override the drag position.
     const applyTranslate = (dx, dy) => {
-      // Clamp so button never leaves viewport
       const r = drag.baseRect;
-      const clampedX = Math.max(-r.left, Math.min(window.innerWidth  - BTN - r.left, dx));
-      const clampedY = Math.max(-r.top,  Math.min(window.innerHeight - BTN - r.top,  dy));
-      btn.style.transform = `translate(${clampedX}px,${clampedY}px)`;
-      drag.lastX = clampedX;
-      drag.lastY = clampedY;
+      const cx = Math.max(-r.left, Math.min(window.innerWidth  - BTN - r.left, dx));
+      const cy = Math.max(-r.top,  Math.min(window.innerHeight - BTN - r.top,  dy));
+      btn.style.transform = `translate(${cx}px,${cy}px)`;
+      drag.lastX = cx;
+      drag.lastY = cy;
     };
 
     const commitDrag = () => {
-      const r = drag.baseRect;
-      const newLeft = r.left + (drag.lastX || 0);
-      const newTop  = r.top  + (drag.lastY || 0);
-      // Set left/top in DOM BEFORE clearing transform so the button never
-      // flashes to the old base position while React re-renders.
+      const newLeft = drag.baseRect.left + drag.lastX;
+      const newTop  = drag.baseRect.top  + drag.lastY;
       btn.style.left      = newLeft + 'px';
       btn.style.top       = newTop  + 'px';
       btn.style.transform = '';
-      // Sync React state so the chat panel also re-anchors to the new position
       setPos({ left: newLeft, top: newTop });
     };
 
-    // ── TOUCH ────────────────────────────────────────────────────────
-    const onTouchStart = (e) => {
-      if (!btn.contains(e.target)) return;
-      const t = e.changedTouches[0];
-      drag = { id: t.identifier, sx: t.clientX, sy: t.clientY, baseRect: btn.getBoundingClientRect(), moved: false, lastX: 0, lastY: 0 };
-    };
-
-    const onTouchMove = (e) => {
-      if (!drag) return;
-      let t = null;
-      for (let i = 0; i < e.changedTouches.length; i++) {
-        if (e.changedTouches[i].identifier === drag.id) { t = e.changedTouches[i]; break; }
-      }
-      if (!t) return;
-      const dx = t.clientX - drag.sx, dy = t.clientY - drag.sy;
-      if (!drag.moved && (Math.abs(dx) > 4 || Math.abs(dy) > 4)) drag.moved = true;
-      if (drag.moved) applyTranslate(dx, dy);
-    };
-
-    const onTouchEnd = (e) => {
-      if (!drag) return;
-      if (e.type === 'touchcancel') {
-        btn.style.transform = '';
-        drag = null;
-        return;
-      }
-      let t = null;
-      for (let i = 0; i < e.changedTouches.length; i++) {
-        if (e.changedTouches[i].identifier === drag.id) { t = e.changedTouches[i]; break; }
-      }
-      if (!t) { btn.style.transform = ''; drag = null; return; }
-      const moved = drag.moved;
-      if (moved) commitDrag();
-      drag = null;
-      if (!moved) setOpen(v => !v);
-    };
-
-    // ── MOUSE ────────────────────────────────────────────────────────
-    const onMouseDown = (e) => {
-      if (!btn.contains(e.target)) return;
-      drag = { id: 'mouse', sx: e.clientX, sy: e.clientY, baseRect: btn.getBoundingClientRect(), moved: false, lastX: 0, lastY: 0 };
+    // Pointer Events + setPointerCapture: once the finger is down on the button
+    // the browser routes ALL subsequent pointermove/pointerup events here,
+    // even when the finger slides far from the button.  This is the only truly
+    // reliable cross-browser drag API on both Android and iOS.
+    const onPointerDown = (e) => {
       e.preventDefault();
+      btn.setPointerCapture(e.pointerId);
+      drag = { sx: e.clientX, sy: e.clientY, baseRect: btn.getBoundingClientRect(), moved: false, lastX: 0, lastY: 0 };
     };
 
-    const onMouseMove = (e) => {
-      if (!drag || drag.id !== 'mouse') return;
+    const onPointerMove = (e) => {
+      if (!drag) return;
       const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
       if (!drag.moved && (Math.abs(dx) > 4 || Math.abs(dy) > 4)) drag.moved = true;
       if (drag.moved) applyTranslate(dx, dy);
     };
 
-    const onMouseUp = () => {
-      if (!drag || drag.id !== 'mouse') return;
+    const onPointerUp = () => {
+      if (!drag) return;
       const moved = drag.moved;
-      if (moved) commitDrag();
+      if (moved) commitDrag(); else btn.style.transform = '';
       drag = null;
       if (!moved) setOpen(v => !v);
     };
 
-    document.addEventListener('touchstart',  onTouchStart,  { passive: true });
-    document.addEventListener('touchmove',   onTouchMove,   { passive: true });
-    document.addEventListener('touchend',    onTouchEnd,    { passive: true });
-    document.addEventListener('touchcancel', onTouchEnd,    { passive: true });
-    document.addEventListener('mousedown',   onMouseDown);
-    document.addEventListener('mousemove',   onMouseMove);
-    document.addEventListener('mouseup',     onMouseUp);
+    const onPointerCancel = () => {
+      if (drag) { btn.style.transform = ''; drag = null; }
+    };
+
+    btn.addEventListener('pointerdown',   onPointerDown);
+    btn.addEventListener('pointermove',   onPointerMove);
+    btn.addEventListener('pointerup',     onPointerUp);
+    btn.addEventListener('pointercancel', onPointerCancel);
 
     return () => {
-      document.removeEventListener('touchstart',  onTouchStart);
-      document.removeEventListener('touchmove',   onTouchMove);
-      document.removeEventListener('touchend',    onTouchEnd);
-      document.removeEventListener('touchcancel', onTouchEnd);
-      document.removeEventListener('mousedown',   onMouseDown);
-      document.removeEventListener('mousemove',   onMouseMove);
-      document.removeEventListener('mouseup',     onMouseUp);
+      btn.removeEventListener('pointerdown',   onPointerDown);
+      btn.removeEventListener('pointermove',   onPointerMove);
+      btn.removeEventListener('pointerup',     onPointerUp);
+      btn.removeEventListener('pointercancel', onPointerCancel);
     };
   }, []);
 
