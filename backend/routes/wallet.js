@@ -20,7 +20,10 @@ router.get('/balance', auth, async (req, res) => {
 
 // GET /api/wallet/transactions — unified feed: transactions + bank deposits + accszone orders
 router.get('/transactions', auth, async (req, res) => {
-  const limit = parseInt(req.query.limit) || 30;
+  const limit  = parseInt(req.query.limit)  || 30;
+  const offset = parseInt(req.query.offset) || 0;
+  // Fetch enough rows from each source to cover offset + limit after merge
+  const fetchSize = limit + offset;
 
   try {
     const userId = req.user.id;
@@ -32,7 +35,7 @@ router.get('/transactions', auth, async (req, res) => {
         .select('id, type, amount, description, reference, status, created_at')
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
-        .limit(limit),
+        .limit(fetchSize),
 
       // Bank deposit requests — only pending/rejected (confirmed ones are already in transactions)
       supabase
@@ -41,7 +44,7 @@ router.get('/transactions', auth, async (req, res) => {
         .eq('user_id', userId)
         .in('status', ['pending', 'rejected'])
         .order('created_at', { ascending: false })
-        .limit(limit),
+        .limit(fetchSize),
 
       // Accszone (Buy Accounts) orders
       supabase
@@ -49,7 +52,7 @@ router.get('/transactions', auth, async (req, res) => {
         .select('id, product_name, platform, quantity, total_cost, status, created_at')
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
-        .limit(limit),
+        .limit(fetchSize),
     ]);
 
     if (txRes.error) console.error('[wallet/tx] transactions error:', txRes.error.message);
@@ -104,7 +107,7 @@ router.get('/transactions', auth, async (req, res) => {
 
     unified.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
-    res.json({ transactions: unified.slice(0, limit), total: unified.length });
+    res.json({ transactions: unified.slice(offset, offset + limit), total: unified.length });
   } catch (err) {
     console.error('[wallet/transactions]:', err.message);
     res.status(500).json({ error: 'Failed to get transactions' });

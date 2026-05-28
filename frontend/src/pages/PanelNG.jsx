@@ -26,7 +26,7 @@ function ThemeProvider({ children }) {
 
 // ─── MOCK DATA ────────────────────────────────────────────────────────────────
 const MOCK = {
-  user: { name: 'Adedayo Adedoyin', email: 'adedayoadedoyin245@gmail.com', role: 'user', balance: 499.85, totalOrders: 2, totalSpent: 0.15, initials: 'AA' },
+  user: { name: 'Demo User', email: 'demo@panelng.com', role: 'user', balance: 499.85, totalOrders: 2, totalSpent: 0.15, initials: 'DU' },
   orders: [
     { id: '233d5234', type: 'sms', platform: 'WhatsApp', phone: '+27833980213', country: 'South Africa', status: 'finished', amount: 0.15 },
     { id: '9d6486ab', type: 'sms', platform: 'WhatsApp', phone: '+14386665757', country: 'Canada', status: 'completed', amount: 0.00 },
@@ -1259,8 +1259,10 @@ function SmsVerify() {
   const [activeOrderId, setActiveOrderId] = useState(null);
   const [code, setCode] = useState('');
   const [polling, setPolling] = useState(false);
+  const [pollTimedOut, setPollTimedOut] = useState(false);
   const [copied, setCopied] = useState(false);
   const pollRef = useRef(null);
+  const pollCountRef = useRef(0);
 
   useEffect(() => {
     api.get('/sms/services')
@@ -1281,7 +1283,16 @@ function SmsVerify() {
   useEffect(() => {
     if (!activeOrderId || code) return;
     setPolling(true);
+    setPollTimedOut(false);
+    pollCountRef.current = 0;
     pollRef.current = setInterval(async () => {
+      pollCountRef.current += 1;
+      if (pollCountRef.current >= 24) {
+        clearInterval(pollRef.current);
+        setPolling(false);
+        setPollTimedOut(true);
+        return;
+      }
       try {
         const res = await api.get(`/sms/check/${activeOrderId}`);
         if (res.data.smsCode) {
@@ -1327,7 +1338,7 @@ function SmsVerify() {
     if (activeOrderId) {
       try { await api.post(`/sms/finish/${activeOrderId}`); } catch (_) {}
     }
-    setActive(null); setActiveOrderId(null); setCode(''); setPolling(false);
+    setActive(null); setActiveOrderId(null); setCode(''); setPolling(false); setPollTimedOut(false);
     clearInterval(pollRef.current);
   };
 
@@ -1354,6 +1365,14 @@ function SmsVerify() {
                 <div className="pn-mono" style={{fontSize:36,color:'var(--text-primary)',letterSpacing:'0.12em'}}>{code}</div>
                 <button className="pn-btn pn-btn-primary pn-btn-sm" onClick={()=>handleCopy(code)}><i className={`ti ${copied?'ti-check':'ti-copy'}`}/>Copy</button>
               </div>
+            </div>
+          ) : pollTimedOut ? (
+            <div style={{marginBottom:16,padding:'12px 14px',background:'rgba(245,158,11,.08)',border:'1px solid rgba(245,158,11,.25)',borderRadius:10}}>
+              <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
+                <i className="ti ti-clock-x" style={{color:'var(--accent)',fontSize:16}}/>
+                <span style={{fontSize:13,fontWeight:600,color:'var(--accent)'}}>No code received (2 min timeout)</span>
+              </div>
+              <div style={{fontSize:12,color:'var(--text-secondary)',marginBottom:10}}>The number may have expired or the SMS was not sent. You can try cancelling and getting a new number.</div>
             </div>
           ) : (
             <div style={{display:'flex',alignItems:'center',gap:10,color:'var(--text-secondary)',fontSize:13,marginBottom:16}}>
@@ -2058,14 +2077,36 @@ function AddFunds() {
 function TransactionHistory() {
   const [txns, setTxns] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [offset, setOffset] = useState(0);
   const [selected, setSelected] = useState(null);
+  const PAGE_SIZE = 30;
 
   useEffect(() => {
-    api.get('/wallet/transactions', { params: { limit: 100 } })
-      .then(r => setTxns(Array.isArray(r.data?.transactions) ? r.data.transactions : []))
+    api.get('/wallet/transactions', { params: { limit: PAGE_SIZE + 1, offset: 0 } })
+      .then(r => {
+        const rows = Array.isArray(r.data?.transactions) ? r.data.transactions : [];
+        setHasMore(rows.length > PAGE_SIZE);
+        setTxns(rows.slice(0, PAGE_SIZE));
+        setOffset(PAGE_SIZE);
+      })
       .catch(() => setTxns([]))
       .finally(() => setLoading(false));
   }, []);
+
+  const loadMore = () => {
+    setLoadingMore(true);
+    api.get('/wallet/transactions', { params: { limit: PAGE_SIZE + 1, offset } })
+      .then(r => {
+        const rows = Array.isArray(r.data?.transactions) ? r.data.transactions : [];
+        setHasMore(rows.length > PAGE_SIZE);
+        setTxns(prev => [...prev, ...rows.slice(0, PAGE_SIZE)]);
+        setOffset(prev => prev + PAGE_SIZE);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingMore(false));
+  };
 
   const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString('en-NG',{day:'numeric',month:'short',year:'numeric'}) : '';
 
@@ -2116,6 +2157,19 @@ function TransactionHistory() {
           );
         })}
       </div>
+
+      {hasMore && (
+        <div style={{textAlign:'center',marginTop:12}}>
+          <button
+            className="pn-btn pn-btn-secondary"
+            onClick={loadMore}
+            disabled={loadingMore}
+            style={{minWidth:140}}
+          >
+            {loadingMore ? <><i className="ti ti-loader-2" style={{animation:'pn-spin 1s linear infinite'}}/>Loading…</> : <><i className="ti ti-chevrons-down"/>Load more</>}
+          </button>
+        </div>
+      )}
 
       {selected && <TxDetailSheet tx={selected} onClose={() => setSelected(null)}/>}
     </div>
