@@ -2276,7 +2276,6 @@ function SupportChat() {
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
   const btnRef = useRef(null);
-  const posRef = useRef(null);
 
   const BTN = 52;
   const [pos, setPos] = useState(() => {
@@ -2361,76 +2360,102 @@ function SupportChat() {
   const handleKey = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } };
   const reset = () => { setPhase('greeting'); setSelectedTopic(null); setConvId(null); setMessages([]); setInput(''); };
 
-  // Always keep posRef in sync so drag closures read the latest position
-  posRef.current = pos;
-
   useEffect(() => {
     const btn = btnRef.current;
     if (!btn) return;
     let drag = null;
 
-    // ── touch (mobile) ──────────────────────────────────────────────
-    const tStart = (e) => {
-      const t = e.touches[0];
-      drag = { x: t.clientX, y: t.clientY, l: posRef.current.left, tp: posRef.current.top, moved: false };
-      e.preventDefault(); // stop browser treating this as a scroll
+    // ── TOUCH (all listeners on document, filter by btn.contains) ────
+    const onTouchStart = (e) => {
+      if (!btn.contains(e.target)) return;
+      const t = e.changedTouches[0];
+      const r = btn.getBoundingClientRect();
+      drag = { id: t.identifier, sx: t.clientX, sy: t.clientY, sl: r.left, st: r.top, moved: false };
     };
 
-    const tMove = (e) => {
+    const onTouchMove = (e) => {
       if (!drag) return;
-      const t = e.touches[0];
-      const dx = t.clientX - drag.x, dy = t.clientY - drag.y;
-      if (Math.abs(dx) > 4 || Math.abs(dy) > 4) drag.moved = true;
+      let t = null;
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        if (e.changedTouches[i].identifier === drag.id) { t = e.changedTouches[i]; break; }
+      }
+      if (!t) return;
+      const dx = t.clientX - drag.sx, dy = t.clientY - drag.sy;
+      if (!drag.moved && (Math.abs(dx) > 4 || Math.abs(dy) > 4)) drag.moved = true;
       if (drag.moved) {
-        e.preventDefault();
-        setPos({
-          left: Math.max(0, Math.min(window.innerWidth - 52, drag.l + dx)),
-          top:  Math.max(0, Math.min(window.innerHeight - 52, drag.tp + dy)),
-        });
+        // Direct DOM write — no React re-render during drag
+        btn.style.left = Math.max(0, Math.min(window.innerWidth  - BTN, drag.sl + dx)) + 'px';
+        btn.style.top  = Math.max(0, Math.min(window.innerHeight - BTN, drag.st + dy)) + 'px';
       }
     };
 
-    const tEnd = () => {
+    const onTouchEnd = (e) => {
       if (!drag) return;
+      if (e.type === 'touchcancel') { drag = null; return; }
+      let t = null;
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        if (e.changedTouches[i].identifier === drag.id) { t = e.changedTouches[i]; break; }
+      }
+      if (!t) { drag = null; return; }
       const moved = drag.moved;
       drag = null;
-      if (!moved) setOpen(v => !v);
-    };
-
-    // ── mouse (desktop) ─────────────────────────────────────────────
-    const mStart = (e) => {
-      drag = { x: e.clientX, y: e.clientY, l: posRef.current.left, tp: posRef.current.top, moved: false };
-    };
-
-    const mMove = (e) => {
-      if (!drag) return;
-      const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
-      if (Math.abs(dx) > 4 || Math.abs(dy) > 4) drag.moved = true;
-      if (drag.moved) {
-        setPos({
-          left: Math.max(0, Math.min(window.innerWidth - 52, drag.l + dx)),
-          top:  Math.max(0, Math.min(window.innerHeight - 52, drag.tp + dy)),
-        });
+      if (moved) {
+        // Sync React state so chat panel follows on next render
+        const r = btn.getBoundingClientRect();
+        setPos({ left: r.left, top: r.top });
+      } else {
+        setOpen(v => !v);
       }
     };
 
-    btn.addEventListener('touchstart',  tStart, { passive: false });
-    document.addEventListener('touchmove',   tMove,  { passive: false });
-    document.addEventListener('touchend',    tEnd);
-    document.addEventListener('touchcancel', tEnd);
+    // ── MOUSE ────────────────────────────────────────────────────────
+    const onMouseDown = (e) => {
+      if (!btn.contains(e.target)) return;
+      const r = btn.getBoundingClientRect();
+      drag = { id: 'mouse', sx: e.clientX, sy: e.clientY, sl: r.left, st: r.top, moved: false };
+      e.preventDefault();
+    };
 
-    btn.addEventListener('mousedown',   mStart);
-    document.addEventListener('mousemove',   mMove);
-    document.addEventListener('mouseup',     tEnd);
+    const onMouseMove = (e) => {
+      if (!drag || drag.id !== 'mouse') return;
+      const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
+      if (!drag.moved && (Math.abs(dx) > 4 || Math.abs(dy) > 4)) drag.moved = true;
+      if (drag.moved) {
+        btn.style.left = Math.max(0, Math.min(window.innerWidth  - BTN, drag.sl + dx)) + 'px';
+        btn.style.top  = Math.max(0, Math.min(window.innerHeight - BTN, drag.st + dy)) + 'px';
+      }
+    };
+
+    const onMouseUp = () => {
+      if (!drag || drag.id !== 'mouse') return;
+      const moved = drag.moved;
+      drag = null;
+      if (moved) {
+        const r = btn.getBoundingClientRect();
+        setPos({ left: r.left, top: r.top });
+      } else {
+        setOpen(v => !v);
+      }
+    };
+
+    // passive:true on touch so we don't fight browser scroll-start detection;
+    // touch-action:none on the button already prevents page scroll for this touch sequence
+    document.addEventListener('touchstart',  onTouchStart,  { passive: true });
+    document.addEventListener('touchmove',   onTouchMove,   { passive: true });
+    document.addEventListener('touchend',    onTouchEnd,    { passive: true });
+    document.addEventListener('touchcancel', onTouchEnd,    { passive: true });
+    document.addEventListener('mousedown',   onMouseDown);
+    document.addEventListener('mousemove',   onMouseMove);
+    document.addEventListener('mouseup',     onMouseUp);
 
     return () => {
-      btn.removeEventListener('touchstart',  tStart);
-      document.removeEventListener('touchmove',   tMove);
-      document.removeEventListener('touchend',    tEnd);
-      document.removeEventListener('touchcancel', tEnd);
-      btn.removeEventListener('mousedown',   mStart);
-      document.removeEventListener('mousemove',   mMove);
-      document.removeEventListener('mouseup',     tEnd);
+      document.removeEventListener('touchstart',  onTouchStart);
+      document.removeEventListener('touchmove',   onTouchMove);
+      document.removeEventListener('touchend',    onTouchEnd);
+      document.removeEventListener('touchcancel', onTouchEnd);
+      document.removeEventListener('mousedown',   onMouseDown);
+      document.removeEventListener('mousemove',   onMouseMove);
+      document.removeEventListener('mouseup',     onMouseUp);
     };
   }, []);
 
