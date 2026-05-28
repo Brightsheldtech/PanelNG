@@ -2360,33 +2360,29 @@ function SupportChat() {
   const handleKey = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } };
   const reset = () => { setPhase('greeting'); setSelectedTopic(null); setConvId(null); setMessages([]); setInput(''); };
 
-  // Drag: press & hold to move, tap to open/close
+  // Drag: setPointerCapture keeps events on the button even when finger moves fast
   const onPointerDown = (e) => {
-    const startX = e.clientX;
-    const startY = e.clientY;
-    const origLeft = pos.left;
-    const origTop = pos.top;
-    dragRef.current.moved = false;
-
-    const onMove = (me) => {
-      const dx = me.clientX - startX;
-      const dy = me.clientY - startY;
-      if (Math.abs(dx) > 5 || Math.abs(dy) > 5) dragRef.current.moved = true;
-      setPos({
-        left: Math.max(0, Math.min(window.innerWidth - BTN, origLeft + dx)),
-        top: Math.max(0, Math.min(window.innerHeight - BTN, origTop + dy)),
-      });
-    };
-
-    const onUp = () => {
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-      if (!dragRef.current.moved) setOpen(o => !o);
-    };
-
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
+    e.currentTarget.setPointerCapture(e.pointerId);
+    dragRef.current = { clientX: e.clientX, clientY: e.clientY, origLeft: pos.left, origTop: pos.top, moved: false };
     e.preventDefault();
+  };
+
+  const onPointerMove = (e) => {
+    if (!dragRef.current || !e.currentTarget.hasPointerCapture(e.pointerId)) return;
+    const dx = e.clientX - dragRef.current.clientX;
+    const dy = e.clientY - dragRef.current.clientY;
+    if (Math.abs(dx) > 5 || Math.abs(dy) > 5) dragRef.current.moved = true;
+    setPos({
+      left: Math.max(0, Math.min(window.innerWidth - BTN, dragRef.current.origLeft + dx)),
+      top: Math.max(0, Math.min(window.innerHeight - BTN, dragRef.current.origTop + dy)),
+    });
+  };
+
+  const onPointerUp = () => {
+    if (!dragRef.current) return;
+    const moved = dragRef.current.moved;
+    dragRef.current = null;
+    if (!moved) setOpen(o => !o);
   };
 
   return (
@@ -2536,6 +2532,8 @@ function SupportChat() {
       {/* Floating button — draggable, tap to open/close */}
       <button
         onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
         onMouseEnter={()=>setHovered(true)}
         onMouseLeave={()=>setHovered(false)}
         style={{

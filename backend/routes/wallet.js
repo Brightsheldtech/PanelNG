@@ -29,7 +29,7 @@ router.get('/transactions', auth, async (req, res) => {
       // Core transactions (SMM debits, SMS debits, card credits, bank confirmations, referral credits)
       supabase
         .from('transactions')
-        .select('id, type, amount, description, reference, created_at')
+        .select('id, type, amount, description, reference, status, created_at')
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
         .limit(limit),
