@@ -169,12 +169,21 @@ const herosms = {
 
   async getAllServices() {
     // Fetch ALL available services from HeroSMS by calling getPrices without a service filter
-    const [pricesData, countriesData] = await Promise.all([
+    const [pricesData, countriesData, svcListData] = await Promise.all([
       call({ action: 'getPrices' }),
       call({ action: 'getCountries' }),
+      call({ action: 'getServicesList' }),
     ]);
 
     if (!pricesData || typeof pricesData !== 'object') return [];
+
+    // Build authoritative name lookup from HeroSMS's own service list
+    const officialNames = {};
+    if (svcListData?.services) {
+      for (const svc of svcListData.services) {
+        if (svc.code && svc.name) officialNames[svc.code] = svc.name;
+      }
+    }
 
     // Aggregate counts and costs across all countries per service code
     const services = {};
@@ -184,7 +193,7 @@ const herosms = {
       for (const [code, entry] of Object.entries(svcs)) {
         if (!entry || entry.count < 1) continue;
         if (!services[code]) {
-          const name = CODE_TO_NAME[code] || code.toUpperCase();
+          const name = officialNames[code] || CODE_TO_NAME[code] || code.toUpperCase();
           services[code] = { code, name, totalCount: 0, minCost: Infinity, maxCost: 0, countryCount: 0 };
         }
         services[code].totalCount += entry.count;
