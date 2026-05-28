@@ -798,6 +798,7 @@ function TxDetailSheet({ tx, onClose }) {
   const iconBg  = isPending ? 'rgba(245,158,11,.15)' : isRejected ? 'rgba(220,38,38,.15)' : isCredit ? 'rgba(34,197,94,.15)' : 'rgba(220,38,38,.15)';
   const iconColor = isPending ? 'var(--accent)' : isRejected ? 'var(--danger)' : isCredit ? 'var(--success)' : 'var(--danger)';
   const icon = isPending ? 'ti-clock' : isRejected ? 'ti-x' : isCredit ? 'ti-arrow-down-left' : 'ti-arrow-up-right';
+  const amtColor = isPending ? 'var(--accent)' : (isCredit && !isRejected ? 'var(--success)' : 'var(--danger)');
   const statusColors = { success:['rgba(34,197,94,.12)','var(--success)'], completed:['rgba(34,197,94,.12)','var(--success)'], pending:['rgba(245,158,11,.12)','var(--accent)'], rejected:['rgba(220,38,38,.12)','var(--danger)'], processing:['rgba(96,165,250,.12)','var(--info)'], cancelled:['rgba(220,38,38,.12)','var(--danger)'] };
   const [sBg, sFg] = statusColors[tx.status] || statusColors.success;
   const fmtDate = (iso) => iso ? new Date(iso).toLocaleString('en-NG',{weekday:'short',day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
@@ -819,7 +820,7 @@ function TxDetailSheet({ tx, onClose }) {
             <div className="pn-tx-amount-val" style={{color:amtColor}}>
               {isCredit && !isRejected ? '+' : '-'}₦{Number(tx.amount).toLocaleString('en-NG',{minimumFractionDigits:2})}
             </div>
-            <div className="pn-tx-amount-label">{isCredit ? 'Money received' : 'Money sent'}</div>
+            <div className="pn-tx-amount-label">{isPending ? 'Pending' : isCredit ? 'Money received' : 'Money sent'}</div>
           </div>
           {/* Detail rows */}
           <div className="pn-tx-details">
@@ -1000,7 +1001,7 @@ function Overview({ setPage }) {
             const iconBg = isPending ? 'rgba(245,158,11,.1)' : isRejected ? 'rgba(248,113,113,.1)' : isCredit ? 'rgba(34,197,94,.1)' : 'rgba(248,113,113,.1)';
             const iconColor = isPending ? 'var(--accent)' : isRejected ? 'var(--danger)' : isCredit ? 'var(--success)' : 'var(--danger)';
             const icon = isPending ? 'ti-clock' : isRejected ? 'ti-x' : isCredit ? 'ti-arrow-down-left' : 'ti-arrow-up-right';
-            const amtColor = isCredit && !isRejected ? 'var(--success)' : 'var(--danger)';
+            const amtColor = isPending ? 'var(--accent)' : (isCredit && !isRejected ? 'var(--success)' : 'var(--danger)');
             const amtPrefix = isCredit && !isRejected ? '+' : '-';
             return (
               <div
@@ -2271,8 +2272,27 @@ function SupportChat() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  const [hovered, setHovered] = useState(false);
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
+  const dragRef = useRef({ moved: false });
+
+  const BTN = 52;
+  const [pos, setPos] = useState(() => {
+    if (typeof window === 'undefined') return { left: 0, top: 0 };
+    const mob = window.innerWidth <= 768;
+    return {
+      left: window.innerWidth - BTN - (mob ? 12 : 24),
+      top: window.innerHeight - BTN - (mob ? 76 : 24),
+    };
+  });
+
+  const PANEL_W = typeof window !== 'undefined' ? Math.min(360, window.innerWidth - 24) : 360;
+  const PANEL_H = 480;
+  const panelTop = pos.top >= PANEL_H + 12 ? pos.top - PANEL_H - 12 : pos.top + BTN + 12;
+  const panelLeft = typeof window !== 'undefined'
+    ? Math.max(8, Math.min(window.innerWidth - PANEL_W - 8, pos.left + BTN - PANEL_W))
+    : pos.left;
 
   const scrollBottom = () => setTimeout(() => bottomRef.current?.scrollIntoView({ behavior:'smooth' }), 60);
 
@@ -2290,9 +2310,6 @@ function SupportChat() {
     const id = setInterval(poll, 4000);
     return () => clearInterval(id);
   }, [phase, convId, open]);
-
-  const handleOpen = () => { setOpen(true); };
-  const handleClose = () => setOpen(false);
 
   const handleTopic = async (topic) => {
     setSelectedTopic(topic);
@@ -2341,17 +2358,42 @@ function SupportChat() {
   };
 
   const handleKey = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } };
-
   const reset = () => { setPhase('greeting'); setSelectedTopic(null); setConvId(null); setMessages([]); setInput(''); };
 
-  const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
-  const panelBottom = isMobile ? 76 : 24;
+  // Drag: press & hold to move, tap to open/close
+  const onPointerDown = (e) => {
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const origLeft = pos.left;
+    const origTop = pos.top;
+    dragRef.current.moved = false;
+
+    const onMove = (me) => {
+      const dx = me.clientX - startX;
+      const dy = me.clientY - startY;
+      if (Math.abs(dx) > 5 || Math.abs(dy) > 5) dragRef.current.moved = true;
+      setPos({
+        left: Math.max(0, Math.min(window.innerWidth - BTN, origLeft + dx)),
+        top: Math.max(0, Math.min(window.innerHeight - BTN, origTop + dy)),
+      });
+    };
+
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      if (!dragRef.current.moved) setOpen(o => !o);
+    };
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    e.preventDefault();
+  };
 
   return (
     <>
-      {/* Chat panel */}
+      {/* Chat panel — follows button position */}
       {open && (
-        <div style={{position:'fixed',bottom:panelBottom+64,right:isMobile?12:24,width:isMobile?'calc(100vw - 24px)':'360px',maxWidth:360,height:480,background:'var(--bg-surface)',border:'1px solid var(--border)',borderRadius:16,boxShadow:'0 8px 40px rgba(0,0,0,.28)',display:'flex',flexDirection:'column',zIndex:9998,overflow:'hidden',fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+        <div style={{position:'fixed',top:panelTop,left:panelLeft,width:PANEL_W,height:PANEL_H,background:'var(--bg-surface)',border:'1px solid var(--border)',borderRadius:16,boxShadow:'0 8px 40px rgba(0,0,0,.28)',display:'flex',flexDirection:'column',zIndex:9998,overflow:'hidden',fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
 
           {/* Header */}
           <div style={{padding:'14px 16px',borderBottom:'1px solid var(--border)',display:'flex',alignItems:'center',gap:10,flexShrink:0,background:'var(--bg-surface)'}}>
@@ -2370,7 +2412,7 @@ function SupportChat() {
                 <i className="ti ti-refresh" style={{fontSize:14}}/>
               </button>
             )}
-            <button onClick={handleClose} style={{width:28,height:28,background:'var(--bg-raised)',border:'none',borderRadius:8,cursor:'pointer',color:'var(--text-secondary)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+            <button onClick={()=>setOpen(false)} style={{width:28,height:28,background:'var(--bg-raised)',border:'none',borderRadius:8,cursor:'pointer',color:'var(--text-secondary)',display:'flex',alignItems:'center',justifyContent:'center'}}>
               <i className="ti ti-x" style={{fontSize:14}}/>
             </button>
           </div>
@@ -2431,7 +2473,7 @@ function SupportChat() {
                 </div>
                 <div style={{marginLeft:40,fontSize:12,color:'var(--text-muted)',marginTop:4}}>Did that help?</div>
                 <div style={{marginLeft:40,display:'flex',gap:8,flexWrap:'wrap'}}>
-                  <button onClick={handleClose} style={{padding:'7px 14px',background:'rgba(34,197,94,.1)',border:'1px solid rgba(34,197,94,.25)',borderRadius:20,fontSize:12,fontWeight:600,color:'var(--success)',cursor:'pointer'}}>
+                  <button onClick={()=>setOpen(false)} style={{padding:'7px 14px',background:'rgba(34,197,94,.1)',border:'1px solid rgba(34,197,94,.25)',borderRadius:20,fontSize:12,fontWeight:600,color:'var(--success)',cursor:'pointer'}}>
                     <i className="ti ti-thumb-up" style={{marginRight:5,fontSize:12}}/>Yes, thanks!
                   </button>
                   <button onClick={()=>escalate(selectedTopic.label)} style={{padding:'7px 14px',background:'rgba(245,158,11,.1)',border:'1px solid rgba(245,158,11,.25)',borderRadius:20,fontSize:12,fontWeight:600,color:'var(--accent)',cursor:'pointer'}}>
@@ -2491,12 +2533,31 @@ function SupportChat() {
         </div>
       )}
 
-      {/* Floating button */}
+      {/* Floating button — draggable, tap to open/close */}
       <button
-        onClick={open?handleClose:handleOpen}
-        style={{position:'fixed',bottom:panelBottom,right:isMobile?12:24,width:52,height:52,borderRadius:'50%',background:'var(--accent)',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 4px 20px rgba(0,0,0,.25)',zIndex:9999,transition:'transform 180ms ease,box-shadow 180ms ease'}}
-        onMouseEnter={e=>{e.currentTarget.style.transform='scale(1.08)';e.currentTarget.style.boxShadow='0 6px 28px rgba(0,0,0,.35)'}}
-        onMouseLeave={e=>{e.currentTarget.style.transform='scale(1)';e.currentTarget.style.boxShadow='0 4px 20px rgba(0,0,0,.25)'}}
+        onPointerDown={onPointerDown}
+        onMouseEnter={()=>setHovered(true)}
+        onMouseLeave={()=>setHovered(false)}
+        style={{
+          position:'fixed',
+          left:pos.left,
+          top:pos.top,
+          width:BTN,
+          height:BTN,
+          borderRadius:'50%',
+          background:'var(--accent)',
+          border:'none',
+          cursor:'pointer',
+          display:'flex',
+          alignItems:'center',
+          justifyContent:'center',
+          boxShadow:'0 4px 20px rgba(0,0,0,.25)',
+          zIndex:9999,
+          transition:'opacity 200ms ease, box-shadow 180ms ease',
+          opacity: open || hovered ? 1 : 0.75,
+          touchAction:'none',
+          userSelect:'none',
+        }}
         aria-label={open?'Close support chat':'Open support chat'}
       >
         <i className={`ti ${open?'ti-x':'ti-message-circle'}`} style={{fontSize:22,color:'var(--accent-text)',transition:'all 180ms ease'}}/>
