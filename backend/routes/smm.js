@@ -69,13 +69,19 @@ router.post('/order', auth, async (req, res) => {
       });
     }
 
-    // Deduct from wallet immediately
-    const { error: deductErr } = await supabase
+    // Atomic deduct — only succeeds if balance hasn't been reduced by a concurrent request
+    const newBalance = parseFloat((userData.wallet_balance - amount).toFixed(2));
+    const { data: deducted, error: deductErr } = await supabase
       .from('users')
-      .update({ wallet_balance: parseFloat((userData.wallet_balance - amount).toFixed(2)) })
-      .eq('id', userId);
+      .update({ wallet_balance: newBalance })
+      .eq('id', userId)
+      .gte('wallet_balance', amount)
+      .select('wallet_balance');
 
     if (deductErr) throw deductErr;
+    if (!deducted || deducted.length === 0) {
+      return res.status(400).json({ error: 'Insufficient wallet balance', required: amount, balance: userData.wallet_balance });
+    }
 
     // Place on JAP
     let panelOrderId = null;
@@ -90,7 +96,7 @@ router.post('/order', auth, async (req, res) => {
       // Refund wallet on JAP failure
       await supabase
         .from('users')
-        .update({ wallet_balance: parseFloat((userData.wallet_balance).toFixed(2)) })
+        .update({ wallet_balance: parseFloat((newBalance + amount).toFixed(2)) })
         .eq('id', userId);
       console.error('JAP order error:', japErr.message);
       return res.status(502).json({ error: 'Order could not be placed at this time. Your wallet has been refunded.' });

@@ -794,7 +794,6 @@ function TxDetailSheet({ tx, onClose }) {
   const isCredit = tx.type === 'credit';
   const isPending = tx.status === 'pending';
   const isRejected = tx.status === 'rejected';
-  const amtColor = isCredit && !isRejected ? 'var(--success)' : 'var(--danger)';
   const iconBg  = isPending ? 'rgba(245,158,11,.15)' : isRejected ? 'rgba(220,38,38,.15)' : isCredit ? 'rgba(34,197,94,.15)' : 'rgba(220,38,38,.15)';
   const iconColor = isPending ? 'var(--accent)' : isRejected ? 'var(--danger)' : isCredit ? 'var(--success)' : 'var(--danger)';
   const icon = isPending ? 'ti-clock' : isRejected ? 'ti-x' : isCredit ? 'ti-arrow-down-left' : 'ti-arrow-up-right';

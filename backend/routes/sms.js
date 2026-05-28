@@ -136,12 +136,19 @@ router.post('/buy-number', auth, async (req, res) => {
       return res.status(502).json({ error: 'No numbers available right now. Try again.' });
     }
 
-    // Deduct wallet — number is now purchased on HeroSMS side
+    // Atomic deduct — only succeeds if balance hasn't been reduced by a concurrent request
     const newBalance = parseFloat((userData.wallet_balance - cost).toFixed(2));
-    await supabase
+    const { data: deducted } = await supabase
       .from('users')
       .update({ wallet_balance: newBalance })
-      .eq('id', userId);
+      .eq('id', userId)
+      .gte('wallet_balance', cost)
+      .select('wallet_balance');
+
+    if (!deducted || deducted.length === 0) {
+      try { await herosms.cancelOrder(numberData.orderId); } catch (_) {}
+      return res.status(400).json({ error: 'Insufficient wallet balance', required: cost, balance: userData.wallet_balance });
+    }
 
     // Create SMS order record
     const { data: smsOrder, error: insertErr } = await supabase
@@ -161,7 +168,7 @@ router.post('/buy-number', auth, async (req, res) => {
     if (insertErr) {
       // Wallet was debited but we couldn't record the order — refund immediately
       console.error('sms_orders insert failed, refunding wallet:', insertErr.message);
-      await supabase.from('users').update({ wallet_balance: userData.wallet_balance }).eq('id', userId);
+      await supabase.from('users').update({ wallet_balance: parseFloat((newBalance + cost).toFixed(2)) }).eq('id', userId);
       try { await herosms.cancelOrder(numberData.orderId); } catch (_) {}
       return res.status(500).json({ error: 'Order recording failed. Your wallet has been refunded.' });
     }

@@ -38,7 +38,7 @@ app.use(
       if (!origin || allowed.includes(origin) || /^http:\/\/192\.168\.\d+\.\d+/.test(origin) || /^http:\/\/10\.\d+\.\d+\.\d+/.test(origin)) {
         cb(null, true);
       } else {
-        cb(null, true); // In dev, allow all — tighten in production
+        cb(new Error(`CORS: origin ${origin} not allowed`));
       }
     },
     credentials: true,
