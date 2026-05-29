@@ -1,13 +1,14 @@
 const express = require('express');
 const supabase = require('../lib/supabase');
 const { getProvider } = require('../lib/providers');
+const { getExchangeRate } = require('../lib/exchangeRate');
 const auth = require('../middleware/auth');
 const adminOnly = require('../middleware/admin');
 const { handleFirstPurchase } = require('../lib/referralRewards');
 const { notify } = require('../lib/notify');
 const router = express.Router();
 
-// GET /api/smm/services — returns services from our DB (user-facing with sell_price)
+// GET /api/smm/services — returns services with NGN prices applied via exchange rate
 router.get('/services', auth, async (req, res) => {
   try {
     const PAGE = 1000;
@@ -16,7 +17,7 @@ router.get('/services', auth, async (req, res) => {
     while (true) {
       const { data, error } = await supabase
         .from('services')
-        .select('id, platform, name, sell_price, min_quantity, max_quantity, panel_service_id, provider')
+        .select('id, platform, name, sell_price, min_quantity, max_quantity, panel_service_id, provider, manual_price')
         .eq('is_active', true)
         .order('sort_order', { ascending: true })
         .order('platform')
@@ -27,7 +28,16 @@ router.get('/services', auth, async (req, res) => {
       if (!data || data.length < PAGE) break;
       from += PAGE;
     }
-    res.json(all);
+    const rate = await getExchangeRate();
+    const enriched = all.map((s) => {
+      const autoNGN = parseFloat((s.sell_price * rate).toFixed(2));
+      return {
+        ...s,
+        auto_price_ngn: autoNGN,
+        final_price_ngn: s.manual_price != null ? s.manual_price : autoNGN,
+      };
+    });
+    res.json(enriched);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to fetch services' });
@@ -60,9 +70,12 @@ router.post('/order', auth, async (req, res) => {
       });
     }
 
-    // Cost = (sell_price per 1000) * qty / 1000
-    const amount = parseFloat(((service.sell_price * qty) / 1000).toFixed(2));
-    const apiCost = parseFloat(((service.cost_price * qty) / 1000).toFixed(2));
+    // sell_price is stored in USD/1000; apply exchange rate to get NGN, unless manual_price is set
+    const rate = await getExchangeRate();
+    const autoNGN = service.sell_price * rate;
+    const priceNGN = service.manual_price != null ? service.manual_price : autoNGN;
+    const amount = parseFloat(((priceNGN * qty) / 1000).toFixed(2));
+    const apiCost = parseFloat(((service.cost_price * rate * qty) / 1000).toFixed(2));
 
     // Check wallet
     const { data: userData } = await supabase

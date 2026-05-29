@@ -63,11 +63,17 @@ router.get('/prices/:product', auth, async (req, res) => {
       .filter((p) => !settings[p.countryId]?.is_hidden)
       .map((p) => {
         const s = settings[p.countryId];
-        // custom_price is admin-set in USD; raw p.price is also USD — both multiply by rate
-        const baseUSD = s?.custom_price != null ? parseFloat(s.custom_price) : p.price;
+        let priceNGN;
+        if (s?.manual_price_ngn != null) {
+          // admin NGN override takes highest priority
+          priceNGN = parseFloat(s.manual_price_ngn.toFixed(2));
+        } else {
+          const baseUSD = s?.custom_price != null ? parseFloat(s.custom_price) : p.price;
+          priceNGN = parseFloat((baseUSD * exchangeRate).toFixed(2));
+        }
         return {
           ...p,
-          price: parseFloat((baseUSD * exchangeRate).toFixed(2)),
+          price: priceNGN,
           _sortOrder: s?.sort_order ?? 999,
         };
       });
@@ -112,8 +118,13 @@ router.post('/buy-number', auth, async (req, res) => {
     if (!countryEntry) return res.status(400).json({ error: 'Country not available for this service' });
 
     const s = settings[countryEntry.countryId];
-    const baseUSD = s?.custom_price != null ? parseFloat(s.custom_price) : countryEntry.price;
-    const cost = parseFloat((baseUSD * exchangeRate).toFixed(2));
+    let cost;
+    if (s?.manual_price_ngn != null) {
+      cost = parseFloat(parseFloat(s.manual_price_ngn).toFixed(2));
+    } else {
+      const baseUSD = s?.custom_price != null ? parseFloat(s.custom_price) : countryEntry.price;
+      cost = parseFloat((baseUSD * exchangeRate).toFixed(2));
+    }
 
     const { data: userData } = await supabase
       .from('users')
