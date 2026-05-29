@@ -116,24 +116,31 @@ router.get('/transactions', auth, async (req, res) => {
 
 router.get('/virtual-account', auth, async (req, res) => {
   try {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('user_virtual_accounts')
       .select('account_number, account_name, bank_name, created_at')
       .eq('user_id', req.user.id)
       .maybeSingle();
+    if (error) {
+      console.error('[VA GET] DB error:', error.message, error.code);
+      return res.status(500).json({ error: 'Failed to fetch virtual account' });
+    }
     res.json(data || null);
   } catch (err) {
+    console.error('[VA GET] error:', err.message);
     res.status(500).json({ error: 'Failed to fetch virtual account' });
   }
 });
 
 router.post('/virtual-account', auth, async (req, res) => {
   try {
-    const { data: existing } = await supabase
+    // Check DB first
+    const { data: existing, error: fetchErr } = await supabase
       .from('user_virtual_accounts')
       .select('account_number, account_name, bank_name')
       .eq('user_id', req.user.id)
       .maybeSingle();
+    if (fetchErr) console.error('[VA POST] fetch existing error:', fetchErr.message, fetchErr.code);
     if (existing) return res.json(existing);
 
     const { bvn } = req.body;
@@ -168,17 +175,30 @@ router.post('/virtual-account', auth, async (req, res) => {
     });
 
     if (!result || result.status !== 'success') {
+      console.error('[VA POST] Flutterwave error:', result?.message);
       return res.status(400).json({ error: result?.message || 'Virtual account creation failed' });
     }
 
     const va = result.data;
-    await supabase.from('user_virtual_accounts').insert({
-      user_id: req.user.id,
-      account_number: va.account_number,
-      account_name: va.account_name,
-      bank_name: va.bank_name,
-      flw_order_ref: va.order_ref,
-    });
+
+    // Upsert — handles retry when Flutterwave already has the account but DB doesn't
+    const { error: upsertErr } = await supabase
+      .from('user_virtual_accounts')
+      .upsert({
+        user_id: req.user.id,
+        account_number: va.account_number,
+        account_name: va.account_name,
+        bank_name: va.bank_name,
+        flw_order_ref: va.order_ref,
+      }, { onConflict: 'user_id' });
+
+    if (upsertErr) {
+      console.error('[VA POST] DB upsert failed:', upsertErr.message, upsertErr.code);
+      // VA exists in Flutterwave — return data but surface the DB error in logs
+      return res.status(500).json({
+        error: `Virtual account created but failed to save (${upsertErr.code}). Run the virtual_accounts migration in Supabase and try again.`,
+      });
+    }
 
     res.status(201).json({
       account_number: va.account_number,
