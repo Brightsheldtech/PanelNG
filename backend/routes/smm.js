@@ -1,6 +1,6 @@
 const express = require('express');
 const supabase = require('../lib/supabase');
-const jap = require('../lib/jap');
+const { getProvider } = require('../lib/providers');
 const auth = require('../middleware/auth');
 const adminOnly = require('../middleware/admin');
 const { handleFirstPurchase } = require('../lib/referralRewards');
@@ -12,7 +12,7 @@ router.get('/services', auth, async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('services')
-      .select('id, platform, name, sell_price, min_quantity, max_quantity, panel_service_id')
+      .select('id, platform, name, sell_price, min_quantity, max_quantity, panel_service_id, provider')
       .eq('is_active', true)
       .order('sort_order', { ascending: true })
       .order('platform')
@@ -85,21 +85,23 @@ router.post('/order', auth, async (req, res) => {
       return res.status(400).json({ error: 'Insufficient wallet balance', required: amount, balance: userData.wallet_balance });
     }
 
-    // Place on JAP
+    // Place order via the correct provider
+    const provider = service.provider || 'jap';
+    const providerClient = getProvider(provider);
     let panelOrderId = null;
     try {
-      const japRes = await jap.placeOrder({
+      const providerRes = await providerClient.placeOrder({
         service: service.panel_service_id,
         link,
         quantity: qty,
       });
-      panelOrderId = japRes.order?.toString() || null;
-    } catch (japErr) {
+      panelOrderId = providerRes.order?.toString() || null;
+    } catch (providerErr) {
       // Refund: re-read current balance so any concurrent credits aren't overwritten
       const { data: fresh } = await supabase.from('users').select('wallet_balance').eq('id', userId).single();
       const refundedBalance = parseFloat(((parseFloat(fresh?.wallet_balance) || 0) + amount).toFixed(2));
       await supabase.from('users').update({ wallet_balance: refundedBalance }).eq('id', userId);
-      console.error('JAP order error:', japErr.message);
+      console.error('Provider order error:', providerErr.message);
       return res.status(502).json({ error: 'Order could not be placed at this time. Your wallet has been refunded.' });
     }
 
@@ -117,6 +119,7 @@ router.post('/order', auth, async (req, res) => {
         api_cost: apiCost,
         status: 'pending',
         panel_order_id: panelOrderId,
+        provider,
       })
       .select()
       .single();
@@ -159,15 +162,16 @@ router.get('/order/:orderId', auth, async (req, res) => {
 
     if (error || !order) return res.status(404).json({ error: 'Order not found' });
 
-    // Sync status from JAP if pending/processing
+    // Sync status from provider if pending/processing
     if (order.panel_order_id && ['pending', 'processing', 'in_progress'].includes(order.status)) {
       try {
-        const japStatus = await jap.getOrderStatus(order.panel_order_id);
-        if (japStatus.status) {
-          const newStatus = japStatus.status.toLowerCase().replace(' ', '_');
+        const providerClient = getProvider(order.provider || 'jap');
+        const providerStatus = await providerClient.getOrderStatus(order.panel_order_id);
+        if (providerStatus.status) {
+          const newStatus = providerStatus.status.toLowerCase().replace(' ', '_');
           await supabase.from('orders').update({ status: newStatus }).eq('id', order.id);
           order.status = newStatus;
-          order.remains = japStatus.remains;
+          order.remains = providerStatus.remains;
         }
       } catch (_) {}
     }
@@ -178,10 +182,11 @@ router.get('/order/:orderId', auth, async (req, res) => {
   }
 });
 
-// GET /api/smm/balance — JAP panel balance (admin only)
+// GET /api/smm/balance — panel balance (admin only). ?provider=smmraja to query SMMRaja
 router.get('/balance', auth, adminOnly, async (req, res) => {
   try {
-    const balance = await jap.getBalance();
+    const providerClient = getProvider(req.query.provider || 'jap');
+    const balance = await providerClient.getBalance();
     res.json(balance);
   } catch (err) {
     res.status(500).json({ error: 'Failed to get panel balance' });
