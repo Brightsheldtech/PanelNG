@@ -187,9 +187,9 @@ router.post('/virtual-account', auth, async (req, res) => {
       .upsert({
         user_id: req.user.id,
         account_number: va.account_number,
-        account_name: va.account_name,
-        bank_name: va.bank_name,
-        flw_order_ref: va.order_ref,
+        account_name: va.account_name || null,
+        bank_name: va.bank_name || 'Wema Bank',
+        flw_order_ref: va.order_ref || null,
       }, { onConflict: 'user_id' });
 
     if (upsertErr) {
