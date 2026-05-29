@@ -443,15 +443,22 @@ router.get('/finance-summary', async (req, res) => {
 // GET /api/admin/services — all services (including inactive)
 router.get('/services', async (req, res) => {
   try {
-    const { data, error } = await supabase
-      .from('services')
-      .select('*')
-      .order('platform')
-      .order('name')
-      .limit(20000);
-
-    if (error) throw error;
-    res.json(data);
+    const PAGE = 1000;
+    let all = [];
+    let from = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from('services')
+        .select('*')
+        .order('platform')
+        .order('name')
+        .range(from, from + PAGE - 1);
+      if (error) throw error;
+      all = all.concat(data || []);
+      if (!data || data.length < PAGE) break;
+      from += PAGE;
+    }
+    res.json(all);
   } catch (err) {
     res.status(500).json({ error: 'Failed to get services' });
   }
