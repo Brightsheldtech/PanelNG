@@ -2348,12 +2348,13 @@ function SupportChat() {
 
   const scrollBottom = () => setTimeout(() => bottomRef.current?.scrollIntoView({ behavior:'smooth' }), 60);
 
-  // Load bot topics from API once on mount; fall back to FALLBACK_TOPICS on error
+  // Re-fetch bot topics every time the chat opens so admin edits appear immediately
   useEffect(() => {
+    if (!open) return;
     api.get('/support/bot-topics')
       .then(r => { if (Array.isArray(r.data) && r.data.length > 0) setBotTopics(r.data); })
       .catch(() => {});
-  }, []);
+  }, [open]);
 
   // Poll messages while in human phase and chat is open
   useEffect(() => {
