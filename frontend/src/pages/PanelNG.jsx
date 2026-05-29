@@ -1176,14 +1176,22 @@ function NewOrder({ setPage }) {
       .finally(() => setLoadingSvc(false));
   }, []);
 
-  const platforms = ['All', ...Array.from(new Set(allServices.map(s => s.platform).filter(Boolean))).sort((a, b) => {
+  // Hide website/web traffic services except USA and Europe ones
+  const displayServices = allServices.filter(s => {
+    const p = (s.platform || '').toLowerCase();
+    const isTraffic = p.includes('website') || p.includes('web traffic') || p.includes('traffic');
+    if (!isTraffic) return true;
+    return p.includes('usa') || p.includes('us ') || p.includes('u.s') || p.includes('europe') || p.includes('eu ');
+  });
+
+  const platforms = ['All', ...Array.from(new Set(displayServices.map(s => s.platform).filter(Boolean))).sort((a, b) => {
     const ai = PRIORITY_PLATFORMS.indexOf(a), bi = PRIORITY_PLATFORMS.indexOf(b);
     if (ai >= 0 && bi >= 0) return ai - bi;
     if (ai >= 0) return -1;
     if (bi >= 0) return 1;
     return a.localeCompare(b);
   })];
-  const byPlatform = platform === 'All' ? allServices : allServices.filter(s => s.platform === platform);
+  const byPlatform = platform === 'All' ? displayServices : displayServices.filter(s => s.platform === platform);
   const services = search.trim()
     ? byPlatform.filter(s => s.name.toLowerCase().includes(search.toLowerCase()))
     : byPlatform;
