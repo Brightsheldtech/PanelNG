@@ -530,25 +530,27 @@ router.post('/sync-services', async (req, res) => {
       return res.status(502).json({ error: 'Provider returned unexpected data' });
     }
 
-    let synced = 0;
-    const MARKUP = 1.3; // 30% default markup
+    const MARKUP = 1.3;
+    const CHUNK = 500;
 
-    for (const svc of services) {
-      const { error } = await supabase.from('services').upsert(
-        {
-          panel_service_id: svc.service.toString(),
-          provider: providerName,
-          platform: svc.category || 'Other',
-          name: svc.name,
-          cost_price: parseFloat(svc.rate) || 0,
-          sell_price: parseFloat((parseFloat(svc.rate) * MARKUP).toFixed(4)),
-          min_quantity: parseInt(svc.min) || 10,
-          max_quantity: parseInt(svc.max) || 100000,
-          is_active: true,
-        },
-        { onConflict: 'panel_service_id,provider' }
-      );
-      if (!error) synced++;
+    const rows = services.map((svc) => ({
+      panel_service_id: svc.service.toString(),
+      provider: providerName,
+      platform: svc.category || 'Other',
+      name: svc.name,
+      cost_price: parseFloat(svc.rate) || 0,
+      sell_price: parseFloat((parseFloat(svc.rate) * MARKUP).toFixed(4)),
+      min_quantity: parseInt(svc.min) || 10,
+      max_quantity: parseInt(svc.max) || 100000,
+      is_active: true,
+    }));
+
+    let synced = 0;
+    for (let i = 0; i < rows.length; i += CHUNK) {
+      const { error } = await supabase
+        .from('services')
+        .upsert(rows.slice(i, i + CHUNK), { onConflict: 'panel_service_id,provider' });
+      if (!error) synced += Math.min(CHUNK, rows.length - i);
     }
 
     res.json({ synced, total: services.length, provider: providerName });
