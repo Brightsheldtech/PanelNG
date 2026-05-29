@@ -1189,7 +1189,7 @@ function NewOrder({ setPage }) {
   const insufficient = cost > 0 && balance < cost;
   const linkPlaceholder = selected
     ? (PLATFORM_PLACEHOLDER[selected.platform] || `https://${(selected.platform||'').toLowerCase()}.com/username`)
-    : 'https://instagram.com/username';
+    : 'Enter link or username';
 
   const handlePlace = async () => {
     if (!serviceId || !link || qty < 1) return;

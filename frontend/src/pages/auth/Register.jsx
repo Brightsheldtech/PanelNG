@@ -31,6 +31,65 @@ function GoogleIcon() {
   );
 }
 
+const COUNTRY_CODES = [
+  { code: '+234', flag: '🇳🇬', name: 'Nigeria' },
+  { code: '+233', flag: '🇬🇭', name: 'Ghana' },
+  { code: '+254', flag: '🇰🇪', name: 'Kenya' },
+  { code: '+27',  flag: '🇿🇦', name: 'South Africa' },
+  { code: '+256', flag: '🇺🇬', name: 'Uganda' },
+  { code: '+255', flag: '🇹🇿', name: 'Tanzania' },
+  { code: '+250', flag: '🇷🇼', name: 'Rwanda' },
+  { code: '+237', flag: '🇨🇲', name: 'Cameroon' },
+  { code: '+225', flag: '🇨🇮', name: "Côte d'Ivoire" },
+  { code: '+221', flag: '🇸🇳', name: 'Senegal' },
+  { code: '+251', flag: '🇪🇹', name: 'Ethiopia' },
+  { code: '+20',  flag: '🇪🇬', name: 'Egypt' },
+  { code: '+212', flag: '🇲🇦', name: 'Morocco' },
+  { code: '+213', flag: '🇩🇿', name: 'Algeria' },
+  { code: '+216', flag: '🇹🇳', name: 'Tunisia' },
+  { code: '+244', flag: '🇦🇴', name: 'Angola' },
+  { code: '+243', flag: '🇨🇩', name: 'DR Congo' },
+  { code: '+242', flag: '🇨🇬', name: 'Congo' },
+  { code: '+263', flag: '🇿🇼', name: 'Zimbabwe' },
+  { code: '+260', flag: '🇿🇲', name: 'Zambia' },
+  { code: '+258', flag: '🇲🇿', name: 'Mozambique' },
+  { code: '+265', flag: '🇲🇼', name: 'Malawi' },
+  { code: '+267', flag: '🇧🇼', name: 'Botswana' },
+  { code: '+264', flag: '🇳🇦', name: 'Namibia' },
+  { code: '+249', flag: '🇸🇩', name: 'Sudan' },
+  { code: '+218', flag: '🇱🇾', name: 'Libya' },
+  { code: '+229', flag: '🇧🇯', name: 'Benin' },
+  { code: '+226', flag: '🇧🇫', name: 'Burkina Faso' },
+  { code: '+257', flag: '🇧🇮', name: 'Burundi' },
+  { code: '+235', flag: '🇹🇩', name: 'Chad' },
+  { code: '+269', flag: '🇰🇲', name: 'Comoros' },
+  { code: '+253', flag: '🇩🇯', name: 'Djibouti' },
+  { code: '+240', flag: '🇬🇶', name: 'Eq. Guinea' },
+  { code: '+291', flag: '🇪🇷', name: 'Eritrea' },
+  { code: '+241', flag: '🇬🇦', name: 'Gabon' },
+  { code: '+220', flag: '🇬🇲', name: 'Gambia' },
+  { code: '+224', flag: '🇬🇳', name: 'Guinea' },
+  { code: '+245', flag: '🇬🇼', name: 'Guinea-Bissau' },
+  { code: '+266', flag: '🇱🇸', name: 'Lesotho' },
+  { code: '+231', flag: '🇱🇷', name: 'Liberia' },
+  { code: '+261', flag: '🇲🇬', name: 'Madagascar' },
+  { code: '+223', flag: '🇲🇱', name: 'Mali' },
+  { code: '+222', flag: '🇲🇷', name: 'Mauritania' },
+  { code: '+230', flag: '🇲🇺', name: 'Mauritius' },
+  { code: '+227', flag: '🇳🇪', name: 'Niger' },
+  { code: '+232', flag: '🇸🇱', name: 'Sierra Leone' },
+  { code: '+252', flag: '🇸🇴', name: 'Somalia' },
+  { code: '+268', flag: '🇸🇿', name: 'Eswatini' },
+  { code: '+228', flag: '🇹🇬', name: 'Togo' },
+  { code: '+1',   flag: '🇺🇸', name: 'USA / Canada' },
+  { code: '+44',  flag: '🇬🇧', name: 'UK' },
+  { code: '+971', flag: '🇦🇪', name: 'UAE' },
+  { code: '+966', flag: '🇸🇦', name: 'Saudi Arabia' },
+  { code: '+974', flag: '🇶🇦', name: 'Qatar' },
+  { code: '+49',  flag: '🇩🇪', name: 'Germany' },
+  { code: '+33',  flag: '🇫🇷', name: 'France' },
+];
+
 function passwordStrength(pw) {
   let score = 0;
   if (pw.length >= 8) score++;
@@ -101,6 +160,25 @@ const css = `
   .ar-spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: ar-spin 0.7s linear infinite; flex-shrink: 0; }
   @keyframes ar-spin { to { transform: rotate(360deg); } }
   .ar-error-banner { margin-top: 12px; padding: 12px 14px; background: rgba(220,38,38,0.06); border: 1px solid rgba(220,38,38,0.15); border-radius: 10px; font-size: 13px; color: #DC2626; line-height: 1.5; }
+  .ar-phone-wrap { display: flex; gap: 8px; }
+  .ar-phone-code {
+    flex-shrink: 0; width: 108px; padding: 12px 26px 12px 10px; border-radius: 11px;
+    border: 1px solid #E5E2D9; background: #FAFAF8 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23A8A49C' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat right 8px center;
+    font-family: 'Epilogue', sans-serif; font-size: 13px; color: #111110;
+    outline: none; cursor: pointer; box-sizing: border-box; -webkit-appearance: none; appearance: none;
+    transition: border-color 0.15s, background-color 0.15s;
+  }
+  .ar-phone-code:focus { border-color: #C9620A; background-color: white; }
+  .ar-phone-code.has-error { border-color: #DC2626 !important; }
+  .ar-phone-num {
+    flex: 1; padding: 12px 14px; border-radius: 11px; border: 1px solid #E5E2D9;
+    background: #FAFAF8; font-family: 'Epilogue', sans-serif; font-size: 16px; color: #111110;
+    outline: none; transition: border-color 0.15s, background 0.15s; box-sizing: border-box;
+    -webkit-appearance: none; appearance: none;
+  }
+  .ar-phone-num::placeholder { color: #A8A49C; }
+  .ar-phone-num:focus { border-color: #C9620A; background: white; }
+  .ar-phone-num.has-error { border-color: #DC2626 !important; }
   .ar-applied-pill { background: rgba(22,163,74,0.1); color: #16A34A; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 100px; font-family: 'Epilogue', sans-serif; }
   .ar-pending { text-align: center; }
   .ar-env-icon { width: 64px; height: 64px; margin: 0 auto 20px; display: block; }
@@ -120,7 +198,7 @@ export default function Register() {
   const navigate = useNavigate();
   const { setSession } = useAuth();
 
-  const [form, setForm] = useState({ fullName: '', username: '', email: '', phone: '', referralCode: '', password: '', confirmPassword: '' });
+  const [form, setForm] = useState({ fullName: '', username: '', email: '', countryCode: '+234', phoneNumber: '', referralCode: '', password: '', confirmPassword: '' });
   const [errors, setErrors] = useState({});
   const [showPw, setShowPw] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -145,7 +223,9 @@ export default function Register() {
 
   const set = (field) => (e) => {
     setForm(f => ({ ...f, [field]: e.target.value }));
-    setErrors(er => ({ ...er, [field]: '' }));
+    // phone errors are stored under 'phone' regardless of which sub-field changed
+    const errorKey = (field === 'phoneNumber' || field === 'countryCode') ? 'phone' : field;
+    setErrors(er => ({ ...er, [errorKey]: '' }));
     setServerError('');
   };
 
@@ -176,8 +256,7 @@ export default function Register() {
     if (!form.username.trim() || form.username.length < 3 || form.username.length > 20 || !/^[a-zA-Z0-9_]+$/.test(form.username))
       e.username = 'Username: 3–20 characters, letters/numbers/underscores only';
     if (!form.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = 'Enter a valid email address';
-    const digits = form.phone.replace(/[\s\-]/g, '');
-    if (!digits || digits.replace(/\D/g, '').length < 10) e.phone = 'Enter a valid phone number (min 10 digits)';
+    if (!form.phoneNumber || form.phoneNumber.replace(/\D/g, '').length < 7) e.phone = 'Enter a valid phone number';
     if (!form.password || form.password.length < 8) e.password = 'Password must be at least 8 characters';
     if (!form.confirmPassword) e.confirmPassword = 'Please confirm your password';
     else if (form.password !== form.confirmPassword) e.confirmPassword = 'Passwords do not match';
@@ -196,7 +275,7 @@ export default function Register() {
         full_name: form.fullName.trim(),
         username: form.username.trim().toLowerCase(),
         email: form.email.trim().toLowerCase(),
-        phone: form.phone.trim(),
+        phone: `${form.countryCode}${form.phoneNumber.replace(/\s/g, '')}`,
         referral_code: form.referralCode.trim() || undefined,
         password: form.password,
       });
@@ -228,7 +307,7 @@ export default function Register() {
   const pwScore = passwordStrength(form.password);
 
   const isFormValid = form.fullName.trim().length >= 2 && form.username.length >= 3 && form.email.includes('@') &&
-    form.phone.length >= 10 && form.password.length >= 8 && form.password === form.confirmPassword && agreed;
+    form.phoneNumber.replace(/\D/g, '').length >= 7 && form.password.length >= 8 && form.password === form.confirmPassword && agreed;
 
   if (welcome) {
     return (
@@ -368,12 +447,28 @@ export default function Register() {
                 </div>
 
                 <div className="ar-field">
-                  <label>Phone Number</label>
-                  <div className="ar-input-wrap">
-                    <span className="ar-input-icon"><Icon name="phone" /></span>
-                    <input className={`ar-input${errors.phone ? ' has-error' : ''}`} type="tel" placeholder="e.g. 08012345678" value={form.phone} onChange={set('phone')} onFocus={handleInputFocus} autoComplete="tel" />
+                  <label><Icon name="phone" size={13} color="#6B6860" /> Phone Number</label>
+                  <div className="ar-phone-wrap">
+                    <select
+                      className={`ar-phone-code${errors.phone ? ' has-error' : ''}`}
+                      value={form.countryCode}
+                      onChange={set('countryCode')}
+                      onFocus={handleInputFocus}
+                    >
+                      {COUNTRY_CODES.map(({ code, flag, name }) => (
+                        <option key={code + name} value={code}>{flag} {code}</option>
+                      ))}
+                    </select>
+                    <input
+                      className={`ar-phone-num${errors.phone ? ' has-error' : ''}`}
+                      type="tel"
+                      placeholder="8012345678"
+                      value={form.phoneNumber}
+                      onChange={set('phoneNumber')}
+                      onFocus={handleInputFocus}
+                      autoComplete="tel-national"
+                    />
                   </div>
-                  <div className="ar-note">Nigerian number preferred.</div>
                   {errors.phone && <div className="ar-field-error">{errors.phone}</div>}
                 </div>
 
