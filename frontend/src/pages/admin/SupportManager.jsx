@@ -46,6 +46,7 @@ function ConversationsTab() {
   const [actioning, setActioning] = useState(false);
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
+  const lastTypingSent = useRef(0);
 
   const loadList = async () => {
     setLoading(true);
@@ -243,7 +244,14 @@ function ConversationsTab() {
               <textarea
                 ref={inputRef}
                 value={reply}
-                onChange={(e) => setReply(e.target.value)}
+                onChange={(e) => {
+                  setReply(e.target.value);
+                  const now = Date.now();
+                  if (selected && now - lastTypingSent.current > 3000) {
+                    lastTypingSent.current = now;
+                    api.patch(`/admin/support/${selected.id}/typing`).catch(() => {});
+                  }
+                }}
                 onKeyDown={handleKey}
                 placeholder="Reply to customer…"
                 rows={1}

@@ -591,6 +591,10 @@ html,body{overflow-x:hidden;max-width:100vw}
 @media (min-width:769px){
   .pn-hamburger{display:none!important}
 }
+.pn-typing-dot{width:7px;height:7px;border-radius:50%;background:var(--text-muted);display:inline-block;animation:pn-bounce 1.2s ease-in-out infinite}
+.pn-typing-dot:nth-child(2){animation-delay:.2s}
+.pn-typing-dot:nth-child(3){animation-delay:.4s}
+@keyframes pn-bounce{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-5px)}}
 `;
 
 // ─── TOPBAR ───────────────────────────────────────────────────────────────────
@@ -2554,6 +2558,8 @@ function SupportChat() {
   const [sending, setSending] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [lastTopic, setLastTopic] = useState(null);
+  const [adminTyping, setAdminTyping] = useState(false);
+  const adminTypingTimer = useRef(null);
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -2601,6 +2607,13 @@ function SupportChat() {
           const freshIds = new Set(fresh.map(m => m.id));
           return [...fresh, ...temps.filter(t => !freshIds.has(t.id))];
         });
+        if (data.admin_is_typing) {
+          setAdminTyping(true);
+          clearTimeout(adminTypingTimer.current);
+          adminTypingTimer.current = setTimeout(() => setAdminTyping(false), 4000);
+        } else {
+          setAdminTyping(false);
+        }
         scrollBottom();
       } catch (_) {}
     };
@@ -2775,19 +2788,18 @@ function SupportChat() {
     );
     const isUser = m.sender_type === 'user';
     const isBot  = m.sender_type === 'bot';
-    const iconBg     = isBot ? 'rgba(245,158,11,.15)' : 'rgba(139,92,246,.15)';
-    const iconBorder = isBot ? '1px solid rgba(245,158,11,.3)' : '1px solid rgba(139,92,246,.3)';
-    const iconColor  = isBot ? 'var(--accent)' : '#8b5cf6';
-    const senderLabel = isBot ? 'PanelNG Bot' : 'Support Agent';
+    const senderLabel = isBot ? 'PanelNG Bot' : 'Customer Support';
     return (
       <div key={m.id||i} style={{display:'flex',justifyContent:isUser?'flex-end':'flex-start',marginBottom:10,alignItems:'flex-end',gap:6}}>
-        {!isUser&&(
-          <div style={{width:28,height:28,borderRadius:8,background:iconBg,border:iconBorder,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
-            <i className={`ti ${isBot?'ti-robot':'ti-headset'}`} style={{fontSize:13,color:iconColor}}/>
+        {!isUser && (isBot ? (
+          <div style={{width:28,height:28,borderRadius:8,background:'rgba(245,158,11,.15)',border:'1px solid rgba(245,158,11,.3)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+            <i className="ti ti-robot" style={{fontSize:13,color:'var(--accent)'}}/>
           </div>
-        )}
+        ) : (
+          <div style={{width:28,height:28,borderRadius:'50%',background:'linear-gradient(135deg,#7c3aed,#4f46e5)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:10,fontWeight:800,color:'#fff',letterSpacing:'-0.02em'}}>CS</div>
+        ))}
         <div style={{maxWidth:'76%'}}>
-          {!isUser&&<div style={{fontSize:10,color:iconColor,fontWeight:600,marginBottom:3,paddingLeft:2}}>{senderLabel}</div>}
+          {!isUser&&<div style={{fontSize:10,color:isBot?'var(--accent)':'#8b5cf6',fontWeight:600,marginBottom:3,paddingLeft:2}}>{senderLabel}</div>}
           <div style={{padding:'9px 12px',borderRadius:isUser?'12px 4px 12px 12px':'4px 12px 12px 12px',background:isUser?'var(--accent)':'var(--bg-raised)',border:isUser?'none':'1px solid var(--border)',color:isUser?'var(--accent-text)':'var(--text-primary)',fontSize:13,lineHeight:1.55,wordBreak:'break-word'}}>
             {m.body&&<div>{m.body}</div>}
             {m.attachment_url&&<img src={m.attachment_url} alt="attachment" style={{marginTop:m.body?8:0,maxWidth:'100%',borderRadius:8,display:'block',cursor:'pointer'}} onClick={()=>window.open(m.attachment_url,'_blank')}/>}
@@ -2840,14 +2852,21 @@ function SupportChat() {
 
           {/* Header */}
           <div style={{padding:'14px 16px',borderBottom:'1px solid var(--border)',display:'flex',alignItems:'center',gap:10,flexShrink:0,background:'var(--bg-surface)'}}>
-            <div style={{width:36,height:36,borderRadius:10,background:'rgba(245,158,11,.15)',border:'1px solid rgba(245,158,11,.3)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
-              <i className="ti ti-headset" style={{fontSize:18,color:'var(--accent)'}}/>
-            </div>
+            {mode === 'human' ? (
+              <div style={{width:36,height:36,borderRadius:'50%',background:'linear-gradient(135deg,#7c3aed,#4f46e5)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:13,fontWeight:800,color:'#fff',letterSpacing:'-0.02em',position:'relative'}}>
+                CS
+                <span style={{position:'absolute',bottom:0,right:0,width:9,height:9,borderRadius:'50%',background:'var(--success)',border:'2px solid var(--bg-surface)'}}/>
+              </div>
+            ) : (
+              <div style={{width:36,height:36,borderRadius:10,background:'rgba(245,158,11,.15)',border:'1px solid rgba(245,158,11,.3)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                <i className="ti ti-headset" style={{fontSize:18,color:'var(--accent)'}}/>
+              </div>
+            )}
             <div style={{flex:1,minWidth:0}}>
-              <div style={{fontSize:14,fontWeight:700,color:'var(--text-primary)',lineHeight:1.2}}>PanelNG Support</div>
+              <div style={{fontSize:14,fontWeight:700,color:'var(--text-primary)',lineHeight:1.2}}>{mode === 'human' ? 'Customer Support' : 'PanelNG Support'}</div>
               <div style={{fontSize:11,color:mode==='human'?'var(--success)':'var(--text-muted)',display:'flex',alignItems:'center',gap:4,marginTop:2}}>
                 {mode==='human'&&<span style={{width:6,height:6,borderRadius:'50%',background:'var(--success)',display:'inline-block'}}/>}
-                {mode==='human'?'Connected to support':mode==='resolved'?'Conversation resolved':'Typically replies within minutes'}
+                {mode==='human'?'Online — typically replies in minutes':mode==='resolved'?'Conversation resolved':'Typically replies within minutes'}
               </div>
             </div>
             {mode!=='greeting'&&mode!=='escalating'&&mode!=='resolved'&&(
@@ -2926,6 +2945,19 @@ function SupportChat() {
               </div>
             )}
 
+            {/* Typing indicator — shown when admin is typing */}
+            {adminTyping && mode === 'human' && (
+              <div style={{display:'flex',alignItems:'flex-end',gap:6,marginBottom:10}}>
+                <div style={{width:28,height:28,borderRadius:'50%',background:'linear-gradient(135deg,#7c3aed,#4f46e5)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:10,fontWeight:800,color:'#fff',letterSpacing:'-0.02em'}}>CS</div>
+                <div>
+                  <div style={{fontSize:10,color:'#8b5cf6',fontWeight:600,marginBottom:3,paddingLeft:2}}>Customer Support</div>
+                  <div style={{background:'var(--bg-raised)',border:'1px solid var(--border)',borderRadius:'4px 12px 12px 12px',padding:'10px 14px',display:'flex',alignItems:'center',gap:4}}>
+                    <span className="pn-typing-dot"/><span className="pn-typing-dot"/><span className="pn-typing-dot"/>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div ref={bottomRef}/>
           </div>
 
@@ -2949,7 +2981,7 @@ function SupportChat() {
               </button>
               <textarea ref={inputRef} value={input} onChange={e=>setInput(e.target.value)} onKeyDown={handleKey}
                 placeholder="Type a message…" rows={1}
-                style={{flex:1,resize:'none',background:'var(--bg-raised)',border:'1px solid var(--border)',borderRadius:10,padding:'9px 12px',fontSize:13,color:'var(--text-primary)',fontFamily:"'Plus Jakarta Sans',sans-serif",outline:'none',lineHeight:1.5,maxHeight:80,overflowY:'auto'}}/>
+                style={{flex:1,resize:'none',background:'var(--bg-raised)',border:'1px solid var(--border)',borderRadius:10,padding:'8px 12px',fontSize:16,color:'var(--text-primary)',fontFamily:"'Plus Jakarta Sans',sans-serif",outline:'none',lineHeight:1.4,maxHeight:80,overflowY:'auto'}}/>
               <button onClick={sendMessage} disabled={(!input.trim()&&!attachment)||sending}
                 style={{width:36,height:36,borderRadius:10,background:'var(--accent)',border:'none',cursor:(!input.trim()&&!attachment)||sending?'not-allowed':'pointer',opacity:(!input.trim()&&!attachment)||sending?0.5:1,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,transition:'opacity 120ms'}}>
                 <i className="ti ti-send" style={{fontSize:16,color:'var(--accent-text)'}}/>

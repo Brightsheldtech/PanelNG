@@ -7,6 +7,7 @@ const adminOnly = require('../middleware/admin');
 const { sendPaymentConfirmed, sendPaymentRejected, sendRefundNotification } = require('../lib/mailer');
 const { handleFirstDeposit } = require('../lib/referralRewards');
 const { notify } = require('../lib/notify');
+const typingMap = require('../lib/typingMap');
 const router = express.Router();
 
 router.use(auth, adminOnly);
@@ -1175,6 +1176,12 @@ router.post('/support/:id/reply', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: 'Failed to send reply' });
   }
+});
+
+// PATCH /api/admin/support/:id/typing — signal admin is typing (in-memory, no DB)
+router.patch('/support/:id/typing', async (req, res) => {
+  typingMap.set(req.params.id);
+  res.sendStatus(200);
 });
 
 // PATCH /api/admin/support/:id/resolve — mark conversation as resolved

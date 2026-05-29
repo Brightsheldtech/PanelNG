@@ -2,6 +2,7 @@ const express = require('express');
 const supabase = require('../lib/supabase');
 const auth = require('../middleware/auth');
 const { getEmailConfig, sendSupportNotification } = require('../lib/mailer');
+const typingMap = require('../lib/typingMap');
 const router = express.Router();
 
 // GET /api/support/bot-topics — active FAQ topics for the chat bot (must be before /:id routes)
@@ -66,7 +67,7 @@ router.get('/:id/messages', auth, async (req, res) => {
       .limit(100);
     if (error) throw error;
 
-    res.json({ conversation: conv, messages: data || [] });
+    res.json({ conversation: conv, messages: data || [], admin_is_typing: typingMap.isActive(id) });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch messages' });
   }
