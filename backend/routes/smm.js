@@ -10,17 +10,24 @@ const router = express.Router();
 // GET /api/smm/services — returns services from our DB (user-facing with sell_price)
 router.get('/services', auth, async (req, res) => {
   try {
-    const { data, error } = await supabase
-      .from('services')
-      .select('id, platform, name, sell_price, min_quantity, max_quantity, panel_service_id, provider')
-      .eq('is_active', true)
-      .order('sort_order', { ascending: true })
-      .order('platform')
-      .order('name')
-      .limit(20000);
-
-    if (error) throw error;
-    res.json(data);
+    const PAGE = 1000;
+    let all = [];
+    let from = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from('services')
+        .select('id, platform, name, sell_price, min_quantity, max_quantity, panel_service_id, provider')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true })
+        .order('platform')
+        .order('name')
+        .range(from, from + PAGE - 1);
+      if (error) throw error;
+      all = all.concat(data || []);
+      if (!data || data.length < PAGE) break;
+      from += PAGE;
+    }
+    res.json(all);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to fetch services' });
