@@ -1161,6 +1161,7 @@ function NewOrder({ setPage }) {
   const [allServices, setAllServices] = useState([]);
   const [loadingSvc, setLoadingSvc] = useState(true);
   const [platform, setPlatform] = useState('All');
+  const [search, setSearch] = useState('');
   const [serviceId, setServiceId] = useState('');
   const [link, setLink] = useState('');
   const [qty, setQty] = useState(1000);
@@ -1182,7 +1183,10 @@ function NewOrder({ setPage }) {
     if (bi >= 0) return 1;
     return a.localeCompare(b);
   })];
-  const services = platform === 'All' ? allServices : allServices.filter(s => s.platform === platform);
+  const byPlatform = platform === 'All' ? allServices : allServices.filter(s => s.platform === platform);
+  const services = search.trim()
+    ? byPlatform.filter(s => s.name.toLowerCase().includes(search.toLowerCase()))
+    : byPlatform;
   const selected = allServices.find(s => s.id === serviceId);
   const cost = selected && qty > 0 ? parseFloat(((selected.sell_price * qty) / 1000).toFixed(2)) : 0;
   const balance = user?.balance || 0;
@@ -1226,11 +1230,31 @@ function NewOrder({ setPage }) {
         <>
           <div className="pn-chips-scroll">
             {platforms.map(p => (
-              <button key={p} className={`pn-pchip${platform===p?' active':''}`} onClick={()=>{setPlatform(p);setServiceId('');}}>
+              <button key={p} className={`pn-pchip${platform===p?' active':''}`} onClick={()=>{setPlatform(p);setServiceId('');setSearch('');}}>
                 {p!=='All'&&<PlatformIcon name={p} size={14}/>}{p}
               </button>
             ))}
           </div>
+          <div className="pn-input-with-icon" style={{marginBottom:12}}>
+            <i className="ti ti-search pn-input-icon" style={{fontSize:15}}/>
+            <input
+              className="pn-input"
+              placeholder="Search services… e.g. followers, likes, views"
+              value={search}
+              onChange={e=>setSearch(e.target.value)}
+              style={{paddingRight:search?36:undefined}}
+            />
+            {search && (
+              <button type="button" onClick={()=>setSearch('')} style={{position:'absolute',right:10,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:'var(--text-muted)',display:'flex',alignItems:'center',padding:2}}>
+                <i className="ti ti-x" style={{fontSize:13}}/>
+              </button>
+            )}
+          </div>
+          {search && (
+            <div style={{fontSize:11,color:'var(--text-muted)',marginBottom:8,marginTop:-6}}>
+              {services.length} result{services.length!==1?'s':''} for "{search}"
+            </div>
+          )}
           <div className="pn-card">
             <div className="pn-input-wrap">
               <label className="pn-input-label">Service</label>
