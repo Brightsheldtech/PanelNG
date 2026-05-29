@@ -773,7 +773,7 @@ function BottomNav({ page, setPage }) {
     { id:'overview', icon:'ti-layout-dashboard', label:'Dashboard' },
     { id:'neworder', icon:'ti-circle-plus', label:'New Order' },
     { id:'orders', icon:'ti-receipt', label:'Orders' },
-    { id:'referral', icon:'ti-users', label:'Referral' },
+    { id:'wallet', icon:'ti-wallet', label:'Wallet' },
     { id:'profile', icon:'ti-user-circle', label:'Profile' },
   ];
   return (
