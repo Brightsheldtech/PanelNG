@@ -317,13 +317,34 @@ router.get('/orders', async (req, res) => {
 
 // GET /api/admin/transactions
 router.get('/transactions', async (req, res) => {
-  const limit = parseInt(req.query.limit) || 50;
-  const offset = parseInt(req.query.offset) || 0;
+  const limit    = parseInt(req.query.limit)  || 50;
+  const offset   = parseInt(req.query.offset) || 0;
+  const category = req.query.category; // deposits | service_debits | bonuses | adjustments
 
   try {
-    const { data, error, count } = await supabase
+    let query = supabase
       .from('transactions')
-      .select('*, users(email, full_name)', { count: 'exact' })
+      .select('*, users(email, full_name)', { count: 'exact' });
+
+    if (category === 'deposits') {
+      query = query.eq('type', 'credit').or(
+        'description.ilike.%via card%,description.ilike.%via virtual account%,description.ilike.%Bank deposit confirmed%,description.ilike.%Admin top-up%'
+      );
+    } else if (category === 'service_debits') {
+      query = query.eq('type', 'debit').or(
+        'reference.like.SMM-%,reference.like.SMS-%,reference.like.ACCS-%'
+      );
+    } else if (category === 'bonuses') {
+      query = query.eq('type', 'credit').or(
+        'description.ilike.%welcome bonus%,description.ilike.%referral reward%'
+      );
+    } else if (category === 'adjustments') {
+      query = query.or(
+        'description.ilike.%Refund%,description.ilike.%Admin deduction%,description.ilike.%Admin top-up%'
+      );
+    }
+
+    const { data, error, count } = await query
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
@@ -331,6 +352,90 @@ router.get('/transactions', async (req, res) => {
     res.json({ transactions: data, total: count });
   } catch (err) {
     res.status(500).json({ error: 'Failed to get transactions' });
+  }
+});
+
+// GET /api/admin/finance-summary
+router.get('/finance-summary', async (req, res) => {
+  try {
+    const sum = (rows, field = 'amount') =>
+      parseFloat((rows || []).reduce((s, r) => s + parseFloat(r[field] || 0), 0).toFixed(2));
+
+    const [
+      cardRes, vaRes, bankRes, adminTopupRes,
+      welcomeRes, refundRes, adminDeductRes,
+      referralsRes, rejectedRes,
+      smmOrdersRes, smsOrdersRes, accsOrdersRes,
+    ] = await Promise.all([
+      supabase.from('transactions').select('amount').eq('type', 'credit').ilike('description', '%via card%'),
+      supabase.from('transactions').select('amount').eq('type', 'credit').ilike('description', '%via virtual account%'),
+      supabase.from('transactions').select('amount').eq('type', 'credit').ilike('description', '%Bank deposit confirmed%'),
+      supabase.from('transactions').select('amount').eq('type', 'credit').ilike('description', '%Admin top-up%'),
+      supabase.from('transactions').select('amount').eq('type', 'credit').ilike('description', '%welcome bonus%'),
+      supabase.from('transactions').select('amount').eq('type', 'credit').ilike('description', '%Refund%'),
+      supabase.from('transactions').select('amount').eq('type', 'debit').ilike('description', '%Admin deduction%'),
+      supabase.from('referrals').select('id, referee_bonus_paid').eq('status', 'completed'),
+      supabase.from('payment_requests').select('amount').eq('status', 'rejected'),
+      supabase.from('orders').select('amount_paid, api_cost'),
+      supabase.from('sms_orders').select('amount_paid'),
+      supabase.from('accszone_orders').select('total_cost').eq('status', 'completed'),
+    ]);
+
+    const smmOrders = smmOrdersRes.data || [];
+    const smmRevenue  = sum(smmOrders, 'amount_paid');
+    const smmApiCost  = parseFloat(smmOrders.reduce((s, o) => s + parseFloat(o.api_cost || 0), 0).toFixed(2));
+    const ordersWithCost = smmOrders.filter(o => parseFloat(o.api_cost || 0) > 0).length;
+
+    const referrals = referralsRes.data || [];
+    const completedReferrals  = referrals.length;
+    const smsRevenue  = sum(smsOrdersRes.data, 'amount_paid');
+    const accsRevenue = sum((accsOrdersRes.data || []).map(o => ({ amount: o.total_cost })));
+
+    const cardTotal       = sum(cardRes.data);
+    const vaTotal         = sum(vaRes.data);
+    const bankTotal       = sum(bankRes.data);
+    const adminTopupTotal = sum(adminTopupRes.data);
+    const welcomeTotal    = sum(welcomeRes.data);
+    const refundTotal     = sum(refundRes.data);
+    const adminDeductTotal = sum(adminDeductRes.data);
+    const referrerRewardsTotal = completedReferrals * 500;
+
+    res.json({
+      deposits: {
+        card:            { total: cardTotal,       count: (cardRes.data || []).length },
+        virtual_account: { total: vaTotal,         count: (vaRes.data || []).length },
+        bank:            { total: bankTotal,       count: (bankRes.data || []).length },
+        admin_topup:     { total: adminTopupTotal, count: (adminTopupRes.data || []).length },
+        total: parseFloat((cardTotal + vaTotal + bankTotal + adminTopupTotal).toFixed(2)),
+      },
+      service_revenue: {
+        smm:      { total: smmRevenue,  count: smmOrders.length },
+        sms:      { total: smsRevenue,  count: (smsOrdersRes.data || []).length },
+        accounts: { total: accsRevenue, count: (accsOrdersRes.data || []).length },
+        total: parseFloat((smmRevenue + smsRevenue + accsRevenue).toFixed(2)),
+      },
+      bonuses: {
+        welcome:          { total: welcomeTotal,          count: (welcomeRes.data || []).length },
+        referrer_rewards: { total: referrerRewardsTotal,  count: completedReferrals },
+        total: parseFloat((welcomeTotal + referrerRewardsTotal).toFixed(2)),
+      },
+      refunds:           { total: refundTotal,       count: (refundRes.data || []).length },
+      admin_deductions:  { total: adminDeductTotal,  count: (adminDeductRes.data || []).length },
+      rejected_deposits: { total: sum(rejectedRes.data), count: (rejectedRes.data || []).length },
+      margin: {
+        smm_revenue:           smmRevenue,
+        smm_api_cost:          smmApiCost,
+        smm_margin:            parseFloat((smmRevenue - smmApiCost).toFixed(2)),
+        orders_with_cost_data: ordersWithCost,
+        total_orders:          smmOrders.length,
+        note: ordersWithCost < smmOrders.length
+          ? `API cost tracked for ${ordersWithCost} of ${smmOrders.length} SMM orders`
+          : null,
+      },
+    });
+  } catch (err) {
+    console.error('[finance-summary]:', err.message);
+    res.status(500).json({ error: 'Failed to load finance summary' });
   }
 });
 

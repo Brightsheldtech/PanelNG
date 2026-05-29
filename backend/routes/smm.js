@@ -53,6 +53,7 @@ router.post('/order', auth, async (req, res) => {
 
     // Cost = (sell_price per 1000) * qty / 1000
     const amount = parseFloat(((service.sell_price * qty) / 1000).toFixed(2));
+    const apiCost = parseFloat(((service.cost_price * qty) / 1000).toFixed(2));
 
     // Check wallet
     const { data: userData } = await supabase
@@ -113,6 +114,7 @@ router.post('/order', auth, async (req, res) => {
         quantity: qty,
         link,
         amount_paid: amount,
+        api_cost: apiCost,
         status: 'pending',
         panel_order_id: panelOrderId,
       })
