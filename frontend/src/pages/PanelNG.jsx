@@ -1193,7 +1193,10 @@ function NewOrder({ setPage }) {
   })];
   const byPlatform = platform === 'All' ? displayServices : displayServices.filter(s => s.platform === platform);
   const services = search.trim()
-    ? byPlatform.filter(s => s.name.toLowerCase().includes(search.toLowerCase()))
+    ? byPlatform.filter(s => {
+        const q = search.toLowerCase();
+        return s.name.toLowerCase().includes(q) || (s.platform || '').toLowerCase().includes(q);
+      })
     : byPlatform;
   const selected = allServices.find(s => s.id === serviceId);
   const cost = selected && qty > 0 ? parseFloat(((selected.sell_price * qty) / 1000).toFixed(2)) : 0;
@@ -1250,7 +1253,7 @@ function NewOrder({ setPage }) {
               placeholder="Search services… e.g. followers, likes, views"
               value={search}
               onChange={e=>setSearch(e.target.value)}
-              style={{paddingRight:search?36:undefined}}
+              style={{paddingRight:search?36:undefined,fontSize:16}}
             />
             {search && (
               <button type="button" onClick={()=>setSearch('')} style={{position:'absolute',right:10,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:'var(--text-muted)',display:'flex',alignItems:'center',padding:2}}>
