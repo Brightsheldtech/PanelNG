@@ -8,11 +8,11 @@ router.get('/balance', auth, async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('users')
-      .select('wallet_balance')
+      .select('wallet_balance, total_funded, total_spent')
       .eq('id', req.user.id)
       .single();
     if (error) throw error;
-    res.json({ balance: data.wallet_balance });
+    res.json({ balance: data.wallet_balance, total_funded: data.total_funded, total_spent: data.total_spent });
   } catch (err) {
     res.status(500).json({ error: 'Failed to get balance' });
   }
@@ -111,6 +111,77 @@ router.get('/transactions', auth, async (req, res) => {
   } catch (err) {
     console.error('[wallet/transactions]:', err.message);
     res.status(500).json({ error: 'Failed to get transactions' });
+  }
+});
+
+router.get('/virtual-account', auth, async (req, res) => {
+  try {
+    const { data } = await supabase
+      .from('user_virtual_accounts')
+      .select('account_number, account_name, bank_name, created_at')
+      .eq('user_id', req.user.id)
+      .maybeSingle();
+    res.json(data || null);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch virtual account' });
+  }
+});
+
+router.post('/virtual-account', auth, async (req, res) => {
+  try {
+    const { data: existing } = await supabase
+      .from('user_virtual_accounts')
+      .select('account_number, account_name, bank_name')
+      .eq('user_id', req.user.id)
+      .maybeSingle();
+    if (existing) return res.json(existing);
+
+    const { data: user } = await supabase
+      .from('users')
+      .select('email, full_name, phone')
+      .eq('id', req.user.id)
+      .single();
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    if (!process.env.FLW_SECRET_KEY) {
+      return res.status(503).json({ error: 'Payment service not configured' });
+    }
+
+    const flutterwave = require('../lib/flutterwave');
+    const nameParts = (user.full_name || 'Customer').split(' ');
+    const hex = req.user.id.replace(/-/g, '').toUpperCase();
+    const txRef = `VA-PNG-${hex}`;
+
+    const result = await flutterwave.createVirtualAccount({
+      email: user.email,
+      txRef,
+      firstname: nameParts[0],
+      lastname: nameParts.slice(1).join(' ') || 'Customer',
+      phonenumber: user.phone || '08000000000',
+      narration: `PanelNG | ${user.full_name || user.email}`,
+    });
+
+    if (!result || result.status !== 'success') {
+      return res.status(400).json({ error: result?.message || 'Virtual account creation failed' });
+    }
+
+    const va = result.data;
+    await supabase.from('user_virtual_accounts').insert({
+      user_id: req.user.id,
+      account_number: va.account_number,
+      account_name: va.account_name,
+      bank_name: va.bank_name,
+      flw_order_ref: va.order_ref,
+    });
+
+    res.status(201).json({
+      account_number: va.account_number,
+      account_name: va.account_name,
+      bank_name: va.bank_name,
+    });
+  } catch (err) {
+    console.error('VA create error:', err.message);
+    res.status(500).json({ error: err.response?.data?.message || 'Failed to generate virtual account' });
   }
 });
 

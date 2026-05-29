@@ -18,6 +18,19 @@ const flutterwave = {
     const res = await client.get(`/transactions?tx_ref=${txRef}`);
     return res.data;
   },
+
+  async createVirtualAccount({ email, txRef, firstname, lastname, phonenumber, narration }) {
+    const res = await client.post('/virtual-account-numbers', {
+      email,
+      is_permanent: true,
+      tx_ref: txRef,
+      phonenumber: phonenumber || '08000000000',
+      firstname: firstname || 'Customer',
+      lastname: lastname || 'User',
+      narration: narration || 'PanelNG Wallet',
+    });
+    return res.data;
+  },
 };
 
 module.exports = flutterwave;

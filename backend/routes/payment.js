@@ -146,17 +146,17 @@ router.post('/flutterwave/webhook', express.raw({ type: '*/*' }), async (req, re
 
     if (existing) return res.sendStatus(200);
 
-    // Extract user_id from tx_ref: FLW-PNG-{USER_ID_SLICE}-{timestamp}
     const txRef = flwData.tx_ref || '';
-    const refParts = txRef.split('-');
-    // refParts: ['FLW', 'PNG', '{fullUUID32hexNoDashes}', '{timestamp}']
-    if (refParts.length < 3 || refParts[0] !== 'FLW' || refParts[1] !== 'PNG') {
+    let userId;
+    if (txRef.startsWith('FLW-PNG-')) {
+      const hex = txRef.split('-')[2].toLowerCase();
+      userId = `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+    } else if (txRef.startsWith('VA-PNG-')) {
+      const hex = txRef.slice(7).toLowerCase();
+      userId = `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+    } else {
       return res.sendStatus(200);
     }
-
-    // Reconstruct UUID with dashes from the 32-char hex string stored in tx_ref
-    const hex = refParts[2].toLowerCase();
-    const userId = `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
 
     const { data: user } = await supabase
       .from('users')
@@ -166,6 +166,7 @@ router.post('/flutterwave/webhook', express.raw({ type: '*/*' }), async (req, re
 
     if (!user) return res.sendStatus(200);
 
+    const isVA = txRef.startsWith('VA-PNG-');
     const newBalance = parseFloat((parseFloat(user.wallet_balance || 0) + amount).toFixed(2));
     const newFunded = parseFloat((parseFloat(user.total_funded || 0) + amount).toFixed(2));
     await supabase.from('users').update({ wallet_balance: newBalance, total_funded: newFunded }).eq('id', user.id);
@@ -174,7 +175,9 @@ router.post('/flutterwave/webhook', express.raw({ type: '*/*' }), async (req, re
       type: 'credit',
       amount,
       reference: transactionId,
-      description: `Wallet funding via card — ₦${amount.toLocaleString('en-NG')}`,
+      description: isVA
+        ? `Wallet funding via virtual account — ₦${amount.toLocaleString('en-NG')}`
+        : `Wallet funding via card — ₦${amount.toLocaleString('en-NG')}`,
     });
 
     handleFirstDeposit(user.id);

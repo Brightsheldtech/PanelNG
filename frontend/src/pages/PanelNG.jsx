@@ -734,7 +734,7 @@ function Sidebar({ page, setPage, isOpen, onClose, isMobile }) {
     { id:'neworder', icon:'ti-circle-plus', label:'New Order' },
     { id:'orders', icon:'ti-receipt', label:'Order History' },
     { id:'transactions', icon:'ti-clock-dollar', label:'Transactions' },
-    { id:'funds', icon:'ti-wallet', label:'Add Funds' },
+    { id:'wallet', icon:'ti-wallet', label:'Wallet' },
     { id:'referral', icon:'ti-users', label:'Referral' },
     { id:'profile', icon:'ti-user-circle', label:'Profile' },
   ];
@@ -2300,6 +2300,179 @@ function ProfileSettings() {
                 <i className="ti ti-logout"/>Yes, Sign Out
               </button>
             </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── WALLET PAGE ──────────────────────────────────────────────────────────────
+function WalletPage({ setPage }) {
+  const fmtN = (n) => '₦' + Number(n || 0).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtK = (n) => { const v = Number(n || 0); return v >= 1000 ? '₦' + (v / 1000).toFixed(v % 1000 === 0 ? 0 : 1) + 'k' : '₦' + v.toLocaleString('en-NG'); };
+
+  const [stats, setStats] = useState({ balance: 0, total_funded: 0, total_spent: 0 });
+  const [va, setVa] = useState(null);
+  const [vaLoading, setVaLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [transactions, setTransactions] = useState([]);
+  const [txLoading, setTxLoading] = useState(true);
+  const [copied, setCopied] = useState(false);
+  const [vaError, setVaError] = useState('');
+
+  useEffect(() => {
+    api.get('/wallet/balance').then(r => setStats(r.data)).catch(() => {});
+    api.get('/wallet/virtual-account')
+      .then(r => setVa(r.data || false))
+      .catch(() => setVa(false))
+      .finally(() => setVaLoading(false));
+    api.get('/wallet/transactions', { params: { limit: 8 } })
+      .then(r => setTransactions(r.data.transactions || []))
+      .catch(() => {})
+      .finally(() => setTxLoading(false));
+  }, []);
+
+  const generateVA = async () => {
+    setGenerating(true);
+    setVaError('');
+    try {
+      const { data } = await api.post('/wallet/virtual-account');
+      setVa(data);
+    } catch (err) {
+      setVaError(err.response?.data?.error || 'Failed to generate. Please try again.');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const copyAccNo = () => {
+    if (!va?.account_number) return;
+    navigator.clipboard.writeText(va.account_number).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  const txIcon = (tx) => {
+    if (tx.type === 'credit') return { icon: 'ti-arrow-down-left', color: 'var(--success)', bg: 'rgba(34,197,94,.1)' };
+    return { icon: 'ti-arrow-up-right', color: 'var(--red)', bg: 'rgba(240,68,56,.1)' };
+  };
+
+  return (
+    <div className="pn-page">
+      <div className="pn-page-title">Wallet</div>
+      <div className="pn-page-sub">Manage your balance and funding options.</div>
+
+      <div style={{ background: 'linear-gradient(135deg, rgba(245,158,11,.15) 0%, rgba(245,158,11,.05) 100%)', border: '1px solid rgba(245,158,11,.25)', borderRadius: 16, padding: '20px 20px 16px', marginBottom: 20 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 6 }}>Available Balance</div>
+        <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--accent)', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.03em', marginBottom: 16 }}>{fmtN(stats.balance)}</div>
+        <div style={{ display: 'flex', gap: 16, marginBottom: 18 }}>
+          <div>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Total Funded</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>{fmtN(stats.total_funded)}</div>
+          </div>
+          <div style={{ width: 1, background: 'var(--border)' }} />
+          <div>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Total Spent</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>{fmtN(stats.total_spent)}</div>
+          </div>
+        </div>
+        <button className="pn-btn pn-btn-primary" style={{ width: '100%', height: 44, borderRadius: 12, fontWeight: 700, fontSize: 14 }} onClick={() => setPage('funds')}>
+          <i className="ti ti-plus" style={{ marginRight: 6 }} />Fund Wallet
+        </button>
+      </div>
+
+      <div className="pn-card" style={{ marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Instant Funding</div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Transfer &rarr; instant credit</div>
+        </div>
+
+        {vaLoading ? (
+          <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-muted)', fontSize: 13 }}>
+            <i className="ti ti-loader-2" style={{ fontSize: 20, animation: 'pn-spin 1s linear infinite', display: 'block', marginBottom: 6 }} />Loading…
+          </div>
+        ) : va ? (
+          <div style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', borderRadius: 12, padding: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(245,158,11,.12)', border: '1px solid rgba(245,158,11,.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <i className="ti ti-building-bank" style={{ fontSize: 18, color: 'var(--accent)' }} />
+              </div>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{va.bank_name}</div>
+                <div style={{ fontSize: 11, color: 'var(--success)', fontWeight: 600 }}>Active virtual account</div>
+              </div>
+            </div>
+            <div style={{ marginBottom: 8 }}>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Account Number</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: '0.06em', color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums', fontFamily: "'Geist Mono','Courier New',monospace" }}>{va.account_number}</div>
+                <button onClick={copyAccNo} style={{ background: copied ? 'rgba(34,197,94,.1)' : 'var(--bg-surface)', border: `1px solid ${copied ? 'rgba(34,197,94,.3)' : 'var(--border)'}`, borderRadius: 8, padding: '4px 10px', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: copied ? 'var(--success)' : 'var(--text-secondary)', transition: 'all 150ms' }}>
+                  <i className={`ti ${copied ? 'ti-check' : 'ti-copy'}`} style={{ marginRight: 4 }} />{copied ? 'Copied' : 'Copy'}
+                </button>
+              </div>
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{va.account_name}</div>
+            <div style={{ marginTop: 10, fontSize: 11, color: 'var(--text-muted)', background: 'rgba(34,197,94,.06)', border: '1px solid rgba(34,197,94,.15)', borderRadius: 8, padding: '6px 10px' }}>
+              <i className="ti ti-info-circle" style={{ marginRight: 5 }} />Transfer any amount to this account — your wallet is credited instantly.
+            </div>
+          </div>
+        ) : (
+          <div style={{ textAlign: 'center', padding: '8px 0 4px' }}>
+            <div style={{ width: 52, height: 52, borderRadius: 14, background: 'var(--bg-raised)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
+              <i className="ti ti-building-bank" style={{ fontSize: 26, color: 'var(--text-muted)' }} />
+            </div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>No Virtual Account Yet</div>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16, lineHeight: 1.5 }}>Generate a dedicated account number to receive instant transfers and auto-fund your wallet.</div>
+            {vaError && <div style={{ fontSize: 12, color: 'var(--red)', marginBottom: 12, background: 'rgba(240,68,56,.06)', border: '1px solid rgba(240,68,56,.15)', borderRadius: 8, padding: '8px 12px' }}>{vaError}</div>}
+            <button className="pn-btn pn-btn-primary pn-btn-full" onClick={generateVA} disabled={generating} style={{ height: 44, borderRadius: 12, fontWeight: 700 }}>
+              {generating ? <><i className="ti ti-loader-2" style={{ marginRight: 6, animation: 'pn-spin 1s linear infinite' }} />Generating…</> : <><i className="ti ti-plus" style={{ marginRight: 6 }} />Generate Virtual Account</>}
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="pn-card">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Recent Transactions</div>
+          <button className="pn-btn pn-btn-ghost pn-btn-sm" onClick={() => setPage('transactions')}>
+            View all <i className="ti ti-arrow-right" />
+          </button>
+        </div>
+        {txLoading ? (
+          <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--text-muted)', fontSize: 13 }}>
+            <i className="ti ti-loader-2" style={{ fontSize: 18, animation: 'pn-spin 1s linear infinite' }} />
+          </div>
+        ) : transactions.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--text-muted)', fontSize: 13 }}>No transactions yet.</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {transactions.map(tx => {
+              const ico = txIcon(tx);
+              const isCredit = tx.type === 'credit';
+              const isPending = tx.status === 'pending';
+              const isRejected = tx.status === 'rejected';
+              const amtColor = isPending ? 'var(--text-muted)' : isRejected ? 'var(--red)' : isCredit ? 'var(--success)' : 'var(--text-primary)';
+              return (
+                <div key={tx.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
+                  <div style={{ width: 34, height: 34, borderRadius: 10, background: ico.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <i className={`ti ${ico.icon}`} style={{ fontSize: 15, color: ico.color }} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tx.description}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{new Date(tx.created_at).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+                  </div>
+                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: amtColor, fontVariantNumeric: 'tabular-nums' }}>
+                      {isCredit && !isRejected ? '+' : '-'}&#x20A6;{Number(tx.amount).toLocaleString('en-NG', { minimumFractionDigits: 2 })}
+                    </div>
+                    {isPending && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Pending</div>}
+                    {isRejected && <div style={{ fontSize: 10, color: 'var(--red)' }}>Rejected</div>}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
