@@ -151,7 +151,7 @@ export default function ServicesManager() {
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState(null);
-  const [syncing, setSyncing] = useState(false);
+  const [syncing, setSyncing] = useState({ jap: false, smmraja: false });
   const [showAdd, setShowAdd] = useState(false);
   const [search, setSearch] = useState('');
   const [platformFilter, setPlatformFilter] = useState('All');
@@ -196,16 +196,17 @@ export default function ServicesManager() {
     }
   };
 
-  const handleSync = async () => {
-    setSyncing(true);
+  const handleSync = async (provider = 'jap') => {
+    setSyncing((s) => ({ ...s, [provider]: true }));
     try {
-      const res = await api.post('/admin/sync-services');
-      toast.success(`Synced ${res.data.synced} of ${res.data.total} services from JAP`);
+      const res = await api.post('/admin/sync-services', { provider });
+      const label = provider === 'smmraja' ? 'SMMRaja' : 'JAP';
+      toast.success(`Synced ${res.data.synced} of ${res.data.total} services from ${label}`);
       load();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Sync failed');
     } finally {
-      setSyncing(false);
+      setSyncing((s) => ({ ...s, [provider]: false }));
     }
   };
 
@@ -224,9 +225,13 @@ export default function ServicesManager() {
           <button className="btn btn-outline btn-sm" onClick={load} disabled={loading}>
             <RefreshCw size={13} />
           </button>
-          <button className="btn btn-outline btn-sm" onClick={handleSync} disabled={syncing}>
-            {syncing ? <span className="spinner" style={{ width: 13, height: 13 }} /> : <Download size={13} />}
-            {syncing ? 'Syncing…' : 'Sync from JAP'}
+          <button className="btn btn-outline btn-sm" onClick={() => handleSync('jap')} disabled={syncing.jap || syncing.smmraja}>
+            {syncing.jap ? <span className="spinner" style={{ width: 13, height: 13 }} /> : <Download size={13} />}
+            {syncing.jap ? 'Syncing…' : 'Sync JAP'}
+          </button>
+          <button className="btn btn-outline btn-sm" onClick={() => handleSync('smmraja')} disabled={syncing.jap || syncing.smmraja}>
+            {syncing.smmraja ? <span className="spinner" style={{ width: 13, height: 13 }} /> : <Download size={13} />}
+            {syncing.smmraja ? 'Syncing…' : 'Sync SMMRaja'}
           </button>
           <button className="btn btn-primary btn-sm" onClick={() => setShowAdd(true)}>
             <Plus size={13} /> Add Service
