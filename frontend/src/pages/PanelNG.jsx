@@ -2842,6 +2842,14 @@ function SupportChat() {
         <i className="ti ti-headset" style={{fontSize:15,flexShrink:0}}/>Speak to an Agent
         <i className="ti ti-chevron-right" style={{fontSize:11,marginLeft:'auto'}}/>
       </button>
+      <a href="https://t.me/panelng" target="_blank" rel="noopener noreferrer"
+        style={{display:'flex',alignItems:'center',gap:8,padding:'7px 13px',background:'rgba(34,158,217,.06)',border:'1px solid rgba(34,158,217,.2)',borderRadius:10,color:'#229ED9',fontSize:12,fontWeight:500,textDecoration:'none',fontFamily:"'Plus Jakarta Sans',sans-serif",transition:'background 120ms'}}
+        onMouseEnter={e=>e.currentTarget.style.background='rgba(34,158,217,.12)'}
+        onMouseLeave={e=>e.currentTarget.style.background='rgba(34,158,217,.06)'}>
+        <i className="ti ti-brand-telegram" style={{fontSize:15,flexShrink:0}}/>
+        Prefer Telegram? Chat us at <strong style={{marginLeft:2}}>@panelng</strong>
+        <i className="ti ti-external-link" style={{fontSize:11,marginLeft:'auto',opacity:.6}}/>
+      </a>
     </div>
   );
 
