@@ -2885,6 +2885,92 @@ function Referral() {
   );
 }
 
+// ─── PWA INSTALL BANNER ───────────────────────────────────────────────────────
+function InstallBanner() {
+  const [show, setShow]   = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
+  const prompt = useRef(null);
+
+  useEffect(() => {
+    // Already installed as standalone PWA — nothing to do
+    if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) return;
+
+    // Dismissed recently (7 days)
+    const ts = localStorage.getItem('pwa_install_dismissed');
+    if (ts && Date.now() - parseInt(ts) < 7 * 24 * 60 * 60 * 1000) return;
+
+    const ios       = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const iosSafari = ios && /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+
+    if (iosSafari) {
+      setIsIOS(true);
+      setTimeout(() => setShow(true), 3000); // slight delay so it doesn't open immediately
+      return;
+    }
+
+    const handler = (e) => {
+      e.preventDefault();
+      prompt.current = e;
+      setTimeout(() => setShow(true), 3000);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const dismiss = () => {
+    localStorage.setItem('pwa_install_dismissed', Date.now().toString());
+    setShow(false);
+  };
+
+  const install = async () => {
+    if (!prompt.current) return;
+    prompt.current.prompt();
+    const { outcome } = await prompt.current.userChoice;
+    prompt.current = null;
+    if (outcome === 'accepted') setShow(false);
+    else dismiss();
+  };
+
+  if (!show) return null;
+
+  return (
+    <div style={{
+      position:'fixed', bottom:72, left:12, right:12, zIndex:9997,
+      background:'var(--bg-surface)', border:'1px solid var(--border)',
+      borderRadius:16, padding:'14px 16px',
+      boxShadow:'0 8px 32px rgba(0,0,0,.4)',
+      display:'flex', alignItems:'center', gap:12,
+      fontFamily:"'Plus Jakarta Sans',sans-serif",
+    }}>
+      <div style={{width:44,height:44,borderRadius:12,background:'#F59E0B',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+        <i className="ti ti-bolt" style={{fontSize:22,color:'#fff'}}/>
+      </div>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:13,fontWeight:700,color:'var(--text-primary)',marginBottom:3}}>
+          Add PanelNG to Home Screen
+        </div>
+        {isIOS ? (
+          <div style={{fontSize:11,color:'var(--text-secondary)',lineHeight:1.55}}>
+            Tap <i className="ti ti-share" style={{fontSize:12,verticalAlign:'middle'}}/> <strong>Share</strong> at the bottom of Safari, then <strong>"Add to Home Screen"</strong>
+          </div>
+        ) : (
+          <div style={{fontSize:11,color:'var(--text-secondary)'}}>
+            Install for faster access, offline use, and no browser chrome
+          </div>
+        )}
+      </div>
+      {!isIOS && (
+        <button onClick={install} style={{background:'#F59E0B',color:'#0F0F0D',border:'none',borderRadius:8,padding:'8px 14px',fontSize:12,fontWeight:700,cursor:'pointer',flexShrink:0,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+          Install
+        </button>
+      )}
+      <button onClick={dismiss} style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-muted)',padding:'4px',display:'flex',alignItems:'center',flexShrink:0}}>
+        <i className="ti ti-x" style={{fontSize:16}}/>
+      </button>
+    </div>
+  );
+}
+
 // ─── APP ──────────────────────────────────────────────────────────────────────
 function App() {
   const { resolved } = useContext(ThemeCtx);
@@ -2910,6 +2996,7 @@ function App() {
         <BottomNav page={page} setPage={navigate}/>
       </div>
       <SupportChat/>
+      <InstallBanner/>
     </div>
   );
 }
