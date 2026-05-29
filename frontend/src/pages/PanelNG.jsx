@@ -934,13 +934,27 @@ function Overview({ setPage }) {
       </div>
 
       {/* Add Funds + View Wallet buttons */}
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:16}}>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:12}}>
         <button className="pn-btn pn-btn-primary pn-btn-full" style={{height:44,borderRadius:12,fontWeight:600}} onClick={()=>setPage('funds')}>
           <i className="ti ti-plus" style={{fontSize:15}}/>Add Funds
         </button>
         <button className="pn-btn pn-btn-secondary pn-btn-full" style={{height:44,borderRadius:12,fontWeight:600}} onClick={()=>setPage('neworder')}>
           New Order <i className="ti ti-arrow-right" style={{fontSize:15}}/>
         </button>
+      </div>
+
+      {/* Service quick-access chips */}
+      <div style={{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap'}}>
+        {[
+          {id:'smm',      icon:'ti-social',                 label:'SMM Order',   color:'#6366F1', bg:'rgba(99,102,241,.12)'},
+          {id:'sms',      icon:'ti-device-mobile-message',  label:'SMS Verify',  color:'#10B981', bg:'rgba(16,185,129,.12)'},
+          {id:'accounts', icon:'ti-shopping-bag',           label:'Buy Accounts',color:'#F59E0B', bg:'rgba(245,158,11,.12)'},
+        ].map(s=>(
+          <button key={s.id} onClick={()=>setPage(s.id)}
+            style={{display:'flex',alignItems:'center',gap:6,padding:'7px 14px',background:s.bg,border:'none',borderRadius:20,cursor:'pointer',fontSize:12,fontWeight:700,color:s.color,fontFamily:"'Plus Jakarta Sans',sans-serif",flexShrink:0}}>
+            <i className={`ti ${s.icon}`} style={{fontSize:14}}/>{s.label}
+          </button>
+        ))}
       </div>
 
       {/* Refer & Earn card */}
@@ -3049,23 +3063,6 @@ function NewOrderSelect({ setPage }) {
         <p style={{margin:'4px 0 0',fontSize:14,color:'var(--text-secondary)'}}>Choose a service to get started</p>
       </div>
 
-      {/* Quick chips row */}
-      <div style={{display:'flex',gap:10,marginBottom:20,flexWrap:'wrap'}}>
-        {SERVICES.map(s => (
-          <button
-            key={s.id}
-            onClick={() => setPage(s.id)}
-            style={{display:'flex',alignItems:'center',gap:7,padding:'9px 16px',background:s.bg,border:'none',borderRadius:24,cursor:'pointer',fontSize:13,fontWeight:700,color:s.color,fontFamily:"'Plus Jakarta Sans',sans-serif",flexShrink:0,transition:'opacity 120ms'}}
-            onMouseEnter={e=>e.currentTarget.style.opacity='0.8'}
-            onMouseLeave={e=>e.currentTarget.style.opacity='1'}
-          >
-            <i className={`ti ${s.icon}`} style={{fontSize:15}}/>
-            {s.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Full cards */}
       <div style={{display:'flex',flexDirection:'column',gap:14}}>
         {SERVICES.map(s => (
           <button
