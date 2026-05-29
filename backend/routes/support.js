@@ -4,6 +4,21 @@ const auth = require('../middleware/auth');
 const { getEmailConfig, sendSupportNotification } = require('../lib/mailer');
 const router = express.Router();
 
+// GET /api/support/bot-topics — active FAQ topics for the chat bot (must be before /:id routes)
+router.get('/bot-topics', auth, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('support_bot_topics')
+      .select('id, icon, label, reply, escalate, sort_order')
+      .eq('active', true)
+      .order('sort_order', { ascending: true });
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch bot topics' });
+  }
+});
+
 // POST /api/support/start — get active conversation or create one
 router.post('/start', auth, async (req, res) => {
   try {

@@ -923,6 +923,87 @@ router.post('/refund', async (req, res) => {
 // SUPPORT / LIVE CHAT
 // ============================================================
 
+// ─── BOT TOPICS CRUD ──────────────────────────────────────────────────────────
+
+// GET /api/admin/support/bot-topics
+router.get('/support/bot-topics', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('support_bot_topics')
+      .select('*')
+      .order('sort_order', { ascending: true });
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch bot topics' });
+  }
+});
+
+// POST /api/admin/support/bot-topics
+router.post('/support/bot-topics', async (req, res) => {
+  const { icon, label, reply, escalate, sort_order } = req.body;
+  if (!label?.trim()) return res.status(400).json({ error: 'Label is required' });
+  try {
+    const { data, error } = await supabase
+      .from('support_bot_topics')
+      .insert({
+        icon: icon?.trim() || 'ti-help-circle',
+        label: label.trim(),
+        reply: reply?.trim() || null,
+        escalate: !!escalate,
+        sort_order: parseInt(sort_order) || 0,
+        active: true,
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    res.status(201).json(data);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to create bot topic' });
+  }
+});
+
+// PATCH /api/admin/support/bot-topics/:id
+router.patch('/support/bot-topics/:id', async (req, res) => {
+  const { id } = req.params;
+  const { icon, label, reply, escalate, sort_order, active } = req.body;
+  const updates = { updated_at: new Date().toISOString() };
+  if (icon      !== undefined) updates.icon       = icon?.trim() || 'ti-help-circle';
+  if (label     !== undefined) updates.label      = label.trim();
+  if (reply     !== undefined) updates.reply      = reply?.trim() || null;
+  if (escalate  !== undefined) updates.escalate   = !!escalate;
+  if (sort_order!== undefined) updates.sort_order = parseInt(sort_order) || 0;
+  if (active    !== undefined) updates.active     = !!active;
+  try {
+    const { data, error } = await supabase
+      .from('support_bot_topics')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: 'Not found' });
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update bot topic' });
+  }
+});
+
+// DELETE /api/admin/support/bot-topics/:id
+router.delete('/support/bot-topics/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const { error } = await supabase
+      .from('support_bot_topics')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete bot topic' });
+  }
+});
+
 // GET /api/admin/support — list conversations (open + resolved, not bot-phase)
 router.get('/support', async (req, res) => {
   const { status } = req.query;

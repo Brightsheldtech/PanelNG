@@ -1,10 +1,13 @@
 const { Resend } = require('resend');
 const supabase = require('./supabase');
 
-const FROM = 'PanelNG <onboarding@resend.dev>';
+// Use a verified Resend domain sender via RESEND_FROM env var.
+// The default onboarding@resend.dev only delivers to the Resend account owner's email.
+// Set RESEND_FROM=PanelNG <noreply@yourdomain.com> after verifying your domain in Resend.
+const FROM = process.env.RESEND_FROM || 'PanelNG <onboarding@resend.dev>';
 
-function getResend() {
-  return new Resend(process.env.RESEND_API_KEY);
+if (!process.env.RESEND_FROM) {
+  console.warn('[mailer] RESEND_FROM not set — using sandbox sender. Emails will only deliver to the Resend account owner. Set RESEND_FROM to a verified domain address to send to all users.');
 }
 
 async function getEmailConfig() {

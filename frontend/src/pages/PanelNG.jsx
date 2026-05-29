@@ -2308,17 +2308,16 @@ function ProfileSettings() {
 }
 
 // ─── SUPPORT CHAT ─────────────────────────────────────────────────────────────
-const BOT_TOPICS = [
-  { id:'funding',  icon:'ti-wallet',         label:'Wallet & Funding',    reply:"To fund your wallet: Add Funds → Bank Transfer → enter amount → get unique reference code → send exact amount to our bank account → click \"I Have Made This Transfer\". Wallet is credited within minutes during business hours (8am–9pm WAT)." },
-  { id:'order',    icon:'ti-package',         label:'Order Not Delivered', reply:"Orders usually process within seconds. If your order shows \"pending\" after 5 minutes, check Order History for status updates. If it's been over 30 minutes and still pending, tap \"I still need help\" so a support agent can investigate." },
-  { id:'payment',  icon:'ti-clock',           label:'Payment Not Confirmed',reply:"Bank transfers are confirmed manually. If you submitted a request during business hours (8am–9pm WAT) and haven't been credited after 2 hours, please escalate. Make sure you used the exact reference code as the transfer narration." },
-  { id:'refund',   icon:'ti-receipt-refund',  label:'Refund / Dispute',    reply:"Refunds are handled case-by-case. Accounts suspended due to third-party policy violations are not eligible. For valid delivery issues, escalate below and include your Order ID." },
+const FALLBACK_TOPICS = [
+  { id:'funding',  icon:'ti-wallet',         label:'Wallet & Funding',    reply:"To fund your wallet: go to Add Funds → Bank Transfer, follow the steps, and your wallet will be credited within minutes during business hours." },
+  { id:'order',    icon:'ti-package',         label:'Order Not Delivered', reply:"Orders usually process within seconds. Check Order History for status. If still pending after 30 minutes, tap \"I still need help\"." },
   { id:'other',    icon:'ti-help-circle',     label:'Something Else',      reply:null, escalate:true },
 ];
 
 function SupportChat() {
   const user = useContext(UserCtx);
   const [open, setOpen] = useState(false);
+  const [botTopics, setBotTopics] = useState(FALLBACK_TOPICS);
   const [phase, setPhase] = useState('greeting'); // greeting | topics | bot-reply | escalating | human
   const [selectedTopic, setSelectedTopic] = useState(null);
   const [convId, setConvId] = useState(null);
@@ -2348,6 +2347,13 @@ function SupportChat() {
     : pos.left;
 
   const scrollBottom = () => setTimeout(() => bottomRef.current?.scrollIntoView({ behavior:'smooth' }), 60);
+
+  // Load bot topics from API once on mount; fall back to FALLBACK_TOPICS on error
+  useEffect(() => {
+    api.get('/support/bot-topics')
+      .then(r => { if (Array.isArray(r.data) && r.data.length > 0) setBotTopics(r.data); })
+      .catch(() => {});
+  }, []);
 
   // Poll messages while in human phase and chat is open
   useEffect(() => {
@@ -2532,7 +2538,7 @@ function SupportChat() {
                     Select a topic below and I'll help right away:
                   </div>
                 </div>
-                {BOT_TOPICS.map(t=>(
+                {botTopics.map(t=>(
                   <button key={t.id} onClick={()=>handleTopic(t)} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',background:'var(--bg-raised)',border:'1px solid var(--border)',borderRadius:10,cursor:'pointer',color:'var(--text-primary)',fontSize:13,fontWeight:500,textAlign:'left',transition:'all 120ms ease',fontFamily:"'Plus Jakarta Sans',sans-serif"}}
                     onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--accent)';e.currentTarget.style.background='rgba(245,158,11,.08)'}}
                     onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--border)';e.currentTarget.style.background='var(--bg-raised)'}}>
