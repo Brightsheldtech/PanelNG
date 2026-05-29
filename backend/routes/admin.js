@@ -936,6 +936,7 @@ router.get('/sms-prices/:product', async (req, res) => {
         is_hidden: s?.is_hidden || false,
         sort_order: s?.sort_order ?? 999,
         custom_price: s?.custom_price ?? null,
+        manual_price_ngn: s?.manual_price_ngn ?? null,
       };
     });
 
