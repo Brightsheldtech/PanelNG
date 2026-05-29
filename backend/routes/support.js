@@ -60,7 +60,7 @@ router.get('/:id/messages', auth, async (req, res) => {
 
     const { data, error } = await supabase
       .from('support_messages')
-      .select('id, sender_type, body, created_at')
+      .select('id, sender_type, body, attachment_url, created_at')
       .eq('conversation_id', id)
       .order('created_at', { ascending: true })
       .limit(100);
@@ -72,11 +72,73 @@ router.get('/:id/messages', auth, async (req, res) => {
   }
 });
 
+// POST /api/support/:id/bot-exchange — save topic tap + bot reply as two messages
+router.post('/:id/bot-exchange', auth, async (req, res) => {
+  const { id } = req.params;
+  const { userLabel, botReply } = req.body;
+  if (!userLabel?.trim() || !botReply?.trim()) {
+    return res.status(400).json({ error: 'userLabel and botReply required' });
+  }
+  try {
+    const { data: conv } = await supabase
+      .from('support_conversations')
+      .select('id, status')
+      .eq('id', id)
+      .eq('user_id', req.user.id)
+      .single();
+    if (!conv) return res.status(404).json({ error: 'Not found' });
+    if (conv.status === 'resolved') return res.status(400).json({ error: 'Conversation is resolved' });
+
+    const { data: userMsg, error: e1 } = await supabase
+      .from('support_messages')
+      .insert({ conversation_id: id, sender_type: 'user', body: userLabel.trim() })
+      .select('id, sender_type, body, attachment_url, created_at')
+      .single();
+    if (e1) throw e1;
+
+    const { data: botMsg, error: e2 } = await supabase
+      .from('support_messages')
+      .insert({ conversation_id: id, sender_type: 'bot', body: botReply.trim() })
+      .select('id, sender_type, body, attachment_url, created_at')
+      .single();
+    if (e2) throw e2;
+
+    await supabase
+      .from('support_conversations')
+      .update({ updated_at: new Date().toISOString() })
+      .eq('id', id);
+
+    res.status(201).json({ userMsg, botMsg });
+  } catch (err) {
+    console.error('bot-exchange error:', err.message);
+    res.status(500).json({ error: 'Failed to save bot exchange' });
+  }
+});
+
+// PATCH /api/support/:id/close — user self-resolves after "Yes, that helped"
+router.patch('/:id/close', auth, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const { data, error } = await supabase
+      .from('support_conversations')
+      .update({ status: 'resolved', updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .eq('user_id', req.user.id)
+      .select('id, status')
+      .single();
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: 'Not found' });
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to close conversation' });
+  }
+});
+
 // POST /api/support/:id/message — user sends a message
 router.post('/:id/message', auth, async (req, res) => {
   const { id } = req.params;
-  const { body } = req.body;
-  if (!body?.trim()) return res.status(400).json({ error: 'Message is required' });
+  const { body, attachment_url } = req.body;
+  if (!body?.trim() && !attachment_url) return res.status(400).json({ error: 'Message or attachment required' });
 
   try {
     const { data: conv } = await supabase
@@ -90,8 +152,8 @@ router.post('/:id/message', auth, async (req, res) => {
 
     const { data, error } = await supabase
       .from('support_messages')
-      .insert({ conversation_id: id, sender_type: 'user', body: body.trim() })
-      .select('id, sender_type, body, created_at')
+      .insert({ conversation_id: id, sender_type: 'user', body: (body || '').trim(), attachment_url: attachment_url || null })
+      .select('id, sender_type, body, attachment_url, created_at')
       .single();
     if (error) throw error;
 

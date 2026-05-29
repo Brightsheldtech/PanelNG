@@ -14,8 +14,8 @@ router.post('/flutterwave/init', auth, async (req, res) => {
   const { amount } = req.body;
   const naira = parseFloat(amount);
 
-  if (!naira || naira < 100) {
-    return res.status(400).json({ error: 'Minimum deposit is ₦100' });
+  if (!naira || naira < 1000) {
+    return res.status(400).json({ error: 'Minimum deposit is ₦1,000' });
   }
   if (!process.env.FLW_PUBLIC_KEY || !process.env.FLW_SECRET_KEY) {
     return res.status(503).json({ error: 'Payment not configured. Contact support.' });

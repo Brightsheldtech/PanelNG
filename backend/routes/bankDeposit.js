@@ -25,8 +25,8 @@ router.post('/request', auth, async (req, res) => {
   const { amount, reference } = req.body;
   const parsedAmount = parseFloat(amount);
 
-  if (!parsedAmount || parsedAmount < 100) {
-    return res.status(400).json({ error: 'Minimum deposit is ₦100' });
+  if (!parsedAmount || parsedAmount < 1000) {
+    return res.status(400).json({ error: 'Minimum deposit is ₦1,000' });
   }
   if (!reference || !/^PNG-\d{4}-[A-Z]{1,4}$/.test(reference)) {
     return res.status(400).json({ error: 'Invalid reference format' });

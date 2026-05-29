@@ -1038,7 +1038,7 @@ router.get('/support/:id', async (req, res) => {
         .single(),
       supabase
         .from('support_messages')
-        .select('id, sender_type, body, created_at')
+        .select('id, sender_type, body, attachment_url, created_at')
         .eq('conversation_id', id)
         .order('created_at', { ascending: true })
         .limit(200),
@@ -1059,7 +1059,7 @@ router.post('/support/:id/reply', async (req, res) => {
     const { data, error } = await supabase
       .from('support_messages')
       .insert({ conversation_id: id, sender_type: 'admin', sender_id: req.user.id, body: body.trim() })
-      .select('id, sender_type, body, created_at')
+      .select('id, sender_type, body, attachment_url, created_at')
       .single();
     if (error) throw error;
     await supabase

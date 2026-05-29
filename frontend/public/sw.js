@@ -1,4 +1,4 @@
-const CACHE = 'panelng-v8';
+const CACHE = 'panelng-v9';
 const SHELL = ['/', '/index.html'];
 
 self.addEventListener('install', e => {
