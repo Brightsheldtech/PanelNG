@@ -933,26 +933,22 @@ function Overview({ setPage }) {
         ))}
       </div>
 
-      {/* Add Funds + View Wallet buttons */}
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:12}}>
-        <button className="pn-btn pn-btn-primary pn-btn-full" style={{height:44,borderRadius:12,fontWeight:600}} onClick={()=>setPage('funds')}>
-          <i className="ti ti-plus" style={{fontSize:15}}/>Add Funds
-        </button>
-        <button className="pn-btn pn-btn-secondary pn-btn-full" style={{height:44,borderRadius:12,fontWeight:600}} onClick={()=>setPage('neworder')}>
-          New Order <i className="ti ti-arrow-right" style={{fontSize:15}}/>
-        </button>
-      </div>
+      {/* Add Funds — full width */}
+      <button className="pn-btn pn-btn-primary pn-btn-full" style={{height:44,borderRadius:12,fontWeight:600,marginBottom:10,width:'100%'}} onClick={()=>setPage('funds')}>
+        <i className="ti ti-plus" style={{fontSize:15}}/>Add Funds
+      </button>
 
-      {/* Service quick-access chips */}
-      <div style={{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap'}}>
+      {/* Service chips — 3 equal columns */}
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:16}}>
         {[
-          {id:'smm',      icon:'ti-social',                 label:'SMM Order',   color:'#6366F1', bg:'rgba(99,102,241,.12)'},
-          {id:'sms',      icon:'ti-device-mobile-message',  label:'SMS Verify',  color:'#10B981', bg:'rgba(16,185,129,.12)'},
-          {id:'accounts', icon:'ti-shopping-bag',           label:'Buy Accounts',color:'#F59E0B', bg:'rgba(245,158,11,.12)'},
+          {id:'smm',      icon:'ti-social',                label:'SMM Order',   color:'#6366F1', bg:'rgba(99,102,241,.12)'},
+          {id:'sms',      icon:'ti-device-mobile-message', label:'SMS Verify',  color:'#10B981', bg:'rgba(16,185,129,.12)'},
+          {id:'accounts', icon:'ti-shopping-bag',          label:'Buy Accounts',color:'#F59E0B', bg:'rgba(245,158,11,.12)'},
         ].map(s=>(
           <button key={s.id} onClick={()=>setPage(s.id)}
-            style={{display:'flex',alignItems:'center',gap:6,padding:'7px 14px',background:s.bg,border:'none',borderRadius:20,cursor:'pointer',fontSize:12,fontWeight:700,color:s.color,fontFamily:"'Plus Jakarta Sans',sans-serif",flexShrink:0}}>
-            <i className={`ti ${s.icon}`} style={{fontSize:14}}/>{s.label}
+            style={{display:'flex',flexDirection:'column',alignItems:'center',gap:5,padding:'10px 6px',background:s.bg,border:'none',borderRadius:12,cursor:'pointer',fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+            <i className={`ti ${s.icon}`} style={{fontSize:18,color:s.color}}/>
+            <span style={{fontSize:11,fontWeight:700,color:s.color,textAlign:'center',lineHeight:1.2}}>{s.label}</span>
           </button>
         ))}
       </div>
