@@ -16,7 +16,8 @@ router.get('/services', auth, async (req, res) => {
       .eq('is_active', true)
       .order('sort_order', { ascending: true })
       .order('platform')
-      .order('name');
+      .order('name')
+      .limit(20000);
 
     if (error) throw error;
     res.json(data);
