@@ -136,6 +136,11 @@ router.post('/virtual-account', auth, async (req, res) => {
       .maybeSingle();
     if (existing) return res.json(existing);
 
+    const { bvn } = req.body;
+    if (!bvn || !/^\d{11}$/.test(bvn)) {
+      return res.status(400).json({ error: 'A valid 11-digit BVN or NIN is required.' });
+    }
+
     const { data: user } = await supabase
       .from('users')
       .select('email, full_name, phone')
@@ -155,6 +160,7 @@ router.post('/virtual-account', auth, async (req, res) => {
     const result = await flutterwave.createVirtualAccount({
       email: user.email,
       txRef,
+      bvn,
       firstname: nameParts[0],
       lastname: nameParts.slice(1).join(' ') || 'Customer',
       phonenumber: user.phone || '08000000000',

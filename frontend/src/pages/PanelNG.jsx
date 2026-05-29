@@ -2319,6 +2319,9 @@ function WalletPage({ setPage }) {
   const [txLoading, setTxLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   const [vaError, setVaError] = useState('');
+  const [showBvnForm, setShowBvnForm] = useState(false);
+  const [bvnType, setBvnType] = useState('bvn'); // 'bvn' | 'nin'
+  const [bvnInput, setBvnInput] = useState('');
 
   useEffect(() => {
     api.get('/wallet/balance').then(r => setStats(r.data)).catch(() => {});
@@ -2333,11 +2336,18 @@ function WalletPage({ setPage }) {
   }, []);
 
   const generateVA = async () => {
+    const val = bvnInput.trim();
+    if (val.length !== 11 || !/^\d{11}$/.test(val)) {
+      setVaError(`Enter a valid 11-digit ${bvnType.toUpperCase()}.`);
+      return;
+    }
     setGenerating(true);
     setVaError('');
     try {
-      const { data } = await api.post('/wallet/virtual-account');
+      const { data } = await api.post('/wallet/virtual-account', { bvn: val, bvn_type: bvnType });
       setVa(data);
+      setShowBvnForm(false);
+      setBvnInput('');
     } catch (err) {
       setVaError(err.response?.data?.error || 'Failed to generate. Please try again.');
     } finally {
@@ -2418,16 +2428,61 @@ function WalletPage({ setPage }) {
             </div>
           </div>
         ) : (
-          <div style={{ textAlign: 'center', padding: '8px 0 4px' }}>
-            <div style={{ width: 52, height: 52, borderRadius: 14, background: 'var(--bg-raised)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
-              <i className="ti ti-building-bank" style={{ fontSize: 26, color: 'var(--text-muted)' }} />
-            </div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>No Virtual Account Yet</div>
-            <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16, lineHeight: 1.5 }}>Generate a dedicated account number to receive instant transfers and auto-fund your wallet.</div>
-            {vaError && <div style={{ fontSize: 12, color: 'var(--red)', marginBottom: 12, background: 'rgba(240,68,56,.06)', border: '1px solid rgba(240,68,56,.15)', borderRadius: 8, padding: '8px 12px' }}>{vaError}</div>}
-            <button className="pn-btn pn-btn-primary pn-btn-full" onClick={generateVA} disabled={generating} style={{ height: 44, borderRadius: 12, fontWeight: 700 }}>
-              {generating ? <><i className="ti ti-loader-2" style={{ marginRight: 6, animation: 'pn-spin 1s linear infinite' }} />Generating…</> : <><i className="ti ti-plus" style={{ marginRight: 6 }} />Generate Virtual Account</>}
-            </button>
+          <div style={{ padding: '4px 0' }}>
+            {!showBvnForm ? (
+              <div style={{ textAlign: 'center', padding: '4px 0' }}>
+                <div style={{ width: 52, height: 52, borderRadius: 14, background: 'var(--bg-raised)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
+                  <i className="ti ti-building-bank" style={{ fontSize: 26, color: 'var(--text-muted)' }} />
+                </div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>No Virtual Account Yet</div>
+                <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16, lineHeight: 1.5 }}>Generate a dedicated account number to receive instant transfers and auto-fund your wallet.</div>
+                <button className="pn-btn pn-btn-primary pn-btn-full" onClick={() => setShowBvnForm(true)} style={{ height: 44, borderRadius: 12, fontWeight: 700 }}>
+                  <i className="ti ti-plus" style={{ marginRight: 6 }} />Generate Virtual Account
+                </button>
+              </div>
+            ) : (
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 12 }}>Verify your identity to generate a virtual account</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 14, lineHeight: 1.5 }}>Required by CBN regulations. Your number is sent directly to our payment provider and is never stored on PanelNG.</div>
+
+                {/* BVN / NIN toggle */}
+                <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+                  {['bvn', 'nin'].map(t => (
+                    <button key={t} onClick={() => { setBvnType(t); setBvnInput(''); setVaError(''); }}
+                      style={{ flex: 1, padding: '9px 0', borderRadius: 10, border: `1px solid ${bvnType === t ? 'var(--accent)' : 'var(--border)'}`, background: bvnType === t ? 'rgba(245,158,11,.1)' : 'var(--bg-raised)', color: bvnType === t ? 'var(--accent)' : 'var(--text-secondary)', fontWeight: 600, fontSize: 13, cursor: 'pointer', transition: 'all 150ms', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
+                      {t.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="pn-input-wrap" style={{ marginBottom: 14 }}>
+                  <label className="pn-input-label">{bvnType === 'bvn' ? 'Bank Verification Number (BVN)' : 'National Identification Number (NIN)'}</label>
+                  <input
+                    className="pn-input pn-mono"
+                    type="tel"
+                    inputMode="numeric"
+                    maxLength={11}
+                    placeholder="11-digit number"
+                    value={bvnInput}
+                    onChange={e => { setBvnInput(e.target.value.replace(/\D/g, '').slice(0, 11)); setVaError(''); }}
+                  />
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{bvnInput.length}/11 digits</div>
+                </div>
+
+                {vaError && (
+                  <div style={{ fontSize: 12, color: 'var(--red)', marginBottom: 12, background: 'rgba(240,68,56,.06)', border: '1px solid rgba(240,68,56,.15)', borderRadius: 8, padding: '8px 12px' }}>{vaError}</div>
+                )}
+
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="pn-btn pn-btn-ghost" style={{ flex: 1, height: 44, borderRadius: 12 }} onClick={() => { setShowBvnForm(false); setBvnInput(''); setVaError(''); }}>
+                    Cancel
+                  </button>
+                  <button className="pn-btn pn-btn-primary" style={{ flex: 2, height: 44, borderRadius: 12, fontWeight: 700 }} onClick={generateVA} disabled={generating || bvnInput.length !== 11}>
+                    {generating ? <><i className="ti ti-loader-2" style={{ marginRight: 6, animation: 'pn-spin 1s linear infinite' }} />Generating…</> : 'Generate Account'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

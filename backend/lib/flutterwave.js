@@ -19,10 +19,11 @@ const flutterwave = {
     return res.data;
   },
 
-  async createVirtualAccount({ email, txRef, firstname, lastname, phonenumber, narration }) {
+  async createVirtualAccount({ email, txRef, bvn, firstname, lastname, phonenumber, narration }) {
     const res = await client.post('/virtual-account-numbers', {
       email,
       is_permanent: true,
+      bvn,
       tx_ref: txRef,
       phonenumber: phonenumber || '08000000000',
       firstname: firstname || 'Customer',
