@@ -3022,7 +3022,7 @@ function NewOrderSelect({ setPage }) {
       label: 'SMM Order',
       desc: 'Boost followers, likes, views & more on any social platform',
       color: '#6366F1',
-      bg: '#EEF2FF',
+      bg: 'rgba(99,102,241,.12)',
     },
     {
       id: 'sms',
@@ -3030,7 +3030,7 @@ function NewOrderSelect({ setPage }) {
       label: 'SMS Verify',
       desc: 'Get virtual numbers to verify any app or service instantly',
       color: '#10B981',
-      bg: '#ECFDF5',
+      bg: 'rgba(16,185,129,.12)',
     },
     {
       id: 'accounts',
@@ -3038,33 +3038,44 @@ function NewOrderSelect({ setPage }) {
       label: 'Buy Accounts',
       desc: 'Purchase aged, verified social media accounts in bulk',
       color: '#F59E0B',
-      bg: '#FFFBEB',
+      bg: 'rgba(245,158,11,.12)',
     },
   ];
+
   return (
     <div style={{padding:'24px 16px',maxWidth:480,margin:'0 auto'}}>
-      <div style={{marginBottom:24}}>
+      <div style={{marginBottom:20}}>
         <h2 style={{margin:0,fontSize:20,fontWeight:700,color:'var(--text-primary)'}}>New Order</h2>
         <p style={{margin:'4px 0 0',fontSize:14,color:'var(--text-secondary)'}}>Choose a service to get started</p>
       </div>
+
+      {/* Quick chips row */}
+      <div style={{display:'flex',gap:10,marginBottom:20,flexWrap:'wrap'}}>
+        {SERVICES.map(s => (
+          <button
+            key={s.id}
+            onClick={() => setPage(s.id)}
+            style={{display:'flex',alignItems:'center',gap:7,padding:'9px 16px',background:s.bg,border:'none',borderRadius:24,cursor:'pointer',fontSize:13,fontWeight:700,color:s.color,fontFamily:"'Plus Jakarta Sans',sans-serif",flexShrink:0,transition:'opacity 120ms'}}
+            onMouseEnter={e=>e.currentTarget.style.opacity='0.8'}
+            onMouseLeave={e=>e.currentTarget.style.opacity='1'}
+          >
+            <i className={`ti ${s.icon}`} style={{fontSize:15}}/>
+            {s.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Full cards */}
       <div style={{display:'flex',flexDirection:'column',gap:14}}>
         {SERVICES.map(s => (
           <button
             key={s.id}
             onClick={() => setPage(s.id)}
-            style={{
-              display:'flex',alignItems:'center',gap:16,
-              background:'var(--bg-surface)',border:'1.5px solid var(--border)',
-              borderRadius:16,padding:'18px 20px',cursor:'pointer',
-              textAlign:'left',width:'100%',transition:'box-shadow 120ms',
-            }}
+            style={{display:'flex',alignItems:'center',gap:16,background:'var(--bg-surface)',border:'1.5px solid var(--border)',borderRadius:16,padding:'18px 20px',cursor:'pointer',textAlign:'left',width:'100%',transition:'box-shadow 120ms'}}
             onMouseEnter={e=>e.currentTarget.style.boxShadow='0 4px 16px rgba(0,0,0,0.08)'}
             onMouseLeave={e=>e.currentTarget.style.boxShadow='none'}
           >
-            <div style={{
-              width:52,height:52,borderRadius:14,
-              background:s.bg,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,
-            }}>
+            <div style={{width:52,height:52,borderRadius:14,background:s.bg,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
               <i className={`ti ${s.icon}`} style={{fontSize:26,color:s.color}}/>
             </div>
             <div style={{flex:1,minWidth:0}}>
