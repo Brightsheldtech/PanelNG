@@ -1,6 +1,6 @@
 const express = require('express');
 const supabase = require('../lib/supabase');
-const jap = require('../lib/jap');
+const { getProvider } = require('../lib/providers');
 const herosms = require('../lib/herosms');
 const auth = require('../middleware/auth');
 const adminOnly = require('../middleware/admin');
@@ -485,7 +485,7 @@ router.patch('/services', async (req, res) => {
 
 // POST /api/admin/services — create a new service manually
 router.post('/services', async (req, res) => {
-  const { platform, name, panel_service_id, cost_price, sell_price, min_quantity, max_quantity } = req.body;
+  const { platform, name, panel_service_id, cost_price, sell_price, min_quantity, max_quantity, provider } = req.body;
   if (!platform || !name || !panel_service_id || !sell_price) {
     return res.status(400).json({ error: 'platform, name, panel_service_id, and sell_price are required' });
   }
@@ -497,6 +497,7 @@ router.post('/services', async (req, res) => {
         platform,
         name,
         panel_service_id: panel_service_id.toString(),
+        provider: provider || 'jap',
         cost_price: parseFloat(cost_price) || 0,
         sell_price: parseFloat(sell_price),
         min_quantity: parseInt(min_quantity) || 100,
@@ -513,21 +514,30 @@ router.post('/services', async (req, res) => {
   }
 });
 
-// POST /api/admin/sync-services — import from JAP and upsert into DB
+// POST /api/admin/sync-services — import from a provider and upsert into DB
+// Body: { provider: 'jap' | 'smmraja' }  (defaults to 'jap')
 router.post('/sync-services', async (req, res) => {
+  const providerName = (req.body.provider || 'jap').toLowerCase();
+  const allowedProviders = ['jap', 'smmraja'];
+  if (!allowedProviders.includes(providerName)) {
+    return res.status(400).json({ error: `Unknown provider. Must be one of: ${allowedProviders.join(', ')}` });
+  }
+
   try {
-    const japServices = await jap.getServices();
-    if (!Array.isArray(japServices)) {
-      return res.status(502).json({ error: 'JAP returned unexpected data' });
+    const providerClient = getProvider(providerName);
+    const services = await providerClient.getServices();
+    if (!Array.isArray(services)) {
+      return res.status(502).json({ error: 'Provider returned unexpected data' });
     }
 
     let synced = 0;
     const MARKUP = 1.3; // 30% default markup
 
-    for (const svc of japServices) {
+    for (const svc of services) {
       const { error } = await supabase.from('services').upsert(
         {
           panel_service_id: svc.service.toString(),
+          provider: providerName,
           platform: svc.category || 'Other',
           name: svc.name,
           cost_price: parseFloat(svc.rate) || 0,
@@ -536,15 +546,15 @@ router.post('/sync-services', async (req, res) => {
           max_quantity: parseInt(svc.max) || 100000,
           is_active: true,
         },
-        { onConflict: 'panel_service_id' }
+        { onConflict: 'panel_service_id,provider' }
       );
       if (!error) synced++;
     }
 
-    res.json({ synced, total: japServices.length });
+    res.json({ synced, total: services.length, provider: providerName });
   } catch (err) {
     console.error('Sync error:', err.message);
-    res.status(500).json({ error: 'Failed to sync services from JAP' });
+    res.status(500).json({ error: 'Failed to sync services' });
   }
 });
 
