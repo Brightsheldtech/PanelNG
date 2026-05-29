@@ -51,11 +51,31 @@ export default function SiteSettings() {
   const fileRef = useRef(null);
   const successTimer = useRef(null);
 
+  const [badgePrice, setBadgePrice] = useState('');
+  const [savingPrice, setSavingPrice] = useState(false);
+
   useEffect(() => {
     api.get('/settings/hero_image_url')
       .then(res => setCurrentUrl(res.data?.value || ''))
       .catch(() => {});
+    api.get('/settings/hero_badge_price')
+      .then(res => setBadgePrice(res.data?.value || ''))
+      .catch(() => {});
   }, []);
+
+  const handleSavePrice = async () => {
+    if (!badgePrice.trim()) return;
+    setSavingPrice(true);
+    setError('');
+    try {
+      await api.put('/settings/hero_badge_price', { value: badgePrice.trim() });
+      showSuccess('Badge price updated. Changes are live on the landing page.');
+    } catch (err) {
+      setError(err?.response?.data?.error || 'Could not save price. Try again.');
+    } finally {
+      setSavingPrice(false);
+    }
+  };
 
   const showSuccess = (msg) => {
     setSuccess(msg);
@@ -200,6 +220,36 @@ export default function SiteSettings() {
         {success && (
           <p style={{ fontSize: 13, color: 'var(--green)', marginTop: 10, margin: '10px 0 0' }}>{success}</p>
         )}
+      </div>
+
+      {/* Hero Badge Price */}
+      <div style={{ marginTop: 40, paddingTop: 32, borderTop: '1px solid var(--border)' }}>
+        <h2 style={{ fontFamily: 'var(--font-brand)', fontWeight: 600, fontSize: 17, color: 'var(--text)', margin: '0 0 8px' }}>
+          Hero Badge Price
+        </h2>
+        <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6, margin: '0 0 20px' }}>
+          The wallet balance shown in the floating badge on the landing page hero. Include the ₦ symbol and formatting exactly as you want it displayed (e.g. <strong>₦12,840</strong>).
+        </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <input
+            type="text"
+            value={badgePrice}
+            onChange={e => setBadgePrice(e.target.value)}
+            placeholder="₦12,840"
+            style={{
+              padding: '9px 14px', borderRadius: 9, border: '1px solid var(--border)',
+              background: 'var(--surface2)', color: 'var(--text)', fontSize: 14,
+              fontFamily: 'var(--font-mono)', outline: 'none', width: 160,
+            }}
+          />
+          <button
+            className="ss-upload-btn"
+            onClick={handleSavePrice}
+            disabled={savingPrice || !badgePrice.trim()}
+          >
+            {savingPrice ? <><span className="ss-spinner" /> Saving…</> : 'Save'}
+          </button>
+        </div>
       </div>
     </div>
   );

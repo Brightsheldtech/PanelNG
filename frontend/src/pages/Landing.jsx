@@ -582,6 +582,7 @@ export default function Landing() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [heroImageUrl, setHeroImageUrl] = useState(null);
   const [heroImageLoading, setHeroImageLoading] = useState(true);
+  const [heroBadgePrice, setHeroBadgePrice] = useState('');
 
   useEffect(() => {
     const handler = () => setScrolled(window.scrollY > 30);
@@ -590,10 +591,13 @@ export default function Landing() {
   }, []);
 
   useEffect(() => {
-    api.get('/settings/hero_image_url')
-      .then(res => setHeroImageUrl(res.data?.value || ''))
-      .catch(() => setHeroImageUrl(''))
-      .finally(() => setHeroImageLoading(false));
+    Promise.all([
+      api.get('/settings/hero_image_url').catch(() => null),
+      api.get('/settings/hero_badge_price').catch(() => null),
+    ]).then(([imgRes, priceRes]) => {
+      setHeroImageUrl(imgRes?.data?.value || '');
+      setHeroBadgePrice(priceRes?.data?.value || '');
+    }).finally(() => setHeroImageLoading(false));
   }, []);
 
   useEffect(() => {
@@ -705,7 +709,7 @@ export default function Landing() {
                 <Icon name="wallet" size={16} color="#C9620A" />
               </div>
               <div>
-                <span className="ln-badge-val">₦12,840</span>
+                <span className="ln-badge-val">{heroBadgePrice || '₦12,840'}</span>
                 <span className="ln-badge-lbl">Wallet balance</span>
               </div>
             </div>
