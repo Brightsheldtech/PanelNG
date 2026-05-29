@@ -447,7 +447,8 @@ router.get('/services', async (req, res) => {
       .from('services')
       .select('*')
       .order('platform')
-      .order('name');
+      .order('name')
+      .limit(20000);
 
     if (error) throw error;
     res.json(data);
