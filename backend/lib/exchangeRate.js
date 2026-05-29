@@ -10,14 +10,19 @@ async function getExchangeRate() {
     const { data } = await supabase
       .from('settings')
       .select('value')
-      .eq('key', 'exchange_rate')
+      .eq('key', 'exchange-rate')
       .single();
     _cached = Number(data?.value || 2900);
     _cachedAt = Date.now();
     return _cached;
   } catch {
-    return 2900; // safe default if table not yet created
+    return 2900;
   }
 }
 
-module.exports = { getExchangeRate };
+function invalidateCache() {
+  _cached = null;
+  _cachedAt = 0;
+}
+
+module.exports = { getExchangeRate, invalidateCache };

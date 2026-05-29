@@ -1,6 +1,7 @@
 const express = require('express');
 const supabase = require('../lib/supabase');
 const { getProvider } = require('../lib/providers');
+const { getExchangeRate } = require('../lib/exchangeRate');
 const herosms = require('../lib/herosms');
 const auth = require('../middleware/auth');
 const adminOnly = require('../middleware/admin');
@@ -464,9 +465,9 @@ router.get('/services', async (req, res) => {
   }
 });
 
-// PATCH /api/admin/services — update service pricing/status
+// PATCH /api/admin/services — update service pricing/status/manual_price
 router.patch('/services', async (req, res) => {
-  const { id, sell_price, is_active, min_quantity, max_quantity, sort_order } = req.body;
+  const { id, sell_price, is_active, min_quantity, max_quantity, sort_order, manual_price } = req.body;
   if (!id) return res.status(400).json({ error: 'Service id is required' });
 
   const updates = {};
@@ -475,6 +476,7 @@ router.patch('/services', async (req, res) => {
   if (min_quantity !== undefined) updates.min_quantity = parseInt(min_quantity);
   if (max_quantity !== undefined) updates.max_quantity = parseInt(max_quantity);
   if (sort_order !== undefined) updates.sort_order = parseInt(sort_order);
+  if (manual_price !== undefined) updates.manual_price = manual_price === null ? null : parseFloat(manual_price);
 
   try {
     const { data, error } = await supabase
@@ -946,7 +948,7 @@ router.get('/sms-prices/:product', async (req, res) => {
 
 // PUT /api/admin/sms-country-settings — upsert a country setting
 router.put('/sms-country-settings', async (req, res) => {
-  const { service_code, country_id, country_name, is_hidden, sort_order, custom_price } = req.body;
+  const { service_code, country_id, country_name, is_hidden, sort_order, custom_price, manual_price_ngn } = req.body;
   if (!service_code || country_id === undefined) {
     return res.status(400).json({ error: 'service_code and country_id are required' });
   }
@@ -957,6 +959,7 @@ router.put('/sms-country-settings', async (req, res) => {
     is_hidden: Boolean(is_hidden),
     sort_order: parseInt(sort_order) || 999,
     custom_price: custom_price !== null && custom_price !== undefined && custom_price !== '' ? parseFloat(custom_price) : null,
+    manual_price_ngn: manual_price_ngn !== null && manual_price_ngn !== undefined && manual_price_ngn !== '' ? parseFloat(manual_price_ngn) : null,
   };
   try {
     const { data, error } = await supabase
@@ -1345,6 +1348,96 @@ router.post('/flw-recover', async (req, res) => {
   } catch (err) {
     console.error('[flw-recover]', err.message);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/services/bulk-price — apply % change to manual_price of multiple services
+router.post('/services/bulk-price', async (req, res) => {
+  const { ids, percent } = req.body;
+  if (!Array.isArray(ids) || !ids.length || percent === undefined) {
+    return res.status(400).json({ error: 'ids (array) and percent are required' });
+  }
+  const pct = parseFloat(percent);
+  if (isNaN(pct)) return res.status(400).json({ error: 'percent must be a number' });
+
+  try {
+    const rate = await getExchangeRate();
+    const { data: svcs, error } = await supabase
+      .from('services')
+      .select('id, sell_price, manual_price')
+      .in('id', ids);
+    if (error) throw error;
+
+    const results = await Promise.all(
+      svcs.map((s) => {
+        const baseNGN = s.manual_price != null ? s.manual_price : s.sell_price * rate;
+        const newPrice = parseFloat((baseNGN * (1 + pct / 100)).toFixed(2));
+        return supabase.from('services').update({ manual_price: newPrice }).eq('id', s.id).select().single();
+      })
+    );
+    const failed = results.filter((r) => r.error).length;
+    res.json({ updated: results.length - failed, failed });
+  } catch (err) {
+    res.status(500).json({ error: 'Bulk price update failed' });
+  }
+});
+
+// GET /api/admin/sms-settings — all sms_country_settings rows for unified manager
+router.get('/sms-settings', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('sms_country_settings')
+      .select('*')
+      .order('service_code')
+      .order('country_name');
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch SMS settings' });
+  }
+});
+
+// GET /api/admin/accszone-overrides — all AccsZone price overrides
+router.get('/accszone-overrides', async (req, res) => {
+  try {
+    const { data, error } = await supabase.from('accszone_price_overrides').select('*').order('slug');
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch AccsZone overrides' });
+  }
+});
+
+// PUT /api/admin/accszone-overrides/:slug — set or update NGN price override for a slug
+router.put('/accszone-overrides/:slug', async (req, res) => {
+  const { custom_price_ngn } = req.body;
+  if (custom_price_ngn === undefined || custom_price_ngn === null || custom_price_ngn === '') {
+    return res.status(400).json({ error: 'custom_price_ngn is required' });
+  }
+  try {
+    const { data, error } = await supabase
+      .from('accszone_price_overrides')
+      .upsert({ slug: req.params.slug, custom_price_ngn: parseFloat(custom_price_ngn) }, { onConflict: 'slug' })
+      .select()
+      .single();
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to save override' });
+  }
+});
+
+// DELETE /api/admin/accszone-overrides/:slug — clear override for a slug
+router.delete('/accszone-overrides/:slug', async (req, res) => {
+  try {
+    const { error } = await supabase
+      .from('accszone_price_overrides')
+      .delete()
+      .eq('slug', req.params.slug);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete override' });
   }
 });
 
