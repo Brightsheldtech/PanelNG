@@ -1140,7 +1140,23 @@ function ServiceDropdown({ services, value, onChange }) {
 }
 
 // ─── PAGE: NEW ORDER ──────────────────────────────────────────────────────────
-function NewOrder() {
+const PRIORITY_PLATFORMS = ['Instagram','TikTok','YouTube','Facebook','Twitter','WhatsApp','Telegram','Spotify'];
+const PLATFORM_PLACEHOLDER = {
+  Instagram: 'https://instagram.com/username',
+  TikTok: 'https://tiktok.com/@username',
+  YouTube: 'https://youtube.com/channel/UCxxxxxxxx',
+  Facebook: 'https://facebook.com/username',
+  Twitter: 'https://twitter.com/username',
+  WhatsApp: '+2348012345678',
+  Telegram: 'https://t.me/username',
+  Spotify: 'https://open.spotify.com/artist/...',
+  SoundCloud: 'https://soundcloud.com/username',
+  LinkedIn: 'https://linkedin.com/in/username',
+  Pinterest: 'https://pinterest.com/username',
+  Snapchat: 'https://snapchat.com/add/username',
+};
+
+function NewOrder({ setPage }) {
   const user = useContext(UserCtx);
   const [allServices, setAllServices] = useState([]);
   const [loadingSvc, setLoadingSvc] = useState(true);
@@ -1159,10 +1175,21 @@ function NewOrder() {
       .finally(() => setLoadingSvc(false));
   }, []);
 
-  const platforms = ['All', ...Array.from(new Set(allServices.map(s => s.platform).filter(Boolean))).sort()];
+  const platforms = ['All', ...Array.from(new Set(allServices.map(s => s.platform).filter(Boolean))).sort((a, b) => {
+    const ai = PRIORITY_PLATFORMS.indexOf(a), bi = PRIORITY_PLATFORMS.indexOf(b);
+    if (ai >= 0 && bi >= 0) return ai - bi;
+    if (ai >= 0) return -1;
+    if (bi >= 0) return 1;
+    return a.localeCompare(b);
+  })];
   const services = platform === 'All' ? allServices : allServices.filter(s => s.platform === platform);
   const selected = allServices.find(s => s.id === serviceId);
   const cost = selected && qty > 0 ? parseFloat(((selected.sell_price * qty) / 1000).toFixed(2)) : 0;
+  const balance = user?.balance || 0;
+  const insufficient = cost > 0 && balance < cost;
+  const linkPlaceholder = selected
+    ? (PLATFORM_PLACEHOLDER[selected.platform] || `https://${(selected.platform||'').toLowerCase()}.com/username`)
+    : 'https://instagram.com/username';
 
   const handlePlace = async () => {
     if (!serviceId || !link || qty < 1) return;
@@ -1207,19 +1234,24 @@ function NewOrder() {
           <div className="pn-card">
             <div className="pn-input-wrap">
               <label className="pn-input-label">Service</label>
-              <ServiceDropdown services={services} value={serviceId} onChange={setServiceId}/>
+              <ServiceDropdown services={services} value={serviceId} onChange={(id)=>{setServiceId(id);setQty(allServices.find(s=>s.id===id)?.min_quantity||1000);}}/>
             </div>
+            {selected && (
+              <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:4,marginTop:-4}}>
+                <span style={{fontSize:11,color:'var(--text-muted)',background:'var(--bg-input)',borderRadius:6,padding:'3px 8px'}}>Min: {selected.min_quantity?.toLocaleString()}</span>
+                <span style={{fontSize:11,color:'var(--text-muted)',background:'var(--bg-input)',borderRadius:6,padding:'3px 8px'}}>Max: {selected.max_quantity?.toLocaleString()}</span>
+                <span style={{fontSize:11,color:'var(--accent)',background:'rgba(99,102,241,.1)',borderRadius:6,padding:'3px 8px',fontWeight:600}}>₦{selected.sell_price}/1k</span>
+              </div>
+            )}
             <div className="pn-input-wrap">
               <label className="pn-input-label">Target Link or Username</label>
               <div className="pn-input-with-icon">
                 <i className="ti ti-link pn-input-icon"/>
-                <input className="pn-input" placeholder="https://instagram.com/yourpage" value={link} onChange={e=>setLink(e.target.value)}/>
+                <input className="pn-input" placeholder={linkPlaceholder} value={link} onChange={e=>setLink(e.target.value)}/>
               </div>
             </div>
             <div className="pn-input-wrap">
-              <label className="pn-input-label">
-                Quantity {selected && <span style={{color:'var(--text-muted)',fontWeight:400}}> ({selected.min_quantity?.toLocaleString()} – {selected.max_quantity?.toLocaleString()})</span>}
-              </label>
+              <label className="pn-input-label">Quantity</label>
               <div className="pn-qty">
                 <button className="pn-qty-btn" onClick={()=>setQty(q=>Math.max(selected?.min_quantity||1,q-100))}>−</button>
                 <input className="pn-qty-input" type="number" value={qty} onChange={e=>setQty(Number(e.target.value)||0)} min={selected?.min_quantity||1} max={selected?.max_quantity||9999999}/>
@@ -1240,7 +1272,17 @@ function NewOrder() {
                 </div>
               </>
             )}
-            <button className="pn-btn pn-btn-primary pn-btn-full" onClick={handlePlace} disabled={!serviceId||!link||qty<1||placing} style={{opacity:(!serviceId||!link||qty<1)?.5:1}}>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 14px',borderRadius:10,background:'var(--bg-input)',border:`1px solid ${insufficient?'rgba(248,113,113,.35)':'var(--border)'}`,marginBottom:12}}>
+              <span style={{fontSize:12,color:'var(--text-muted)'}}>Wallet Balance</span>
+              <span style={{fontWeight:700,fontSize:14,color:insufficient?'var(--danger)':'var(--success)'}}>{fmt(balance)}</span>
+            </div>
+            {insufficient && (
+              <div style={{background:'rgba(248,113,113,.08)',border:'1px solid rgba(248,113,113,.2)',borderRadius:10,padding:'10px 14px',marginBottom:12,display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,fontSize:12}}>
+                <span style={{color:'var(--danger)'}}>Need {fmt(cost - balance)} more to place this order.</span>
+                {setPage && <button className="pn-btn pn-btn-primary pn-btn-sm" onClick={()=>setPage('funds')} style={{fontSize:11,padding:'4px 10px',height:'auto'}}>Add Funds</button>}
+              </div>
+            )}
+            <button className="pn-btn pn-btn-primary pn-btn-full" onClick={handlePlace} disabled={!serviceId||!link||qty<1||placing||insufficient} style={{opacity:(!serviceId||!link||qty<1||insufficient)?.6:1}}>
               {placing ? <><i className="ti ti-loader-2" style={{animation:'pn-spin 1s linear infinite'}}/>Placing…</> : <><i className="ti ti-shopping-cart"/>Place Order →</>}
             </button>
           </div>
@@ -3343,7 +3385,7 @@ function App() {
     if (data?.new_balance != null) updateUser({ wallet_balance: data.new_balance });
     refreshUser();
   };
-  const PAGES = { overview: <Overview setPage={setPage}/>, neworder: <NewOrderSelect setPage={navigate}/>, smm: <NewOrder/>, sms: <SmsVerify/>, accounts: <BuyAccounts balance={user.balance} token={localStorage.getItem('panelng_token')} onNavigate={navigate} onPurchaseComplete={handlePurchaseComplete}/>, orders: <OrderHistory/>, funds: <AddFunds/>, transactions: <TransactionHistory/>, wallet: <WalletPage setPage={navigate}/>, referral: <Referral/>, profile: <ProfileSettings/> };
+  const PAGES = { overview: <Overview setPage={setPage}/>, neworder: <NewOrderSelect setPage={navigate}/>, smm: <NewOrder setPage={navigate}/>, sms: <SmsVerify/>, accounts: <BuyAccounts balance={user.balance} token={localStorage.getItem('panelng_token')} onNavigate={navigate} onPurchaseComplete={handlePurchaseComplete}/>, orders: <OrderHistory/>, funds: <AddFunds/>, transactions: <TransactionHistory/>, wallet: <WalletPage setPage={navigate}/>, referral: <Referral/>, profile: <ProfileSettings/> };
   return (
     <div className="pn-root" data-theme={resolved}>
       <div className="pn-shell">
