@@ -1236,6 +1236,9 @@ router.post('/flw-recover', async (req, res) => {
     const flwData = result.data;
     const txId = String(flwData.id);
     const amount = parseFloat(flwData.amount);
+    if (!amount || !isFinite(amount) || amount <= 0) {
+      return res.status(400).json({ error: 'Invalid or zero amount in Flutterwave response' });
+    }
     const txRef = flwData.tx_ref || '';
     const paymentType = flwData.payment_type || '';
 
@@ -1300,7 +1303,8 @@ router.post('/flw-recover', async (req, res) => {
 
     const newBalance = parseFloat((parseFloat(user.wallet_balance || 0) + amount).toFixed(2));
     const newFunded  = parseFloat((parseFloat(user.total_funded  || 0) + amount).toFixed(2));
-    await supabase.from('users').update({ wallet_balance: newBalance, total_funded: newFunded }).eq('id', user.id);
+    const { error: walletErr } = await supabase.from('users').update({ wallet_balance: newBalance, total_funded: newFunded }).eq('id', user.id);
+    if (walletErr) throw walletErr;
     await supabase.from('transactions').insert({
       user_id: user.id,
       type: 'credit',

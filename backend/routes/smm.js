@@ -2,6 +2,7 @@ const express = require('express');
 const supabase = require('../lib/supabase');
 const jap = require('../lib/jap');
 const auth = require('../middleware/auth');
+const adminOnly = require('../middleware/admin');
 const { handleFirstPurchase } = require('../lib/referralRewards');
 const { notify } = require('../lib/notify');
 const router = express.Router();
@@ -94,11 +95,10 @@ router.post('/order', auth, async (req, res) => {
       });
       panelOrderId = japRes.order?.toString() || null;
     } catch (japErr) {
-      // Refund wallet on JAP failure
-      await supabase
-        .from('users')
-        .update({ wallet_balance: parseFloat((newBalance + amount).toFixed(2)) })
-        .eq('id', userId);
+      // Refund: re-read current balance so any concurrent credits aren't overwritten
+      const { data: fresh } = await supabase.from('users').select('wallet_balance').eq('id', userId).single();
+      const refundedBalance = parseFloat(((parseFloat(fresh?.wallet_balance) || 0) + amount).toFixed(2));
+      await supabase.from('users').update({ wallet_balance: refundedBalance }).eq('id', userId);
       console.error('JAP order error:', japErr.message);
       return res.status(502).json({ error: 'Order could not be placed at this time. Your wallet has been refunded.' });
     }
@@ -178,8 +178,8 @@ router.get('/order/:orderId', auth, async (req, res) => {
   }
 });
 
-// GET /api/smm/balance — JAP panel balance (admin info)
-router.get('/balance', auth, async (req, res) => {
+// GET /api/smm/balance — JAP panel balance (admin only)
+router.get('/balance', auth, adminOnly, async (req, res) => {
   try {
     const balance = await jap.getBalance();
     res.json(balance);

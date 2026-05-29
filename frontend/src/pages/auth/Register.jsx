@@ -223,7 +223,9 @@ export default function Register() {
 
   const set = (field) => (e) => {
     setForm(f => ({ ...f, [field]: e.target.value }));
-    setErrors(er => ({ ...er, [field]: '' }));
+    // phone errors are stored under 'phone' regardless of which sub-field changed
+    const errorKey = (field === 'phoneNumber' || field === 'countryCode') ? 'phone' : field;
+    setErrors(er => ({ ...er, [errorKey]: '' }));
     setServerError('');
   };
 

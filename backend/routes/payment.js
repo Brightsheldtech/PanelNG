@@ -76,6 +76,9 @@ router.post('/flutterwave/verify', auth, async (req, res) => {
     }
 
     const amount = parseFloat(flwData.amount);
+    if (!amount || !isFinite(amount) || amount <= 0) {
+      return res.status(400).json({ error: 'Invalid payment amount from Flutterwave' });
+    }
 
     // Credit wallet + update total_funded
     const { data: userRow } = await supabase
@@ -87,7 +90,8 @@ router.post('/flutterwave/verify', auth, async (req, res) => {
     const newBalance = parseFloat((parseFloat(userRow.wallet_balance || 0) + amount).toFixed(2));
     const newFunded = parseFloat((parseFloat(userRow.total_funded || 0) + amount).toFixed(2));
 
-    await supabase.from('users').update({ wallet_balance: newBalance, total_funded: newFunded }).eq('id', req.user.id);
+    const { error: walletErr } = await supabase.from('users').update({ wallet_balance: newBalance, total_funded: newFunded }).eq('id', req.user.id);
+    if (walletErr) throw walletErr;
 
     await supabase.from('transactions').insert({
       user_id: req.user.id,
@@ -135,6 +139,7 @@ router.post('/flutterwave/webhook', express.raw({ type: '*/*' }), async (req, re
   const flwData = payload.data;
   const transactionId = String(flwData.id);
   const amount = parseFloat(flwData.amount);
+  if (!amount || !isFinite(amount) || amount <= 0) return res.sendStatus(200);
 
   try {
     // Idempotency — skip if already credited
@@ -205,7 +210,8 @@ router.post('/flutterwave/webhook', express.raw({ type: '*/*' }), async (req, re
 
     const newBalance = parseFloat((parseFloat(user.wallet_balance || 0) + amount).toFixed(2));
     const newFunded = parseFloat((parseFloat(user.total_funded || 0) + amount).toFixed(2));
-    await supabase.from('users').update({ wallet_balance: newBalance, total_funded: newFunded }).eq('id', user.id);
+    const { error: walletErr } = await supabase.from('users').update({ wallet_balance: newBalance, total_funded: newFunded }).eq('id', user.id);
+    if (walletErr) throw walletErr;
     await supabase.from('transactions').insert({
       user_id: user.id,
       type: 'credit',
