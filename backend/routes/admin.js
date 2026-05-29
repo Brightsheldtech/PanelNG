@@ -1218,4 +1218,110 @@ router.patch('/support/:id/reopen', async (req, res) => {
   }
 });
 
+// POST /api/admin/flw-recover — verify a Flutterwave transaction by ID and credit the user
+// Use this to manually recover payments that slipped through (e.g. bank transfers with
+// Flutterwave-generated tx_refs that the webhook couldn't match before the fix).
+router.post('/flw-recover', async (req, res) => {
+  const { transaction_id } = req.body;
+  if (!transaction_id) return res.status(400).json({ error: 'transaction_id required' });
+
+  try {
+    const flutterwave = require('../lib/flutterwave');
+    const result = await flutterwave.verifyById(String(transaction_id).trim());
+
+    if (!result || result.status !== 'success' || result.data?.status !== 'successful') {
+      return res.status(400).json({ error: 'Transaction not successful on Flutterwave', details: result?.message });
+    }
+
+    const flwData = result.data;
+    const txId = String(flwData.id);
+    const amount = parseFloat(flwData.amount);
+    const txRef = flwData.tx_ref || '';
+    const paymentType = flwData.payment_type || '';
+
+    // Idempotency
+    const { data: existing } = await supabase
+      .from('transactions')
+      .select('id, amount')
+      .eq('reference', txId)
+      .maybeSingle();
+    if (existing) return res.json({ message: 'Already credited', amount: existing.amount, already_processed: true });
+
+    // Identify user
+    let userId;
+    let channelLabel = 'bank transfer';
+
+    if (txRef.startsWith('FLW-PNG-')) {
+      const hex = txRef.split('-')[2].toLowerCase();
+      userId = `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+      channelLabel = 'card';
+    } else if (txRef.startsWith('VA-PNG-')) {
+      const hex = txRef.slice(7).toLowerCase();
+      userId = `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+      channelLabel = 'virtual account';
+    } else {
+      // Bank transfer — try account number then email
+      const acctNum = flwData.meta?.account_number || flwData.account_id;
+      const customerEmail = flwData.customer?.email;
+
+      if (acctNum) {
+        const { data: va } = await supabase
+          .from('user_virtual_accounts')
+          .select('user_id')
+          .eq('account_number', String(acctNum))
+          .maybeSingle();
+        if (va) userId = va.user_id;
+      }
+      if (!userId && customerEmail) {
+        const { data: u } = await supabase
+          .from('users')
+          .select('id')
+          .ilike('email', customerEmail)
+          .maybeSingle();
+        if (u) userId = u.id;
+      }
+    }
+
+    if (!userId) {
+      return res.status(404).json({
+        error: 'Cannot identify user for this transaction',
+        hint: 'Check Flutterwave dashboard for customer email or account number, then credit manually via wallet-adjust.',
+        flw_customer: flwData.customer,
+        flw_meta: flwData.meta,
+      });
+    }
+
+    const { data: user } = await supabase
+      .from('users')
+      .select('id, wallet_balance, total_funded, email, full_name')
+      .eq('id', userId)
+      .maybeSingle();
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const newBalance = parseFloat((parseFloat(user.wallet_balance || 0) + amount).toFixed(2));
+    const newFunded  = parseFloat((parseFloat(user.total_funded  || 0) + amount).toFixed(2));
+    await supabase.from('users').update({ wallet_balance: newBalance, total_funded: newFunded }).eq('id', user.id);
+    await supabase.from('transactions').insert({
+      user_id: user.id,
+      type: 'credit',
+      amount,
+      reference: txId,
+      description: `Wallet funding via ${channelLabel} — ₦${amount.toLocaleString('en-NG')}`,
+    });
+
+    handleFirstDeposit(user.id);
+    notify(user.id, {
+      type: 'wallet_credit',
+      title: 'Wallet Funded',
+      message: `₦${amount.toLocaleString('en-NG')} has been added to your wallet.`,
+    });
+
+    console.log(`[flw-recover] credited ₦${amount} to user ${user.id.slice(0,8)} (${user.email})`);
+    res.json({ message: 'Payment recovered and wallet credited', user_id: user.id, user_email: user.email, amount, new_balance: newBalance });
+  } catch (err) {
+    console.error('[flw-recover]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

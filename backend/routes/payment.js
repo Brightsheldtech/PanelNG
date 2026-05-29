@@ -147,14 +147,51 @@ router.post('/flutterwave/webhook', express.raw({ type: '*/*' }), async (req, re
     if (existing) return res.sendStatus(200);
 
     const txRef = flwData.tx_ref || '';
+    const paymentType = flwData.payment_type || '';
     let userId;
+    let channelLabel = 'card';
+
     if (txRef.startsWith('FLW-PNG-')) {
+      // Inline card / bank-transfer checkout — userId is encoded in tx_ref
       const hex = txRef.split('-')[2].toLowerCase();
       userId = `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+      channelLabel = 'card';
     } else if (txRef.startsWith('VA-PNG-')) {
+      // VA payment where Flutterwave preserved our tx_ref
       const hex = txRef.slice(7).toLowerCase();
       userId = `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+      channelLabel = 'virtual account';
+    } else if (paymentType === 'bank_transfer') {
+      // Permanent VA payment — Flutterwave generates its own tx_ref (FLWB-XXXX).
+      // Identify the user by (1) destination account number, (2) customer email.
+      channelLabel = 'bank transfer';
+      const acctNum = flwData.meta?.account_number || flwData.account_id;
+      const customerEmail = flwData.customer?.email;
+
+      if (acctNum) {
+        const { data: va } = await supabase
+          .from('user_virtual_accounts')
+          .select('user_id')
+          .eq('account_number', String(acctNum))
+          .maybeSingle();
+        if (va) userId = va.user_id;
+      }
+
+      if (!userId && customerEmail) {
+        const { data: u } = await supabase
+          .from('users')
+          .select('id')
+          .ilike('email', customerEmail)
+          .maybeSingle();
+        if (u) userId = u.id;
+      }
+
+      if (!userId) {
+        console.warn(`[webhook] bank_transfer unmatched — txRef=${txRef} acct=${acctNum} email=${customerEmail}`);
+        return res.sendStatus(200);
+      }
     } else {
+      console.warn(`[webhook] unhandled tx_ref pattern — txRef=${txRef} type=${paymentType}`);
       return res.sendStatus(200);
     }
 
@@ -166,7 +203,6 @@ router.post('/flutterwave/webhook', express.raw({ type: '*/*' }), async (req, re
 
     if (!user) return res.sendStatus(200);
 
-    const isVA = txRef.startsWith('VA-PNG-');
     const newBalance = parseFloat((parseFloat(user.wallet_balance || 0) + amount).toFixed(2));
     const newFunded = parseFloat((parseFloat(user.total_funded || 0) + amount).toFixed(2));
     await supabase.from('users').update({ wallet_balance: newBalance, total_funded: newFunded }).eq('id', user.id);
@@ -175,18 +211,16 @@ router.post('/flutterwave/webhook', express.raw({ type: '*/*' }), async (req, re
       type: 'credit',
       amount,
       reference: transactionId,
-      description: isVA
-        ? `Wallet funding via virtual account — ₦${amount.toLocaleString('en-NG')}`
-        : `Wallet funding via card — ₦${amount.toLocaleString('en-NG')}`,
+      description: `Wallet funding via ${channelLabel} — ₦${amount.toLocaleString('en-NG')}`,
     });
 
     handleFirstDeposit(user.id);
     notify(user.id, {
       type: 'wallet_credit',
       title: 'Wallet Funded',
-      message: `₦${amount.toLocaleString('en-NG')} has been added to your wallet via ${isVA ? 'virtual account' : 'card'} payment.`,
+      message: `₦${amount.toLocaleString('en-NG')} has been added to your wallet via ${channelLabel}.`,
     });
-    console.log(`[webhook] FLW credited ₦${amount} to user ${user.id.slice(0, 8)}`);
+    console.log(`[webhook] FLW credited ₦${amount} to user ${user.id.slice(0, 8)} via ${channelLabel}`);
   } catch (err) {
     console.error('[webhook] FLW error:', err.message);
   }
