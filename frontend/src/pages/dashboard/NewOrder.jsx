@@ -4,6 +4,20 @@ import { Link } from 'react-router-dom';
 import api from '../../lib/api';
 import toast from 'react-hot-toast';
 
+const LINK_PLACEHOLDERS = {
+  Instagram: 'https://instagram.com/yourpage',
+  TikTok: 'https://tiktok.com/@yourpage',
+  YouTube: 'https://youtube.com/channel/...',
+  Facebook: 'https://facebook.com/yourpage',
+  Twitter: 'https://twitter.com/yourpage',
+  WhatsApp: '+2348012345678',
+  Telegram: 'https://t.me/yourpage',
+  Spotify: 'https://open.spotify.com/artist/...',
+  LinkedIn: 'https://linkedin.com/in/yourprofile',
+  Snapchat: 'https://snapchat.com/add/username',
+  Pinterest: 'https://pinterest.com/yourpage',
+};
+
 export default function NewOrder() {
   const [services, setServices] = useState([]);
   const [balance, setBalance] = useState(0);
@@ -281,7 +295,9 @@ export default function NewOrder() {
             <input
               type="text"
               className="form-input"
-              placeholder="https://instagram.com/yourpage"
+              placeholder={selectedService
+                ? (LINK_PLACEHOLDERS[selectedService.platform] || `Enter your ${selectedService.platform} link or username`)
+                : 'Enter link or username'}
               value={link}
               onChange={(e) => setLink(e.target.value)}
               required
