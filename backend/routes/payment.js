@@ -184,7 +184,7 @@ router.post('/flutterwave/webhook', express.raw({ type: '*/*' }), async (req, re
     notify(user.id, {
       type: 'wallet_credit',
       title: 'Wallet Funded',
-      message: `₦${amount.toLocaleString('en-NG')} has been added to your wallet via card payment.`,
+      message: `₦${amount.toLocaleString('en-NG')} has been added to your wallet via ${isVA ? 'virtual account' : 'card'} payment.`,
     });
     console.log(`[webhook] FLW credited ₦${amount} to user ${user.id.slice(0, 8)}`);
   } catch (err) {

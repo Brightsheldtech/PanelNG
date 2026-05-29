@@ -2310,7 +2310,6 @@ function ProfileSettings() {
 // ─── WALLET PAGE ──────────────────────────────────────────────────────────────
 function WalletPage({ setPage }) {
   const fmtN = (n) => '₦' + Number(n || 0).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const fmtK = (n) => { const v = Number(n || 0); return v >= 1000 ? '₦' + (v / 1000).toFixed(v % 1000 === 0 ? 0 : 1) + 'k' : '₦' + v.toLocaleString('en-NG'); };
 
   const [stats, setStats] = useState({ balance: 0, total_funded: 0, total_spent: 0 });
   const [va, setVa] = useState(null);
