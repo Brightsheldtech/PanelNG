@@ -221,7 +221,7 @@ export default function ServicesManager() {
           <h1 className="page-title">Services Manager</h1>
           <p className="page-subtitle">{services.length} services · {services.filter((s) => s.is_active).length} active</p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <button className="btn btn-outline btn-sm" onClick={load} disabled={loading}>
             <RefreshCw size={13} />
           </button>
@@ -234,7 +234,7 @@ export default function ServicesManager() {
             {syncing.smmraja ? 'Syncing…' : 'Sync SMMRaja'}
           </button>
           <button className="btn btn-primary btn-sm" onClick={() => setShowAdd(true)}>
-            <Plus size={13} /> Add Service
+            <Plus size={13} /> Add
           </button>
         </div>
       </div>
