@@ -1579,21 +1579,29 @@ function OrderHistory() {
   const fetchOrders = async () => {
     setLoading(true);
     try {
-      const [stdRes, accRes] = await Promise.all([
+      const fetchAccs = tab === 'all' || tab === 'accounts';
+      const [stdRes, accRes] = await Promise.allSettled([
         api.get('/orders', { params: { limit: 50, ...(tab !== 'all' && tab !== 'accounts' ? { type: tab } : {}) } }),
-        (tab === 'all' || tab === 'accounts') ? api.get('/accszone/orders') : Promise.resolve({ data: [] }),
+        fetchAccs ? api.get('/accszone/orders') : Promise.resolve({ data: [] }),
       ]);
-      const std = (stdRes.data.orders || []).map(o => ({
-        ...o,
-        amount: o.amount_paid || o.total_cost || 0,
-        phone: o.phone_number,
-      }));
-      const accs = (Array.isArray(accRes.data) ? accRes.data : []).map(o => ({
+
+      const std = stdRes.status === 'fulfilled'
+        ? (stdRes.value.data.orders || []).map(o => ({
+            ...o,
+            amount: o.amount_paid || o.total_cost || 0,
+            phone: o.phone_number,
+          }))
+        : [];
+
+      const accsRaw = accRes.status === 'fulfilled' ? accRes.value.data : [];
+      if (accRes.status === 'rejected') console.error('[orders] accszone fetch failed:', accRes.reason);
+      const accs = (Array.isArray(accsRaw) ? accsRaw : []).map(o => ({
         ...o,
         type: 'accounts',
         platform: o.platform,
         amount: o.total_cost,
       }));
+
       const merged = tab === 'accounts' ? accs
         : tab !== 'all' ? std
         : [...std, ...accs].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
