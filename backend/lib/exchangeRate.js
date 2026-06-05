@@ -12,7 +12,7 @@ async function getExchangeRate() {
       .select('value')
       .eq('key', 'exchange-rate')
       .single();
-    _cached = Number(data?.value || 2900);
+    _cached = Number(data?.value) || 2900;
     _cachedAt = Date.now();
     return _cached;
   } catch {

@@ -20,9 +20,9 @@ export default function AdminOrders() {
   const [refundReason, setRefundReason] = useState('');
   const [refunding, setRefunding] = useState(false);
 
-  const load = async (reset = true) => {
+  const load = async (reset = true, currentPage = page) => {
     setLoading(true);
-    const offset = reset ? 0 : page * LIMIT;
+    const offset = reset ? 0 : currentPage * LIMIT;
     try {
       const params = new URLSearchParams({ limit: LIMIT, offset });
       if (filter !== 'all') params.set('type', filter);
@@ -45,7 +45,7 @@ export default function AdminOrders() {
 
   const openRefund = (order) => {
     setRefundModal({ order });
-    setRefundAmount(String(order.amount_paid || ''));
+    setRefundAmount(String(order.amount_paid ?? order.total_cost ?? ''));
     setRefundReason('');
   };
 
@@ -202,7 +202,7 @@ export default function AdminOrders() {
             <div style={{ textAlign: 'center', marginTop: 16 }}>
               <button
                 className="btn btn-outline"
-                onClick={() => { setPage((p) => p + 1); load(false); }}
+                onClick={() => { const next = page + 1; setPage(next); load(false, next); }}
                 disabled={loading}
               >
                 {loading ? <span className="spinner" style={{ width: 14, height: 14 }} /> : 'Load More'}

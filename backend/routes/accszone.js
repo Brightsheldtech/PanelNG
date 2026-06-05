@@ -302,11 +302,17 @@ router.post('/order', auth, async (req, res) => {
     const newBalance = parseFloat((currentBalance - totalCostNGN).toFixed(2));
     const newSpent   = parseFloat((parseFloat(user.total_spent || 0) + totalCostNGN).toFixed(2));
 
-    const { error: deductErr } = await supabase
+    // Atomic deduct — only succeeds if balance hasn't dropped below required amount concurrently
+    const { data: deducted, error: deductErr } = await supabase
       .from('users')
       .update({ wallet_balance: newBalance, total_spent: newSpent })
-      .eq('id', req.user.id);
+      .eq('id', req.user.id)
+      .gte('wallet_balance', totalCostNGN)
+      .select('wallet_balance');
     if (deductErr) throw deductErr;
+    if (!deducted || deducted.length === 0) {
+      return res.status(402).json({ error: 'Insufficient wallet balance', required: totalCostNGN });
+    }
 
     // Place order with ACCSZONE — refund wallet if this fails
     let orderResult;
@@ -314,8 +320,14 @@ router.post('/order', auth, async (req, res) => {
       const { data } = await az.post('/purchase', { ad_id: Number(ad_id), quantity: Number(quantity) });
       orderResult = data;
     } catch (azErr) {
-      // Refund wallet
-      await supabase.from('users').update({ wallet_balance: currentBalance, total_spent: parseFloat(user.total_spent || 0) }).eq('id', req.user.id);
+      // Re-fetch current values so the refund doesn't overwrite concurrent wallet changes
+      const { data: freshUser } = await supabase.from('users').select('wallet_balance, total_spent').eq('id', req.user.id).single();
+      const freshBalance = parseFloat(freshUser?.wallet_balance ?? currentBalance);
+      const freshSpent   = parseFloat(freshUser?.total_spent   ?? 0);
+      await supabase.from('users').update({
+        wallet_balance: parseFloat((freshBalance + totalCostNGN).toFixed(2)),
+        total_spent:    parseFloat(Math.max(0, freshSpent - totalCostNGN).toFixed(2)),
+      }).eq('id', req.user.id);
       console.error('[accszone] purchase failed, wallet refunded:', azErr.response?.data || azErr.message);
       return res.status(502).json({ error: 'Order could not be completed. Your wallet has been refunded.' });
     }
@@ -324,7 +336,7 @@ router.post('/order', auth, async (req, res) => {
     const deliveredAccounts = extractCredentials(orderResult);
 
     // Save order to Supabase (prices stored in NGN)
-    const { data: savedOrder } = await supabase
+    const { data: savedOrder, error: orderSaveErr } = await supabase
       .from('accszone_orders')
       .insert({
         user_id: req.user.id,
@@ -340,6 +352,7 @@ router.post('/order', auth, async (req, res) => {
       })
       .select()
       .single();
+    if (orderSaveErr) console.error('[accszone] order save failed (order placed, wallet deducted):', orderSaveErr.message);
 
     // Transaction record so the debit appears in the wallet feed immediately
     await supabase.from('transactions').insert({

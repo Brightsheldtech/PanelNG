@@ -113,9 +113,9 @@ export default function AdminTransactions() {
     }
   };
 
-  const loadTx = async (reset = true, cat = category) => {
+  const loadTx = async (reset = true, cat = category, currentPage = page) => {
     setLoading(true);
-    const offset = reset ? 0 : page * LIMIT;
+    const offset = reset ? 0 : currentPage * LIMIT;
     try {
       const params = { limit: LIMIT, offset };
       if (cat !== 'all') params.category = cat;
@@ -345,7 +345,7 @@ export default function AdminTransactions() {
         <div style={{ textAlign: 'center', marginTop: 16 }}>
           <button
             className="btn btn-outline"
-            onClick={() => { setPage((p) => p + 1); loadTx(false); }}
+            onClick={() => { const next = page + 1; setPage(next); loadTx(false, category, next); }}
             disabled={loading}
           >
             {loading ? <span className="spinner" style={{ width: 14, height: 14 }} /> : 'Load More'}

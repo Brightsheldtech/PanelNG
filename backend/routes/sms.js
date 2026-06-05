@@ -157,7 +157,9 @@ router.post('/buy-number', auth, async (req, res) => {
       .select('wallet_balance');
 
     if (!deducted || deducted.length === 0) {
-      try { await herosms.cancelOrder(numberData.orderId); } catch (_) {}
+      try { await herosms.cancelOrder(numberData.orderId); } catch (cancelErr) {
+        console.error('[sms] HeroSMS cancel failed after deduction race — number may be wasted:', numberData.orderId, cancelErr.message);
+      }
       return res.status(400).json({ error: 'Insufficient wallet balance', required: cost, balance: userData.wallet_balance });
     }
 

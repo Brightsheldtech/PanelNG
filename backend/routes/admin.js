@@ -1068,6 +1068,18 @@ router.post('/refund', async (req, res) => {
   if (!parsedAmount || parsedAmount <= 0) return res.status(400).json({ error: 'Amount must be greater than 0' });
 
   try {
+    // Idempotency: if an order_id is provided, reject if already refunded
+    if (order_id && order_type) {
+      const tableMap = { smm: 'orders', sms: 'sms_orders', accounts: 'accszone_orders' };
+      const table = tableMap[order_type];
+      if (table) {
+        const { data: existingOrder } = await supabase.from(table).select('status').eq('id', order_id).single();
+        if (existingOrder?.status === 'refunded') {
+          return res.status(409).json({ error: 'This order has already been refunded' });
+        }
+      }
+    }
+
     const { data: userRow, error: userErr } = await supabase
       .from('users')
       .select('id, email, full_name, wallet_balance')
