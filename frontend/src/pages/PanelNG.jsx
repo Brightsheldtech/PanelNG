@@ -1741,17 +1741,28 @@ function OrderHistory() {
                   {!detail.credLoading && !detail.credError && (detail.accounts||[]).length === 0 && (
                     <div style={{textAlign:'center',padding:'20px 0',fontSize:12,color:'var(--text-muted)'}}>No credential data stored for this order.</div>
                   )}
-                  {!detail.credLoading && !detail.credError && (detail.accounts||[]).map((acc, i) => (
-                    <div key={i} style={{marginBottom:12}}>
-                      <div style={{fontSize:10,fontWeight:700,letterSpacing:'1px',textTransform:'uppercase',color:'var(--accent)',marginBottom:6}}>Account {i + 1}</div>
-                      <div style={{background:'var(--bg-raised)',border:'1px solid var(--border)',borderRadius:10,padding:'2px 12px'}}>
-                        {typeof acc === 'string'
-                          ? <CredHistoryRow label="credentials" value={acc}/>
-                          : Object.entries(acc).map(([k, v]) => <CredHistoryRow key={k} label={k} value={String(v)}/>)
-                        }
+                  {!detail.credLoading && !detail.credError && (detail.accounts||[]).map((raw, i) => {
+                    // Handle both new format (clean string) and old format (metadata object with accounts field)
+                    const AZ_META = new Set(['order_id','listing','quantity','amount','discount','new_balance','purchased_at']);
+                    const cred = (typeof raw === 'object' && raw?.accounts != null) ? raw.accounts : raw;
+                    let fields;
+                    if (typeof cred === 'string') {
+                      const idx = cred.indexOf(':');
+                      fields = idx > 0
+                        ? [['Username', cred.slice(0, idx)], ['Password', cred.slice(idx + 1)]]
+                        : [['Credentials', cred]];
+                    } else {
+                      fields = Object.entries(cred).filter(([k]) => !AZ_META.has(k));
+                    }
+                    return (
+                      <div key={i} style={{marginBottom:12}}>
+                        <div style={{fontSize:10,fontWeight:700,letterSpacing:'1px',textTransform:'uppercase',color:'var(--accent)',marginBottom:6}}>Account {i + 1}</div>
+                        <div style={{background:'var(--bg-raised)',border:'1px solid var(--border)',borderRadius:10,padding:'2px 12px'}}>
+                          {fields.map(([k, v]) => <CredHistoryRow key={k} label={k} value={String(v)}/>)}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </>
               )}
             </div>

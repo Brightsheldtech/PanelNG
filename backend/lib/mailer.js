@@ -77,14 +77,31 @@ async function sendPaymentNotification({ fullName, email, amount, reference, cre
   }
 }
 
+// Fields ACCSZONE includes in their response that are not useful to the end user
+const ACCSZONE_META = new Set(['order_id','listing','quantity','amount','discount','new_balance','purchased_at']);
+
+function resolveCredential(acc) {
+  // Old stored format: object with nested 'accounts' field (metadata blob)
+  if (typeof acc === 'object' && acc !== null && acc.accounts != null) return acc.accounts;
+  return acc;
+}
+
+function parseCredFields(cred) {
+  if (typeof cred === 'string') {
+    const i = cred.indexOf(':');
+    if (i > 0) return [['Username', cred.slice(0, i)], ['Password', cred.slice(i + 1)]];
+    return [['Credentials', cred]];
+  }
+  return Object.entries(cred).filter(([k]) => !ACCSZONE_META.has(k));
+}
+
 function formatAccountsText(accounts) {
   if (!accounts) return 'No account data returned.';
-  if (typeof accounts === 'string') return accounts;
   const list = Array.isArray(accounts) ? accounts : [accounts];
-  return list.map((acc, i) => {
-    const header = `Account ${i + 1}`;
-    if (typeof acc === 'string') return `${header}:\n  ${acc}`;
-    return `${header}:\n${Object.entries(acc).map(([k, v]) => `  ${k}: ${v}`).join('\n')}`;
+  return list.map((raw, i) => {
+    const cred = resolveCredential(raw);
+    const fields = parseCredFields(cred);
+    return `Account ${i + 1}:\n${fields.map(([k, v]) => `  ${k}: ${v}`).join('\n')}`;
   }).join('\n\n');
 }
 
@@ -98,8 +115,9 @@ async function sendOrderDelivery({ toEmail, toName, productName, quantity, total
     });
     const accountList = Array.isArray(accounts) ? accounts : (accounts ? [accounts] : []);
 
-    const accountRows = accountList.map((acc, i) => {
-      const fields = typeof acc === 'string' ? [['credentials', acc]] : Object.entries(acc);
+    const accountRows = accountList.map((raw, i) => {
+      const cred = resolveCredential(raw);
+      const fields = parseCredFields(cred);
       return `
         <div style="background:#0B0E18;border:1px solid #1A1D2E;border-radius:8px;padding:14px 18px;margin-bottom:10px;">
           <div style="font-size:11px;font-weight:700;color:#F0A500;letter-spacing:0.08em;margin-bottom:10px;text-transform:uppercase;">Account ${i + 1}</div>
