@@ -533,13 +533,23 @@ function PurchaseModal({ listing, qty, balance, onClose, onSuccess, onAddFunds, 
     }
   };
 
+  const AZ_META = new Set(['order_id','listing','quantity','amount','discount','new_balance','purchased_at']);
+  const resolveCred = (raw) => (typeof raw === 'object' && raw?.accounts != null) ? raw.accounts : raw;
+  const credFields = (cred) => {
+    if (typeof cred === 'string') {
+      const i = cred.indexOf(':');
+      return i > 0 ? [['Username', cred.slice(0, i)], ['Password', cred.slice(i + 1)]] : [['Credentials', cred]];
+    }
+    return Object.entries(cred).filter(([k]) => !AZ_META.has(k));
+  };
+
   const buildAccountText = () => {
     const accs = result?.accounts || [];
     const list = Array.isArray(accs) ? accs : (accs ? [accs] : []);
-    const lines = list.map((acc, i) => {
-      const header = `Account ${i + 1}`;
-      if (typeof acc === 'string') return `${header}:\n  ${acc}`;
-      return `${header}:\n${Object.entries(acc).map(([k, v]) => `  ${k}: ${v}`).join('\n')}`;
+    const lines = list.map((raw, i) => {
+      const cred = resolveCred(raw);
+      const fields = credFields(cred);
+      return `Account ${i + 1}:\n${fields.map(([k, v]) => `  ${k}: ${v}`).join('\n')}`;
     });
     return [
       '='.repeat(50),
@@ -648,13 +658,18 @@ function PurchaseModal({ listing, qty, balance, onClose, onSuccess, onAddFunds, 
             {/* Delivered accounts */}
             <div style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', borderRadius: 12, padding: '4px 16px', marginBottom: 16, maxHeight: 240, overflowY: 'auto' }}>
               {(result?.accounts || []).length > 0
-                ? (result.accounts.map((acc, i) => (
-                    <div key={i} style={{ padding: '10px 0', borderBottom: i < result.accounts.length - 1 ? '0.5px solid var(--border)' : 'none' }}>
-                      {typeof acc === 'string'
-                        ? <CredRow label="credentials" value={acc} />
-                        : Object.entries(acc).map(([k, v]) => <CredRow key={k} label={k} value={String(v)} />)}
-                    </div>
-                  )))
+                ? (() => {
+                    const list = Array.isArray(result.accounts) ? result.accounts : [result.accounts];
+                    return list.map((raw, i) => {
+                      const cred = resolveCred(raw);
+                      const fields = credFields(cred);
+                      return (
+                        <div key={i} style={{ padding: '10px 0', borderBottom: i < list.length - 1 ? '0.5px solid var(--border)' : 'none' }}>
+                          {fields.map(([k, v]) => <CredRow key={k} label={k} value={String(v)} />)}
+                        </div>
+                      );
+                    });
+                  })()
                 : <div style={{ padding: '16px 0', textAlign: 'center', fontSize: 13, color: 'var(--text-muted)' }}>Account data delivered. Check your email and order history for details.</div>
               }
             </div>

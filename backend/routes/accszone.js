@@ -203,6 +203,34 @@ router.get('/listings/:slug', async (req, res) => {
 });
 
 // ── POST /api/accszone/order ─────────────────────────────────────────────────
+
+// ACCSZONE wraps the purchase result in a top-level object.
+// The actual credentials live at result.accounts or result.data.accounts.
+// We strip all supplier metadata (order_id, amount, new_balance, etc.) and
+// return only the raw credential string(s) to the user.
+function extractCredentials(result) {
+  if (!result) return [];
+  // Shape: { accounts: "user:pass" } or { accounts: ["user:pass"] }
+  if (result.accounts != null) {
+    const a = result.accounts;
+    return Array.isArray(a) ? a.filter(Boolean) : [a];
+  }
+  // Shape: { data: { accounts: "user:pass", order_id: ..., ... } }
+  if (result.data != null) {
+    const d = result.data;
+    if (d.accounts != null) {
+      const a = d.accounts;
+      return Array.isArray(a) ? a.filter(Boolean) : [a];
+    }
+    if (typeof d === 'string') return [d];
+    // data is an object without an accounts key — use as-is (unusual shape)
+    return [d];
+  }
+  // Array already (multiple accounts)
+  if (Array.isArray(result)) return result.filter(Boolean);
+  return [];
+}
+
 router.post('/order', auth, async (req, res) => {
   const { ad_id, quantity, listing_slug, unit_price, product_name, platform } = req.body;
 
@@ -292,12 +320,15 @@ router.post('/order', auth, async (req, res) => {
       return res.status(502).json({ error: 'Order could not be completed. Your wallet has been refunded.' });
     }
 
+    // Extract just the credential strings — strip ACCSZONE metadata
+    const deliveredAccounts = extractCredentials(orderResult);
+
     // Save order to Supabase (prices stored in NGN)
     const { data: savedOrder } = await supabase
       .from('accszone_orders')
       .insert({
         user_id: req.user.id,
-        accszone_order_id: String(orderResult?.order_id || orderResult?.id || ''),
+        accszone_order_id: String(orderResult?.order_id || orderResult?.data?.order_id || orderResult?.id || ''),
         product_id: String(ad_id),
         product_name: productName,
         platform: platform || 'Other',
@@ -305,7 +336,7 @@ router.post('/order', auth, async (req, res) => {
         unit_price: unitPrice,
         total_cost: totalCostNGN,
         status: 'completed',
-        delivered_data: orderResult?.accounts || orderResult?.data || orderResult || null,
+        delivered_data: deliveredAccounts.length > 0 ? deliveredAccounts : null,
       })
       .select()
       .single();
@@ -319,8 +350,6 @@ router.post('/order', auth, async (req, res) => {
       description: `${productName} × ${Number(quantity)}`,
       status: 'completed',
     });
-
-    const deliveredAccounts = orderResult?.accounts || orderResult?.data || [];
 
     // Fire-and-forget delivery email and notification
     sendOrderDelivery({
