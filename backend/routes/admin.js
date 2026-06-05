@@ -264,27 +264,32 @@ router.get('/users/:userId/adjustments', async (req, res) => {
   }
 });
 
-// GET /api/admin/orders — SMM + SMS combined
+// GET /api/admin/orders — SMM + SMS + Accounts combined
 router.get('/orders', async (req, res) => {
   const limit = parseInt(req.query.limit) || 50;
   const offset = parseInt(req.query.offset) || 0;
-  const type = req.query.type; // 'smm' | 'sms' | undefined = all
+  const type = req.query.type; // 'smm' | 'sms' | 'accounts' | undefined = all
 
-  const fetchSmm = !type || type === 'smm';
-  const fetchSms = !type || type === 'sms';
+  const fetchSmm      = !type || type === 'smm';
+  const fetchSms      = !type || type === 'sms';
+  const fetchAccounts = !type || type === 'accounts';
 
   try {
-    const [smmRes, smsRes] = await Promise.all([
+    const [smmRes, smsRes, azRes] = await Promise.all([
       fetchSmm
         ? supabase.from('orders').select('*, users(email, full_name)', { count: 'exact' }).order('created_at', { ascending: false })
         : Promise.resolve({ data: [], count: 0, error: null }),
       fetchSms
         ? supabase.from('sms_orders').select('*, users(email, full_name)', { count: 'exact' }).order('created_at', { ascending: false })
         : Promise.resolve({ data: [], count: 0, error: null }),
+      fetchAccounts
+        ? supabase.from('accszone_orders').select('id, user_id, product_name, platform, quantity, unit_price, total_cost, status, created_at, users(email, full_name)', { count: 'exact' }).order('created_at', { ascending: false })
+        : Promise.resolve({ data: [], count: 0, error: null }),
     ]);
 
     if (smmRes.error) throw smmRes.error;
     if (smsRes.error) throw smsRes.error;
+    if (azRes.error) throw azRes.error;
 
     const smmOrders = (smmRes.data || []).map((o) => ({ ...o, type: 'smm' }));
     const smsOrders = (smsRes.data || []).map((o) => ({
@@ -303,11 +308,24 @@ router.get('/orders', async (req, res) => {
       created_at: o.created_at,
       users: o.users,
     }));
+    const accsOrders = (azRes.data || []).map((o) => ({
+      id: o.id,
+      user_id: o.user_id,
+      type: 'accounts',
+      platform: o.platform,
+      service_name: o.product_name,
+      quantity: o.quantity,
+      unit_price: o.unit_price,
+      amount_paid: o.total_cost,
+      status: o.status,
+      created_at: o.created_at,
+      users: o.users,
+    }));
 
-    const merged = [...smmOrders, ...smsOrders]
+    const merged = [...smmOrders, ...smsOrders, ...accsOrders]
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
-    const total = (smmRes.count || 0) + (smsRes.count || 0);
+    const total = (smmRes.count || 0) + (smsRes.count || 0) + (azRes.count || 0);
     const paginated = merged.slice(offset, offset + limit);
 
     res.json({ orders: paginated, total });

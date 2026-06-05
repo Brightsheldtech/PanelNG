@@ -86,7 +86,7 @@ export default function AdminOrders() {
 
       {/* Filter tabs */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 20, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, padding: 4, width: 'fit-content' }}>
-        {[['all', 'All'], ['smm', 'SMM'], ['sms', 'SMS']].map(([val, label]) => (
+        {[['all', 'All'], ['smm', 'SMM'], ['sms', 'SMS'], ['accounts', 'Accounts']].map(([val, label]) => (
           <button
             key={val}
             onClick={() => setFilter(val)}
@@ -138,7 +138,11 @@ export default function AdminOrders() {
                         <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{o.users?.email}</div>
                       </td>
                       <td>
-                        <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: o.type === 'smm' ? 'var(--blue-muted)' : 'var(--purple-muted)', color: o.type === 'smm' ? 'var(--blue)' : 'var(--purple)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        <span style={{
+                          fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, textTransform: 'uppercase', letterSpacing: '0.05em',
+                          background: o.type === 'smm' ? 'var(--blue-muted)' : o.type === 'accounts' ? 'rgba(20,184,166,.12)' : 'var(--purple-muted)',
+                          color: o.type === 'smm' ? 'var(--blue)' : o.type === 'accounts' ? '#14B8A6' : 'var(--purple)',
+                        }}>
                           {o.type}
                         </span>
                       </td>
