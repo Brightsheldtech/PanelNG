@@ -3,13 +3,14 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { Menu } from 'lucide-react';
 import Sidebar from './Sidebar';
 import { useAuth } from '../context/AuthContext';
-import api from '../lib/api';
 
 export default function DashboardLayout() {
   const [open, setOpen] = useState(false);
-  const [balance, setBalance] = useState(null);
   const { user } = useAuth();
   const location = useLocation();
+
+  // Balance comes from AuthContext which polls /wallet/balance every 15 seconds
+  const balance = user?.wallet_balance ?? null;
 
   useEffect(() => { setOpen(false); }, [location.pathname]);
 
@@ -17,10 +18,6 @@ export default function DashboardLayout() {
     document.body.style.overflow = open ? 'hidden' : '';
     return () => { document.body.style.overflow = ''; };
   }, [open]);
-
-  useEffect(() => {
-    api.get('/wallet/balance').then((r) => setBalance(r.data.balance)).catch(() => {});
-  }, []);
 
   const fmt = (n) => Number(n || 0).toLocaleString('en-NG', { minimumFractionDigits: 2 });
 
