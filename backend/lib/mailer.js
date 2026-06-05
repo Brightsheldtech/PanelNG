@@ -156,8 +156,9 @@ async function sendOrderDelivery({ toEmail, toName, productName, quantity, total
               ? '<p style="color:#A0A0B8;font-size:13px;">Your order was processed. Please check your order history in the dashboard for full details.</p>'
               : accountRows}
           </div>
-          <div style="background:#0B0E18;border:1px solid #1A1D2E;border-radius:8px;padding:14px 18px;font-size:12px;color:#A0A0B8;line-height:1.7;">
-            PanelNG acts solely as a reseller of third-party digital accounts. We are not responsible for how purchased accounts are used after delivery.
+          <div style="background:#1A0505;border:1px solid #4A1515;border-radius:8px;padding:14px 18px;font-size:12px;color:#F87171;line-height:1.8;">
+            <strong style="display:block;margin-bottom:6px;font-size:13px;">⚠ No Refunds &amp; Liability Disclaimer</strong>
+            All sales are final. No refunds are issued once credentials have been delivered. PanelNG acts solely as a reseller of third-party digital accounts and is not liable for any account bans, restrictions, or consequences arising from misuse after delivery. By completing this purchase you agree to use the accounts responsibly and in accordance with platform terms.
           </div>
         </div>
       `,

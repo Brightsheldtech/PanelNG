@@ -1763,6 +1763,14 @@ function OrderHistory() {
                       </div>
                     );
                   })}
+                  {!detail.credLoading && !detail.credError && (detail.accounts||[]).length > 0 && (
+                    <div style={{background:'rgba(220,38,38,.06)',border:'1px solid rgba(220,38,38,.2)',borderRadius:10,padding:'10px 14px',marginTop:8}}>
+                      <p style={{fontSize:11,color:'var(--danger)',lineHeight:1.7,margin:0}}>
+                        <i className="ti ti-shield-off" style={{marginRight:5}}/>
+                        <strong>No Refunds.</strong> All sales are final once credentials are delivered. PanelNG is a reseller only — we are not liable for account bans, restrictions, or any consequences resulting from misuse after delivery.
+                      </p>
+                    </div>
+                  )}
                 </>
               )}
             </div>

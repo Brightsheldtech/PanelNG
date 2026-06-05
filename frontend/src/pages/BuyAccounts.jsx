@@ -566,7 +566,12 @@ function PurchaseModal({ listing, qty, balance, onClose, onSuccess, onAddFunds, 
       ...lines,
       '',
       '='.repeat(50),
-      'Keep this file secure. PanelNG is not liable for misuse.',
+      'DISCLAIMER',
+      '='.repeat(50),
+      'All sales are final. No refunds are issued once credentials are delivered.',
+      'PanelNG is a reseller only and is not liable for account bans, restrictions,',
+      'or consequences arising from misuse after delivery.',
+      'Keep this file secure. Do not share your credentials.',
       '='.repeat(50),
     ].join('\n');
   };
@@ -681,10 +686,10 @@ function PurchaseModal({ listing, qty, balance, onClose, onSuccess, onAddFunds, 
                 <i className="ti ti-download" />Download .txt
               </button>
             </div>
-            <div style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 14px', marginBottom: 12 }}>
-              <p style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.6, margin: 0 }}>
-                <i className="ti ti-info-circle" style={{ marginRight: 5 }} />
-                PanelNG is not liable for how these accounts are used. By receiving this purchase you agree to use them only for lawful purposes. Misuse, violation of platform terms, or any illegal activity is solely your responsibility.
+            <div style={{ background: 'rgba(220,38,38,.06)', border: '1px solid rgba(220,38,38,.2)', borderRadius: 10, padding: '10px 14px', marginBottom: 12 }}>
+              <p style={{ fontSize: 11, color: 'var(--danger)', lineHeight: 1.7, margin: 0 }}>
+                <i className="ti ti-shield-off" style={{ marginRight: 5 }} />
+                <strong>No Refunds.</strong> All sales are final once credentials are delivered. PanelNG is a reseller only — we are not liable for account bans, restrictions, or any consequences resulting from misuse after delivery. Use accounts responsibly and in accordance with platform terms.
               </p>
             </div>
             <button onClick={onClose} style={{ width: '100%', height: 40, background: 'var(--accent)', color: 'var(--accent-text)', border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>Done</button>
