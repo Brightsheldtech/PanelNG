@@ -342,35 +342,85 @@ router.get('/transactions', async (req, res) => {
   const category = req.query.category; // deposits | service_debits | bonuses | adjustments
 
   try {
-    let query = supabase
-      .from('transactions')
-      .select('*, users(email, full_name)', { count: 'exact' });
+    // For categories that can never include AccsZone debits, use the simple paginated path
+    if (category === 'deposits' || category === 'bonuses' || category === 'adjustments') {
+      let query = supabase
+        .from('transactions')
+        .select('*, users(email, full_name)', { count: 'exact' });
 
-    if (category === 'deposits') {
-      query = query.eq('type', 'credit').or(
-        'description.ilike.%via card%,description.ilike.%via virtual account%,description.ilike.%Bank deposit confirmed%,description.ilike.%Admin top-up%'
-      );
-    } else if (category === 'service_debits') {
-      query = query.eq('type', 'debit').or(
-        'reference.like.SMM-%,reference.like.SMS-%,reference.like.ACCS-%'
-      );
-    } else if (category === 'bonuses') {
-      query = query.eq('type', 'credit').or(
-        'description.ilike.%welcome bonus%,description.ilike.%referral reward%'
-      );
-    } else if (category === 'adjustments') {
-      query = query.or(
-        'description.ilike.%Refund%,description.ilike.%Admin deduction%,description.ilike.%Admin top-up%'
-      );
+      if (category === 'deposits') {
+        query = query.eq('type', 'credit').or(
+          'description.ilike.%via card%,description.ilike.%via virtual account%,description.ilike.%Bank deposit confirmed%,description.ilike.%Admin top-up%'
+        );
+      } else if (category === 'bonuses') {
+        query = query.eq('type', 'credit').or(
+          'description.ilike.%welcome bonus%,description.ilike.%referral reward%'
+        );
+      } else if (category === 'adjustments') {
+        query = query.or(
+          'description.ilike.%Refund%,description.ilike.%Admin deduction%,description.ilike.%Admin top-up%'
+        );
+      }
+
+      const { data, error, count } = await query
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1);
+      if (error) throw error;
+      return res.json({ transactions: data || [], total: count || 0 });
     }
 
-    const { data, error, count } = await query
-      .order('created_at', { ascending: false })
-      .range(offset, offset + limit - 1);
+    // For 'all' and 'service_debits': merge the transactions table with accszone_orders so
+    // account purchases are always visible even if the transactions insert failed.
+    // Both queries fetch without a row limit and we paginate in-memory — acceptable for
+    // panels with thousands (not millions) of records.
+    let txQuery = supabase.from('transactions').select('*, users(email, full_name)');
+    if (category === 'service_debits') {
+      txQuery = txQuery.eq('type', 'debit').or('reference.like.SMM-%,reference.like.SMS-%,reference.like.ACCS-%');
+    }
 
-    if (error) throw error;
-    res.json({ transactions: data, total: count });
+    const [txRes, azRes] = await Promise.all([
+      txQuery.order('created_at', { ascending: false }),
+      supabase
+        .from('accszone_orders')
+        .select('id, user_id, product_name, quantity, total_cost, status, created_at, users(email, full_name)')
+        .order('created_at', { ascending: false }),
+    ]);
+
+    if (txRes.error) throw txRes.error;
+
+    const txRows = txRes.data || [];
+
+    // Build a set of accszone order UUIDs that already have a transaction entry (ACCS-{uuid})
+    const coveredAccsIds = new Set(
+      txRows
+        .filter(t => t.reference && t.reference.startsWith('ACCS-'))
+        .map(t => t.reference.slice(5))
+    );
+
+    // Synthesize transaction-shaped rows for accszone orders not already in the transactions table
+    const orphans = (azRes.data || [])
+      .filter(o => !coveredAccsIds.has(String(o.id)))
+      .map(o => ({
+        id: `az_${o.id}`,
+        user_id: o.user_id,
+        type: 'debit',
+        amount: o.total_cost,
+        reference: `ACCS-${o.id}`,
+        description: `${o.product_name} × ${o.quantity}`,
+        status: o.status || 'completed',
+        created_at: o.created_at,
+        users: o.users,
+      }));
+
+    const merged = [...txRows, ...orphans]
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+    const total = merged.length;
+    const paginated = merged.slice(offset, offset + limit);
+
+    res.json({ transactions: paginated, total });
   } catch (err) {
+    console.error('[admin] transactions:', err.message);
     res.status(500).json({ error: 'Failed to get transactions' });
   }
 });
