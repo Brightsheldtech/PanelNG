@@ -620,7 +620,8 @@ router.post('/sync-services', async (req, res) => {
       sell_price: parseFloat((parseFloat(svc.rate) * MARKUP).toFixed(4)),
       min_quantity: parseInt(svc.min) || 10,
       max_quantity: parseInt(svc.max) || 100000,
-      is_active: true,
+      // is_active intentionally omitted: new rows use DB default (false);
+      // existing rows keep their current is_active value on upsert conflict
     }));
 
     let synced = 0;
@@ -635,6 +636,24 @@ router.post('/sync-services', async (req, res) => {
   } catch (err) {
     console.error('Sync error:', err.message);
     res.status(500).json({ error: 'Failed to sync services' });
+  }
+});
+
+// POST /api/admin/services/bulk-toggle — activate or deactivate a set of services
+router.post('/services/bulk-toggle', async (req, res) => {
+  const { ids, is_active } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids array is required' });
+  if (typeof is_active !== 'boolean') return res.status(400).json({ error: 'is_active must be a boolean' });
+  try {
+    const { error } = await supabase
+      .from('services')
+      .update({ is_active })
+      .in('id', ids);
+    if (error) throw error;
+    res.json({ updated: ids.length, is_active });
+  } catch (err) {
+    console.error('bulk-toggle error:', err.message);
+    res.status(500).json({ error: 'Bulk toggle failed' });
   }
 });
 
