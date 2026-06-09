@@ -11,11 +11,18 @@ const router = express.Router();
 // GET /api/smm/services — returns services with NGN prices applied via exchange rate
 router.get('/services', auth, async (req, res) => {
   try {
+    const { data: visData } = await supabase
+      .from('settings')
+      .select('value')
+      .eq('key', 'smm-provider-visibility')
+      .maybeSingle();
+    const visibility = visData?.value || 'both';
+
     const PAGE = 1000;
     let all = [];
     let from = 0;
     while (true) {
-      const { data, error } = await supabase
+      let q = supabase
         .from('services')
         .select('id, platform, name, sell_price, min_quantity, max_quantity, panel_service_id, provider, manual_price')
         .eq('is_active', true)
@@ -23,6 +30,9 @@ router.get('/services', auth, async (req, res) => {
         .order('platform')
         .order('name')
         .range(from, from + PAGE - 1);
+      if (visibility === 'jap') q = q.eq('provider', 'jap');
+      else if (visibility === 'smmraja') q = q.eq('provider', 'smmraja');
+      const { data, error } = await q;
       if (error) throw error;
       all = all.concat(data || []);
       if (!data || data.length < PAGE) break;

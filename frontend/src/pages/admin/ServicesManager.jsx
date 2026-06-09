@@ -1,12 +1,12 @@
-import { useEffect, useState, useMemo, useRef } from 'react';
-import { RefreshCw, ToggleLeft, ToggleRight, Plus, Download, Search, X, Percent, DollarSign, MessageSquare, Zap } from 'lucide-react';
+import { useEffect, useState, useMemo } from 'react';
+import { RefreshCw, ToggleLeft, ToggleRight, Plus, Download, Search, X, Percent, Zap } from 'lucide-react';
 import api from '../../lib/api';
 import toast from 'react-hot-toast';
 
 const fmt = (n) => Number(n || 0).toLocaleString('en-NG', { minimumFractionDigits: 2 });
 const PAGE_SIZE = 100;
 
-// ─── Add Service Modal (SMM) ─────────────────────────────────────────────────
+// ─── Add Service Modal ────────────────────────────────────────────────────────
 function AddServiceModal({ onClose, onAdded }) {
   const [form, setForm] = useState({ platform: '', name: '', panel_service_id: '', cost_price: '', sell_price: '', min_quantity: 100, max_quantity: 10000, provider: 'jap' });
   const [saving, setSaving] = useState(false);
@@ -82,7 +82,7 @@ function AddServiceModal({ onClose, onAdded }) {
   );
 }
 
-// ─── SMM Tab ─────────────────────────────────────────────────────────────────
+// ─── SMM Services Tab ─────────────────────────────────────────────────────────
 function SmmTab() {
   const [services, setServices] = useState([]);
   const [rate, setRate] = useState(null);
@@ -92,27 +92,44 @@ function SmmTab() {
   const [search, setSearch] = useState('');
   const [platformFilter, setPlatformFilter] = useState('All');
   const [providerFilter, setProviderFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [page, setPage] = useState(0);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [bulkPercent, setBulkPercent] = useState('');
   const [bulkApplying, setBulkApplying] = useState(false);
+  const [bulkToggling, setBulkToggling] = useState(false);
   const [manualInputs, setManualInputs] = useState({});
   const [saving, setSaving] = useState({});
+  const [visibility, setVisibility] = useState('both');
+  const [savingVisibility, setSavingVisibility] = useState(false);
 
   const load = async () => {
     setLoading(true);
     try {
-      const [svcRes, rateRes] = await Promise.all([
+      const [svcRes, rateRes, visRes] = await Promise.all([
         api.get('/admin/services'),
         api.get('/settings/exchange-rate'),
+        api.get('/settings/smm-provider-visibility').catch(() => ({ data: { value: 'both' } })),
       ]);
       setServices(svcRes.data || []);
       setRate(Number(rateRes.data.value || 2900));
+      setVisibility(visRes.data.value || 'both');
     } catch { toast.error('Failed to load services'); }
     finally { setLoading(false); }
   };
 
   useEffect(() => { load(); }, []);
+
+  const saveVisibility = async (val) => {
+    setSavingVisibility(true);
+    try {
+      await api.put('/settings/smm-provider-visibility', { value: val });
+      setVisibility(val);
+      const label = val === 'both' ? 'JAP + SMMRaja' : val === 'jap' ? 'JAP only' : 'SMMRaja only';
+      toast.success(`Customers now see: ${label}`);
+    } catch { toast.error('Failed to save visibility setting'); }
+    finally { setSavingVisibility(false); }
+  };
 
   const platforms = useMemo(() => ['All', ...Array.from(new Set(services.map((s) => s.platform))).sort()], [services]);
 
@@ -120,15 +137,16 @@ function SmmTab() {
     let list = services;
     if (providerFilter !== 'all') list = list.filter((s) => s.provider === providerFilter);
     if (platformFilter !== 'All') list = list.filter((s) => s.platform === platformFilter);
+    if (statusFilter === 'active') list = list.filter((s) => s.is_active);
+    else if (statusFilter === 'inactive') list = list.filter((s) => !s.is_active);
     if (search) list = list.filter((s) => s.name.toLowerCase().includes(search.toLowerCase()) || s.platform.toLowerCase().includes(search.toLowerCase()) || s.panel_service_id?.includes(search));
     return list;
-  }, [services, platformFilter, providerFilter, search]);
+  }, [services, platformFilter, providerFilter, statusFilter, search]);
 
   const pageCount = Math.ceil(filtered.length / PAGE_SIZE);
   const pageItems = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
-  // Reset page when filter changes
-  useEffect(() => { setPage(0); setSelectedIds(new Set()); }, [search, platformFilter, providerFilter]);
+  useEffect(() => { setPage(0); setSelectedIds(new Set()); }, [search, platformFilter, providerFilter, statusFilter]);
 
   const handleToggle = async (svc) => {
     try {
@@ -183,11 +201,49 @@ function SmmTab() {
     finally { setBulkApplying(false); }
   };
 
+  const handleBulkToggle = async (is_active) => {
+    setBulkToggling(true);
+    try {
+      const res = await api.post('/admin/services/bulk-toggle', { ids: [...selectedIds], is_active });
+      setServices((prev) => prev.map((s) => selectedIds.has(s.id) ? { ...s, is_active } : s));
+      toast.success(`${is_active ? 'Activated' : 'Deactivated'} ${res.data.updated} services`);
+      setSelectedIds(new Set());
+    } catch { toast.error('Bulk toggle failed'); }
+    finally { setBulkToggling(false); }
+  };
+
   if (loading) return <div style={{ textAlign: 'center', padding: 60 }}><span className="spinner spinner-lg" /></div>;
 
   return (
     <div>
       {showAdd && <AddServiceModal onClose={() => setShowAdd(false)} onAdded={(s) => setServices((prev) => [s, ...prev])} />}
+
+      {/* Customer Visibility Toggle */}
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 18px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 200 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 2 }}>Customer Visibility</div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Which provider's services customers can browse and order</div>
+        </div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          {[['jap', 'JAP Only'], ['smmraja', 'SMMRaja Only'], ['both', 'Both']].map(([val, label]) => (
+            <button
+              key={val}
+              onClick={() => !savingVisibility && visibility !== val && saveVisibility(val)}
+              disabled={savingVisibility}
+              style={{
+                padding: '7px 16px', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: savingVisibility ? 'not-allowed' : 'pointer',
+                border: visibility === val ? 'none' : '1px solid var(--border)',
+                background: visibility === val ? 'var(--primary)' : 'transparent',
+                color: visibility === val ? '#000' : 'var(--text-muted)',
+                opacity: savingVisibility ? 0.6 : 1,
+                transition: 'all 0.15s',
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* Header actions */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end', marginBottom: 16 }}>
@@ -227,11 +283,20 @@ function SmmTab() {
             </button>
           ))}
         </div>
+        <div style={{ display: 'flex', gap: 4 }}>
+          {[['all', 'All'], ['active', 'Active'], ['inactive', 'Inactive']].map(([val, label]) => (
+            <button key={val} onClick={() => setStatusFilter(val)}
+              className={`btn btn-sm ${statusFilter === val ? 'btn-primary' : 'btn-outline'}`}
+              style={{ padding: '4px 10px', fontSize: 12 }}>
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Bulk action bar */}
       {selectedIds.size > 0 && (
-        <div style={{ background: 'var(--primary-muted)', border: '1px solid var(--primary-border, var(--border))', borderRadius: 8, padding: '10px 14px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ background: 'var(--primary-muted)', border: '1px solid var(--primary-border, var(--border))', borderRadius: 8, padding: '10px 14px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 13, fontWeight: 600 }}>{selectedIds.size} selected</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div style={{ position: 'relative' }}>
@@ -244,10 +309,25 @@ function SmmTab() {
                 style={{ width: 130, height: 32, padding: '0 28px 0 10px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13, color: 'var(--text)', outline: 'none' }}
               />
             </div>
-            <button className="btn btn-primary btn-sm" onClick={applyBulk} disabled={bulkApplying}>
+            <button className="btn btn-primary btn-sm" onClick={applyBulk} disabled={bulkApplying || bulkToggling}>
               {bulkApplying ? <span className="spinner" style={{ width: 12, height: 12 }} /> : 'Apply %'}
             </button>
           </div>
+          <div style={{ width: 1, height: 24, background: 'var(--border)', flexShrink: 0 }} />
+          <button
+            onClick={() => handleBulkToggle(true)}
+            disabled={bulkApplying || bulkToggling}
+            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', height: 32, background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 6, color: 'var(--green, #22C55E)', cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-body)' }}
+          >
+            {bulkToggling ? <span className="spinner" style={{ width: 12, height: 12 }} /> : 'Activate'}
+          </button>
+          <button
+            onClick={() => handleBulkToggle(false)}
+            disabled={bulkApplying || bulkToggling}
+            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', height: 32, background: 'rgba(220,38,38,0.08)', border: '1px solid rgba(220,38,38,0.2)', borderRadius: 6, color: 'var(--red, #DC2626)', cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-body)' }}
+          >
+            {bulkToggling ? <span className="spinner" style={{ width: 12, height: 12 }} /> : 'Deactivate'}
+          </button>
           <button className="btn btn-ghost btn-sm" onClick={() => setSelectedIds(new Set())} style={{ marginLeft: 'auto' }}>
             <X size={13} /> Clear
           </button>
@@ -374,296 +454,17 @@ function SmmTab() {
   );
 }
 
-// ─── SMS Tab ─────────────────────────────────────────────────────────────────
-function SmsTab() {
-  const [settings, setSettings] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [inputs, setInputs] = useState({});
-  const [saving, setSaving] = useState({});
-
-  const load = async () => {
-    setLoading(true);
-    try {
-      const res = await api.get('/admin/sms-settings');
-      setSettings(res.data || []);
-    } catch { toast.error('Failed to load SMS settings'); }
-    finally { setLoading(false); }
-  };
-
-  useEffect(() => { load(); }, []);
-
-  const filtered = useMemo(() => {
-    if (!search) return settings;
-    const q = search.toLowerCase();
-    return settings.filter((s) => s.service_code?.toLowerCase().includes(q) || s.country_name?.toLowerCase().includes(q));
-  }, [settings, search]);
-
-  const saveManualPrice = async (row, value) => {
-    const key = `${row.service_code}_${row.country_id}`;
-    setSaving((p) => ({ ...p, [key]: true }));
-    try {
-      await api.put('/admin/sms-country-settings', {
-        service_code: row.service_code,
-        country_id: row.country_id,
-        country_name: row.country_name,
-        is_hidden: row.is_hidden,
-        sort_order: row.sort_order,
-        custom_price: row.custom_price,
-        manual_price_ngn: value,
-      });
-      setSettings((prev) => prev.map((s) => s.id === row.id ? { ...s, manual_price_ngn: value } : s));
-      toast.success(value === null ? 'Override cleared' : 'Price saved');
-      if (value === null) setInputs((p) => { const n = { ...p }; delete n[key]; return n; });
-    } catch { toast.error('Save failed'); }
-    finally { setSaving((p) => ({ ...p, [key]: false })); }
-  };
-
-  if (loading) return <div style={{ textAlign: 'center', padding: 60 }}><span className="spinner spinner-lg" /></div>;
-
-  return (
-    <div>
-      <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>
-        {settings.length} configured country/product entries · Set <strong>Manual NGN</strong> to override the exchange-rate price for a specific country.
-      </div>
-      <div style={{ marginBottom: 12 }}>
-        <div style={{ position: 'relative', maxWidth: 300 }}>
-          <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-          <input className="form-input" placeholder="Search service or country…" value={search} onChange={(e) => setSearch(e.target.value)} style={{ paddingLeft: 30 }} />
-        </div>
-      </div>
-      <div className="table-wrap"><div className="table-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th>Service Code</th>
-              <th>Country</th>
-              <th>Custom USD Price</th>
-              <th style={{ minWidth: 200 }}>Manual NGN Override</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((row) => {
-              const key = `${row.service_code}_${row.country_id}`;
-              const hasManual = row.manual_price_ngn != null;
-              const inputVal = inputs[key] !== undefined ? inputs[key] : (hasManual ? String(row.manual_price_ngn) : '');
-              const isSaving = !!saving[key];
-              return (
-                <tr key={key} style={hasManual ? { borderLeft: '2px solid var(--primary)' } : {}}>
-                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>{row.service_code}</td>
-                  <td style={{ fontSize: 13 }}>{row.country_name}</td>
-                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-muted)' }}>
-                    {row.custom_price != null ? `$${row.custom_price}` : '—'}
-                  </td>
-                  <td>
-                    <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
-                      <input type="number" min="0" step="0.01" placeholder="₦ override"
-                        value={inputVal}
-                        onChange={(e) => setInputs((p) => ({ ...p, [key]: e.target.value }))}
-                        style={{ width: 110, height: 30, padding: '0 8px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12, color: 'var(--text)', outline: 'none', fontFamily: 'var(--font-mono)' }}
-                      />
-                      <button className="btn btn-primary btn-sm" style={{ padding: '4px 10px', height: 30, fontSize: 12 }}
-                        disabled={isSaving || inputVal === ''}
-                        onClick={() => { const v = parseFloat(inputVal); if (!isNaN(v) && v > 0) saveManualPrice(row, v); }}>
-                        {isSaving ? <span className="spinner" style={{ width: 11, height: 11 }} /> : 'Save'}
-                      </button>
-                      {hasManual && (
-                        <button className="btn btn-ghost btn-sm" style={{ padding: '4px 6px', height: 30 }} disabled={isSaving} onClick={() => saveManualPrice(row, null)}>
-                          <X size={12} />
-                        </button>
-                      )}
-                    </div>
-                    {hasManual && <div style={{ fontSize: 10, color: 'var(--primary)', marginTop: 2 }}>override active · ₦{fmt(row.manual_price_ngn)}</div>}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        {filtered.length === 0 && (
-          <div className="empty-state"><MessageSquare size={28} /><h3>No SMS settings found</h3><p>Configure country prices from the SMS management page first</p></div>
-        )}
-      </div></div>
-    </div>
-  );
-}
-
-// ─── AccsZone Tab ─────────────────────────────────────────────────────────────
-function AccszoneTab() {
-  const [overrides, setOverrides] = useState([]);
-  const [rate, setRate] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [newSlug, setNewSlug] = useState('');
-  const [newPrice, setNewPrice] = useState('');
-  const [adding, setAdding] = useState(false);
-  const [saving, setSaving] = useState({});
-  const [editInputs, setEditInputs] = useState({});
-
-  const load = async () => {
-    setLoading(true);
-    try {
-      const [ovRes, rateRes] = await Promise.all([
-        api.get('/admin/accszone-overrides'),
-        api.get('/settings/exchange-rate'),
-      ]);
-      setOverrides(ovRes.data || []);
-      setRate(Number(rateRes.data.value || 2900));
-    } catch { toast.error('Failed to load AccsZone overrides'); }
-    finally { setLoading(false); }
-  };
-
-  useEffect(() => { load(); }, []);
-
-  const addOverride = async () => {
-    if (!newSlug.trim() || !newPrice) return toast.error('Slug and price are required');
-    setAdding(true);
-    try {
-      const res = await api.put(`/admin/accszone-overrides/${newSlug.trim()}`, { custom_price_ngn: parseFloat(newPrice) });
-      setOverrides((prev) => {
-        const exists = prev.find((o) => o.slug === res.data.slug);
-        return exists ? prev.map((o) => o.slug === res.data.slug ? res.data : o) : [...prev, res.data];
-      });
-      setNewSlug(''); setNewPrice('');
-      toast.success('Override saved');
-    } catch { toast.error('Failed to save override'); }
-    finally { setAdding(false); }
-  };
-
-  const saveEdit = async (slug, value) => {
-    setSaving((p) => ({ ...p, [slug]: true }));
-    try {
-      await api.put(`/admin/accszone-overrides/${slug}`, { custom_price_ngn: parseFloat(value) });
-      setOverrides((prev) => prev.map((o) => o.slug === slug ? { ...o, custom_price_ngn: parseFloat(value) } : o));
-      setEditInputs((p) => { const n = { ...p }; delete n[slug]; return n; });
-      toast.success('Override updated');
-    } catch { toast.error('Save failed'); }
-    finally { setSaving((p) => ({ ...p, [slug]: false })); }
-  };
-
-  const clearOverride = async (slug) => {
-    setSaving((p) => ({ ...p, [slug]: true }));
-    try {
-      await api.delete(`/admin/accszone-overrides/${slug}`);
-      setOverrides((prev) => prev.filter((o) => o.slug !== slug));
-      toast.success('Override cleared');
-    } catch { toast.error('Failed to clear override'); }
-    finally { setSaving((p) => ({ ...p, [slug]: false })); }
-  };
-
-  if (loading) return <div style={{ textAlign: 'center', padding: 60 }}><span className="spinner spinner-lg" /></div>;
-
-  return (
-    <div>
-      <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
-        {overrides.length} price overrides · Without an override, account prices are calculated as <strong>USD price × ₦{rate?.toLocaleString()}</strong>.
-      </div>
-
-      {/* Add new override */}
-      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 16, marginBottom: 16, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-        <div className="form-group" style={{ flex: 1, minWidth: 200, margin: 0 }}>
-          <label className="form-label">Product Slug</label>
-          <input className="form-input" placeholder="e.g. netflix-1-month" value={newSlug} onChange={(e) => setNewSlug(e.target.value)} />
-        </div>
-        <div className="form-group" style={{ width: 160, margin: 0 }}>
-          <label className="form-label">Price (₦)</label>
-          <input type="number" className="form-input" placeholder="5000" value={newPrice} onChange={(e) => setNewPrice(e.target.value)} />
-        </div>
-        <button className="btn btn-primary btn-sm" onClick={addOverride} disabled={adding}>
-          {adding ? <span className="spinner" style={{ width: 13, height: 13 }} /> : <><Plus size={13} /> Add Override</>}
-        </button>
-      </div>
-
-      {/* Overrides table */}
-      <div className="table-wrap"><div className="table-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th>Product Slug</th>
-              <th>Override Price (₦)</th>
-              <th style={{ minWidth: 200 }}>Edit Price</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {overrides.map((o) => {
-              const isSaving = !!saving[o.slug];
-              const editVal = editInputs[o.slug] !== undefined ? editInputs[o.slug] : '';
-              return (
-                <tr key={o.slug}>
-                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>{o.slug}</td>
-                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 700, color: 'var(--primary)' }}>
-                    ₦{fmt(o.custom_price_ngn)}
-                  </td>
-                  <td>
-                    <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
-                      <input type="number" min="0" step="0.01" placeholder="New price ₦"
-                        value={editVal}
-                        onChange={(e) => setEditInputs((p) => ({ ...p, [o.slug]: e.target.value }))}
-                        style={{ width: 120, height: 30, padding: '0 8px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12, color: 'var(--text)', outline: 'none', fontFamily: 'var(--font-mono)' }}
-                      />
-                      <button className="btn btn-primary btn-sm" style={{ padding: '4px 10px', height: 30, fontSize: 12 }}
-                        disabled={isSaving || editVal === ''}
-                        onClick={() => saveEdit(o.slug, editVal)}>
-                        {isSaving ? <span className="spinner" style={{ width: 11, height: 11 }} /> : 'Save'}
-                      </button>
-                    </div>
-                  </td>
-                  <td>
-                    <button className="btn btn-ghost btn-sm" disabled={isSaving} onClick={() => clearOverride(o.slug)} style={{ color: 'var(--red)' }}>
-                      <X size={13} /> Clear
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        {overrides.length === 0 && (
-          <div className="empty-state"><DollarSign size={28} /><h3>No overrides set</h3><p>All AccsZone prices will use exchange-rate calculation</p></div>
-        )}
-      </div></div>
-    </div>
-  );
-}
-
 // ─── Main ServicesManager ─────────────────────────────────────────────────────
 export default function ServicesManager() {
-  const [tab, setTab] = useState('smm');
-
-  const tabs = [
-    { id: 'smm', label: 'SMM Services', icon: <Zap size={14} /> },
-    { id: 'sms', label: 'SMS Prices', icon: <MessageSquare size={14} /> },
-    { id: 'accszone', label: 'AccsZone', icon: <DollarSign size={14} /> },
-  ];
-
   return (
     <div className="dash-page">
       <div className="page-header">
         <div>
-          <h1 className="page-title">Services Manager</h1>
-          <p className="page-subtitle">Manage prices across all service types</p>
+          <h1 className="page-title">SMM Services</h1>
+          <p className="page-subtitle">Manage services, prices, and customer visibility</p>
         </div>
       </div>
-
-      {/* Tab bar */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '1px solid var(--border)', paddingBottom: 0 }}>
-        {tabs.map((t) => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', fontSize: 13, fontWeight: 600,
-              background: 'none', border: 'none', cursor: 'pointer',
-              color: tab === t.id ? 'var(--primary)' : 'var(--text-muted)',
-              borderBottom: tab === t.id ? '2px solid var(--primary)' : '2px solid transparent',
-              marginBottom: -1,
-            }}>
-            {t.icon}{t.label}
-          </button>
-        ))}
-      </div>
-
-      {tab === 'smm' && <SmmTab />}
-      {tab === 'sms' && <SmsTab />}
-      {tab === 'accszone' && <AccszoneTab />}
+      <SmmTab />
     </div>
   );
 }
