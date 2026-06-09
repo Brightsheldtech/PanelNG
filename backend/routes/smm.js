@@ -1,24 +1,53 @@
 const express = require('express');
 const supabase = require('../lib/supabase');
-const jap = require('../lib/jap');
+const { getProvider } = require('../lib/providers');
+const { getExchangeRate } = require('../lib/exchangeRate');
 const auth = require('../middleware/auth');
+const adminOnly = require('../middleware/admin');
 const { handleFirstPurchase } = require('../lib/referralRewards');
 const { notify } = require('../lib/notify');
 const router = express.Router();
 
-// GET /api/smm/services — returns services from our DB (user-facing with sell_price)
+// GET /api/smm/services — returns services with NGN prices applied via exchange rate
 router.get('/services', auth, async (req, res) => {
   try {
-    const { data, error } = await supabase
-      .from('services')
-      .select('id, platform, name, sell_price, min_quantity, max_quantity, panel_service_id')
-      .eq('is_active', true)
-      .order('sort_order', { ascending: true })
-      .order('platform')
-      .order('name');
+    const { data: visData } = await supabase
+      .from('settings')
+      .select('value')
+      .eq('key', 'smm-provider-visibility')
+      .maybeSingle();
+    const visibility = visData?.value || 'both';
 
-    if (error) throw error;
-    res.json(data);
+    const PAGE = 1000;
+    let all = [];
+    let from = 0;
+    while (true) {
+      let q = supabase
+        .from('services')
+        .select('id, platform, name, sell_price, min_quantity, max_quantity, panel_service_id, provider, manual_price')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true })
+        .order('platform')
+        .order('name')
+        .range(from, from + PAGE - 1);
+      if (visibility === 'jap') q = q.eq('provider', 'jap');
+      else if (visibility === 'smmraja') q = q.eq('provider', 'smmraja');
+      const { data, error } = await q;
+      if (error) throw error;
+      all = all.concat(data || []);
+      if (!data || data.length < PAGE) break;
+      from += PAGE;
+    }
+    const rate = await getExchangeRate();
+    const enriched = all.map((s) => {
+      const autoNGN = parseFloat((s.sell_price * rate).toFixed(2));
+      return {
+        ...s,
+        auto_price_ngn: autoNGN,
+        final_price_ngn: s.manual_price != null ? s.manual_price : autoNGN,
+      };
+    });
+    res.json(enriched);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to fetch services' });
@@ -51,8 +80,12 @@ router.post('/order', auth, async (req, res) => {
       });
     }
 
-    // Cost = (sell_price per 1000) * qty / 1000
-    const amount = parseFloat(((service.sell_price * qty) / 1000).toFixed(2));
+    // sell_price is stored in USD/1000; apply exchange rate to get NGN, unless manual_price is set
+    const rate = await getExchangeRate();
+    const autoNGN = service.sell_price * rate;
+    const priceNGN = service.manual_price != null ? service.manual_price : autoNGN;
+    const amount = parseFloat(((priceNGN * qty) / 1000).toFixed(2));
+    const apiCost = parseFloat(((service.cost_price * rate * qty) / 1000).toFixed(2));
 
     // Check wallet
     const { data: userData } = await supabase
@@ -69,30 +102,37 @@ router.post('/order', auth, async (req, res) => {
       });
     }
 
-    // Deduct from wallet immediately
-    const { error: deductErr } = await supabase
+    // Atomic deduct — only succeeds if balance hasn't been reduced by a concurrent request
+    const newBalance = parseFloat((userData.wallet_balance - amount).toFixed(2));
+    const { data: deducted, error: deductErr } = await supabase
       .from('users')
-      .update({ wallet_balance: parseFloat((userData.wallet_balance - amount).toFixed(2)) })
-      .eq('id', userId);
+      .update({ wallet_balance: newBalance })
+      .eq('id', userId)
+      .gte('wallet_balance', amount)
+      .select('wallet_balance');
 
     if (deductErr) throw deductErr;
+    if (!deducted || deducted.length === 0) {
+      return res.status(400).json({ error: 'Insufficient wallet balance', required: amount, balance: userData.wallet_balance });
+    }
 
-    // Place on JAP
+    // Place order via the correct provider
+    const provider = service.provider || 'jap';
+    const providerClient = getProvider(provider);
     let panelOrderId = null;
     try {
-      const japRes = await jap.placeOrder({
+      const providerRes = await providerClient.placeOrder({
         service: service.panel_service_id,
         link,
         quantity: qty,
       });
-      panelOrderId = japRes.order?.toString() || null;
-    } catch (japErr) {
-      // Refund wallet on JAP failure
-      await supabase
-        .from('users')
-        .update({ wallet_balance: parseFloat((userData.wallet_balance).toFixed(2)) })
-        .eq('id', userId);
-      console.error('JAP order error:', japErr.message);
+      panelOrderId = providerRes.order?.toString() || null;
+    } catch (providerErr) {
+      // Refund: re-read current balance so any concurrent credits aren't overwritten
+      const { data: fresh } = await supabase.from('users').select('wallet_balance').eq('id', userId).single();
+      const refundedBalance = parseFloat(((parseFloat(fresh?.wallet_balance) || 0) + amount).toFixed(2));
+      await supabase.from('users').update({ wallet_balance: refundedBalance }).eq('id', userId);
+      console.error('Provider order error:', providerErr.message);
       return res.status(502).json({ error: 'Order could not be placed at this time. Your wallet has been refunded.' });
     }
 
@@ -107,8 +147,10 @@ router.post('/order', auth, async (req, res) => {
         quantity: qty,
         link,
         amount_paid: amount,
+        api_cost: apiCost,
         status: 'pending',
         panel_order_id: panelOrderId,
+        provider,
       })
       .select()
       .single();
@@ -151,15 +193,16 @@ router.get('/order/:orderId', auth, async (req, res) => {
 
     if (error || !order) return res.status(404).json({ error: 'Order not found' });
 
-    // Sync status from JAP if pending/processing
+    // Sync status from provider if pending/processing
     if (order.panel_order_id && ['pending', 'processing', 'in_progress'].includes(order.status)) {
       try {
-        const japStatus = await jap.getOrderStatus(order.panel_order_id);
-        if (japStatus.status) {
-          const newStatus = japStatus.status.toLowerCase().replace(' ', '_');
+        const providerClient = getProvider(order.provider || 'jap');
+        const providerStatus = await providerClient.getOrderStatus(order.panel_order_id);
+        if (providerStatus.status) {
+          const newStatus = providerStatus.status.toLowerCase().replace(' ', '_');
           await supabase.from('orders').update({ status: newStatus }).eq('id', order.id);
           order.status = newStatus;
-          order.remains = japStatus.remains;
+          order.remains = providerStatus.remains;
         }
       } catch (_) {}
     }
@@ -170,10 +213,11 @@ router.get('/order/:orderId', auth, async (req, res) => {
   }
 });
 
-// GET /api/smm/balance — JAP panel balance (admin info)
-router.get('/balance', auth, async (req, res) => {
+// GET /api/smm/balance — panel balance (admin only). ?provider=smmraja to query SMMRaja
+router.get('/balance', auth, adminOnly, async (req, res) => {
   try {
-    const balance = await jap.getBalance();
+    const providerClient = getProvider(req.query.provider || 'jap');
+    const balance = await providerClient.getBalance();
     res.json(balance);
   } catch (err) {
     res.status(500).json({ error: 'Failed to get panel balance' });

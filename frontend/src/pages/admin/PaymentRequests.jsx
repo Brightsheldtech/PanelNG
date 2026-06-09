@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { CheckCircle, XCircle, Clock, RefreshCw, AlertCircle } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, RefreshCw, AlertCircle, Search } from 'lucide-react';
 import api from '../../lib/api';
 import toast from 'react-hot-toast';
 
@@ -17,6 +17,11 @@ export default function PaymentRequests() {
   const [actionId, setActionId] = useState(null);
   const [rejectModal, setRejectModal] = useState(null); // { id, reference }
   const [rejectReason, setRejectReason] = useState('');
+
+  // Flutterwave recovery tool
+  const [flwTxId, setFlwTxId] = useState('');
+  const [recovering, setRecovering] = useState(false);
+  const [recoverResult, setRecoverResult] = useState(null);
 
   const load = async () => {
     setLoading(true);
@@ -69,6 +74,22 @@ export default function PaymentRequests() {
   const fmt = (n) => Number(n || 0).toLocaleString('en-NG', { minimumFractionDigits: 2 });
   const fmtDate = (d) => new Date(d).toLocaleString('en-NG', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
+  const handleFlwRecover = async () => {
+    if (!flwTxId.trim()) return;
+    setRecovering(true); setRecoverResult(null);
+    try {
+      const res = await api.post('/admin/flw-recover', { transaction_id: flwTxId.trim() });
+      setRecoverResult({ ok: true, ...res.data });
+      if (!res.data.already_processed) toast.success(`Wallet credited ₦${Number(res.data.amount).toLocaleString('en-NG')}`);
+    } catch (err) {
+      const msg = err.response?.data?.error || 'Recovery failed';
+      setRecoverResult({ ok: false, error: msg, hint: err.response?.data?.hint, flw_customer: err.response?.data?.flw_customer });
+      toast.error(msg);
+    } finally {
+      setRecovering(false);
+    }
+  };
+
   const pendingCount = requests.filter((r) => r.status === 'pending').length;
   const displayList = requests;
 
@@ -95,6 +116,60 @@ export default function PaymentRequests() {
         <button className="btn btn-outline btn-sm" onClick={load} disabled={loading}>
           <RefreshCw size={13} /> Refresh
         </button>
+      </div>
+
+      {/* Flutterwave Payment Recovery */}
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '18px 20px', marginBottom: 24 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Search size={14} /> Recover Missed Flutterwave Payment
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
+          Use this when a customer's bank transfer or VA payment was received on Flutterwave but not credited here.
+          Find the Transaction ID on your Flutterwave dashboard.
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input
+            className="form-input"
+            style={{ flex: 1, fontSize: 13 }}
+            placeholder="Flutterwave Transaction ID (e.g. 12345678)"
+            value={flwTxId}
+            onChange={(e) => { setFlwTxId(e.target.value); setRecoverResult(null); }}
+            onKeyDown={(e) => e.key === 'Enter' && handleFlwRecover()}
+          />
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={handleFlwRecover}
+            disabled={recovering || !flwTxId.trim()}
+            style={{ whiteSpace: 'nowrap' }}
+          >
+            {recovering ? <span className="spinner" style={{ width: 13, height: 13 }} /> : <CheckCircle size={13} />}
+            Process
+          </button>
+        </div>
+        {recoverResult && (
+          <div style={{
+            marginTop: 10, padding: '10px 14px', borderRadius: 8, fontSize: 12,
+            background: recoverResult.ok ? 'rgba(14,201,127,0.08)' : 'rgba(255,77,77,0.08)',
+            border: `1px solid ${recoverResult.ok ? 'rgba(14,201,127,0.25)' : 'rgba(255,77,77,0.25)'}`,
+            color: recoverResult.ok ? 'var(--green)' : 'var(--red)',
+          }}>
+            {recoverResult.ok ? (
+              recoverResult.already_processed
+                ? `Already credited — ₦${Number(recoverResult.amount).toLocaleString('en-NG')} was previously processed.`
+                : `✓ ₦${Number(recoverResult.amount).toLocaleString('en-NG')} credited to ${recoverResult.user_email}. New balance: ₦${Number(recoverResult.new_balance).toLocaleString('en-NG')}`
+            ) : (
+              <>
+                {recoverResult.error}
+                {recoverResult.hint && <div style={{ color: 'var(--text-muted)', marginTop: 4 }}>{recoverResult.hint}</div>}
+                {recoverResult.flw_customer && (
+                  <div style={{ color: 'var(--text-muted)', marginTop: 4 }}>
+                    FLW customer: {recoverResult.flw_customer.name} / {recoverResult.flw_customer.email}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Filter tabs */}

@@ -203,6 +203,34 @@ router.get('/listings/:slug', async (req, res) => {
 });
 
 // ── POST /api/accszone/order ─────────────────────────────────────────────────
+
+// ACCSZONE wraps the purchase result in a top-level object.
+// The actual credentials live at result.accounts or result.data.accounts.
+// We strip all supplier metadata (order_id, amount, new_balance, etc.) and
+// return only the raw credential string(s) to the user.
+function extractCredentials(result) {
+  if (!result) return [];
+  // Shape: { accounts: "user:pass" } or { accounts: ["user:pass"] }
+  if (result.accounts != null) {
+    const a = result.accounts;
+    return Array.isArray(a) ? a.filter(Boolean) : [a];
+  }
+  // Shape: { data: { accounts: "user:pass", order_id: ..., ... } }
+  if (result.data != null) {
+    const d = result.data;
+    if (d.accounts != null) {
+      const a = d.accounts;
+      return Array.isArray(a) ? a.filter(Boolean) : [a];
+    }
+    if (typeof d === 'string') return [d];
+    // data is an object without an accounts key — use as-is (unusual shape)
+    return [d];
+  }
+  // Array already (multiple accounts)
+  if (Array.isArray(result)) return result.filter(Boolean);
+  return [];
+}
+
 router.post('/order', auth, async (req, res) => {
   const { ad_id, quantity, listing_slug, unit_price, product_name, platform } = req.body;
 
@@ -274,11 +302,17 @@ router.post('/order', auth, async (req, res) => {
     const newBalance = parseFloat((currentBalance - totalCostNGN).toFixed(2));
     const newSpent   = parseFloat((parseFloat(user.total_spent || 0) + totalCostNGN).toFixed(2));
 
-    const { error: deductErr } = await supabase
+    // Atomic deduct — only succeeds if balance hasn't dropped below required amount concurrently
+    const { data: deducted, error: deductErr } = await supabase
       .from('users')
       .update({ wallet_balance: newBalance, total_spent: newSpent })
-      .eq('id', req.user.id);
+      .eq('id', req.user.id)
+      .gte('wallet_balance', totalCostNGN)
+      .select('wallet_balance');
     if (deductErr) throw deductErr;
+    if (!deducted || deducted.length === 0) {
+      return res.status(402).json({ error: 'Insufficient wallet balance', required: totalCostNGN });
+    }
 
     // Place order with ACCSZONE — refund wallet if this fails
     let orderResult;
@@ -286,18 +320,27 @@ router.post('/order', auth, async (req, res) => {
       const { data } = await az.post('/purchase', { ad_id: Number(ad_id), quantity: Number(quantity) });
       orderResult = data;
     } catch (azErr) {
-      // Refund wallet
-      await supabase.from('users').update({ wallet_balance: currentBalance, total_spent: parseFloat(user.total_spent || 0) }).eq('id', req.user.id);
+      // Re-fetch current values so the refund doesn't overwrite concurrent wallet changes
+      const { data: freshUser } = await supabase.from('users').select('wallet_balance, total_spent').eq('id', req.user.id).single();
+      const freshBalance = parseFloat(freshUser?.wallet_balance ?? currentBalance);
+      const freshSpent   = parseFloat(freshUser?.total_spent   ?? 0);
+      await supabase.from('users').update({
+        wallet_balance: parseFloat((freshBalance + totalCostNGN).toFixed(2)),
+        total_spent:    parseFloat(Math.max(0, freshSpent - totalCostNGN).toFixed(2)),
+      }).eq('id', req.user.id);
       console.error('[accszone] purchase failed, wallet refunded:', azErr.response?.data || azErr.message);
       return res.status(502).json({ error: 'Order could not be completed. Your wallet has been refunded.' });
     }
 
+    // Extract just the credential strings — strip ACCSZONE metadata
+    const deliveredAccounts = extractCredentials(orderResult);
+
     // Save order to Supabase (prices stored in NGN)
-    const { data: savedOrder } = await supabase
+    const { data: savedOrder, error: orderSaveErr } = await supabase
       .from('accszone_orders')
       .insert({
         user_id: req.user.id,
-        accszone_order_id: String(orderResult?.order_id || orderResult?.id || ''),
+        accszone_order_id: String(orderResult?.order_id || orderResult?.data?.order_id || orderResult?.id || ''),
         product_id: String(ad_id),
         product_name: productName,
         platform: platform || 'Other',
@@ -305,10 +348,11 @@ router.post('/order', auth, async (req, res) => {
         unit_price: unitPrice,
         total_cost: totalCostNGN,
         status: 'completed',
-        delivered_data: orderResult?.accounts || orderResult?.data || orderResult || null,
+        delivered_data: deliveredAccounts.length > 0 ? deliveredAccounts : null,
       })
       .select()
       .single();
+    if (orderSaveErr) console.error('[accszone] order save failed (order placed, wallet deducted):', orderSaveErr.message);
 
     // Transaction record so the debit appears in the wallet feed immediately
     await supabase.from('transactions').insert({
@@ -319,8 +363,6 @@ router.post('/order', auth, async (req, res) => {
       description: `${productName} × ${Number(quantity)}`,
       status: 'completed',
     });
-
-    const deliveredAccounts = orderResult?.accounts || orderResult?.data || [];
 
     // Fire-and-forget delivery email and notification
     sendOrderDelivery({

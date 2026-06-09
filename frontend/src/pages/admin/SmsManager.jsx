@@ -12,7 +12,7 @@ function displayName(code) {
 // ── Country row component ──────────────────────────────────────
 function CountryRow({ country, serviceCode, onUpdated, rate }) {
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ custom_price: country.custom_price ?? '', sort_order: country.sort_order ?? 999 });
+  const [form, setForm] = useState({ manual_price_ngn: country.manual_price_ngn ?? '', sort_order: country.sort_order ?? 999 });
   const [saving, setSaving] = useState(false);
 
   const save = async (patch) => {
@@ -24,7 +24,7 @@ function CountryRow({ country, serviceCode, onUpdated, rate }) {
         country_name: country.country,
         is_hidden: country.is_hidden,
         sort_order: form.sort_order,
-        custom_price: form.custom_price === '' ? null : form.custom_price,
+        manual_price_ngn: form.manual_price_ngn === '' ? null : form.manual_price_ngn,
         ...patch,
       });
       onUpdated(country.countryId, { setting_id: res.data.id, ...res.data });
@@ -52,8 +52,8 @@ function CountryRow({ country, serviceCode, onUpdated, rate }) {
     setSaving(true);
     try {
       await api.delete(`/admin/sms-country-settings/${country.setting_id}`);
-      onUpdated(country.countryId, { setting_id: null, is_hidden: false, sort_order: 999, custom_price: null });
-      setForm({ custom_price: '', sort_order: 999 });
+      onUpdated(country.countryId, { setting_id: null, is_hidden: false, sort_order: 999, custom_price: null, manual_price_ngn: null });
+      setForm({ manual_price_ngn: '', sort_order: 999 });
       toast.success('Reset');
     } catch { toast.error('Reset failed'); }
     finally { setSaving(false); }
@@ -64,8 +64,9 @@ function CountryRow({ country, serviceCode, onUpdated, rate }) {
   const fmtUsd = (n) => Number(n || 0).toFixed(4);
   const hasCustom = !!country.setting_id;
   const costNgn = toNgn(country.cost);
-  const margin = country.custom_price != null && costNgn > 0
-    ? (((Number(country.custom_price) - costNgn) / costNgn) * 100).toFixed(0)
+  const sellNgn = country.manual_price_ngn != null ? Number(country.manual_price_ngn) : costNgn;
+  const margin = country.manual_price_ngn != null && costNgn > 0
+    ? (((sellNgn - costNgn) / costNgn) * 100).toFixed(0)
     : null;
 
   return (
@@ -81,20 +82,20 @@ function CountryRow({ country, serviceCode, onUpdated, rate }) {
       </td>
       <td>
         {editing ? (
-          <input type="number" className="form-input" value={form.custom_price}
-            onChange={(e) => setForm({ ...form, custom_price: e.target.value })}
+          <input type="number" className="form-input" value={form.manual_price_ngn}
+            onChange={(e) => setForm({ ...form, manual_price_ngn: e.target.value })}
             placeholder={costNgn.toFixed(2)} style={{ width: 120, padding: '4px 8px', fontSize: 13 }} step="0.01" />
         ) : (
           <div>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700, color: country.custom_price != null ? 'var(--primary)' : 'var(--text-muted)' }}>
-              ₦{country.custom_price != null ? Number(country.custom_price).toLocaleString('en-NG', { minimumFractionDigits: 2 }) : fmtNgn(country.cost)}
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700, color: country.manual_price_ngn != null ? 'var(--primary)' : 'var(--text-muted)' }}>
+              ₦{country.manual_price_ngn != null ? Number(country.manual_price_ngn).toLocaleString('en-NG', { minimumFractionDigits: 2 }) : fmtNgn(country.cost)}
             </span>
             {margin !== null && (
               <span style={{ fontSize: 10, color: Number(margin) >= 0 ? 'var(--green)' : 'var(--red)', marginLeft: 4 }}>
                 {Number(margin) >= 0 ? '+' : ''}{margin}%
               </span>
             )}
-            {country.custom_price == null && (
+            {country.manual_price_ngn == null && (
               <div style={{ fontSize: 10, color: 'var(--text-dim)' }}>not set</div>
             )}
           </div>
@@ -235,11 +236,11 @@ export default function SmsManager() {
     setLoading(true);
     Promise.all([
       api.get('/admin/sms-all-services'),
-      api.get('/admin/settings'),
+      api.get('/settings/exchange-rate'),
     ])
-      .then(([svcRes, settingsRes]) => {
+      .then(([svcRes, rateRes]) => {
         setServices(svcRes.data || []);
-        const r = parseFloat(settingsRes.data?.usd_ngn_rate);
+        const r = parseFloat(rateRes.data?.value);
         if (r > 0) setRate(r);
       })
       .catch(() => toast.error('Failed to load services'))

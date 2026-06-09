@@ -26,7 +26,7 @@ function ThemeProvider({ children }) {
 
 // ─── MOCK DATA ────────────────────────────────────────────────────────────────
 const MOCK = {
-  user: { name: 'Adedayo Adedoyin', email: 'adedayoadedoyin245@gmail.com', role: 'user', balance: 499.85, totalOrders: 2, totalSpent: 0.15, initials: 'AA' },
+  user: { name: 'Demo User', email: 'demo@panelng.com', role: 'user', balance: 499.85, totalOrders: 2, totalSpent: 0.15, initials: 'DU' },
   orders: [
     { id: '233d5234', type: 'sms', platform: 'WhatsApp', phone: '+27833980213', country: 'South Africa', status: 'finished', amount: 0.15 },
     { id: '9d6486ab', type: 'sms', platform: 'WhatsApp', phone: '+14386665757', country: 'Canada', status: 'completed', amount: 0.00 },
@@ -591,6 +591,10 @@ html,body{overflow-x:hidden;max-width:100vw}
 @media (min-width:769px){
   .pn-hamburger{display:none!important}
 }
+.pn-typing-dot{width:7px;height:7px;border-radius:50%;background:var(--text-muted);display:inline-block;animation:pn-bounce 1.2s ease-in-out infinite}
+.pn-typing-dot:nth-child(2){animation-delay:.2s}
+.pn-typing-dot:nth-child(3){animation-delay:.4s}
+@keyframes pn-bounce{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-5px)}}
 `;
 
 // ─── TOPBAR ───────────────────────────────────────────────────────────────────
@@ -734,7 +738,7 @@ function Sidebar({ page, setPage, isOpen, onClose, isMobile }) {
     { id:'neworder', icon:'ti-circle-plus', label:'New Order' },
     { id:'orders', icon:'ti-receipt', label:'Order History' },
     { id:'transactions', icon:'ti-clock-dollar', label:'Transactions' },
-    { id:'funds', icon:'ti-wallet', label:'Add Funds' },
+    { id:'wallet', icon:'ti-wallet', label:'Wallet' },
     { id:'referral', icon:'ti-users', label:'Referral' },
     { id:'profile', icon:'ti-user-circle', label:'Profile' },
   ];
@@ -773,7 +777,7 @@ function BottomNav({ page, setPage }) {
     { id:'overview', icon:'ti-layout-dashboard', label:'Dashboard' },
     { id:'neworder', icon:'ti-circle-plus', label:'New Order' },
     { id:'orders', icon:'ti-receipt', label:'Orders' },
-    { id:'referral', icon:'ti-users', label:'Referral' },
+    { id:'wallet', icon:'ti-wallet', label:'Wallet' },
     { id:'profile', icon:'ti-user-circle', label:'Profile' },
   ];
   return (
@@ -794,10 +798,10 @@ function TxDetailSheet({ tx, onClose }) {
   const isCredit = tx.type === 'credit';
   const isPending = tx.status === 'pending';
   const isRejected = tx.status === 'rejected';
-  const amtColor = isCredit && !isRejected ? 'var(--success)' : 'var(--danger)';
   const iconBg  = isPending ? 'rgba(245,158,11,.15)' : isRejected ? 'rgba(220,38,38,.15)' : isCredit ? 'rgba(34,197,94,.15)' : 'rgba(220,38,38,.15)';
   const iconColor = isPending ? 'var(--accent)' : isRejected ? 'var(--danger)' : isCredit ? 'var(--success)' : 'var(--danger)';
   const icon = isPending ? 'ti-clock' : isRejected ? 'ti-x' : isCredit ? 'ti-arrow-down-left' : 'ti-arrow-up-right';
+  const amtColor = isPending ? 'var(--accent)' : (isCredit && !isRejected ? 'var(--success)' : 'var(--danger)');
   const statusColors = { success:['rgba(34,197,94,.12)','var(--success)'], completed:['rgba(34,197,94,.12)','var(--success)'], pending:['rgba(245,158,11,.12)','var(--accent)'], rejected:['rgba(220,38,38,.12)','var(--danger)'], processing:['rgba(96,165,250,.12)','var(--info)'], cancelled:['rgba(220,38,38,.12)','var(--danger)'] };
   const [sBg, sFg] = statusColors[tx.status] || statusColors.success;
   const fmtDate = (iso) => iso ? new Date(iso).toLocaleString('en-NG',{weekday:'short',day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
@@ -819,7 +823,7 @@ function TxDetailSheet({ tx, onClose }) {
             <div className="pn-tx-amount-val" style={{color:amtColor}}>
               {isCredit && !isRejected ? '+' : '-'}₦{Number(tx.amount).toLocaleString('en-NG',{minimumFractionDigits:2})}
             </div>
-            <div className="pn-tx-amount-label">{isCredit ? 'Money received' : 'Money sent'}</div>
+            <div className="pn-tx-amount-label">{isPending ? 'Pending' : isCredit ? 'Money received' : 'Money sent'}</div>
           </div>
           {/* Detail rows */}
           <div className="pn-tx-details">
@@ -929,14 +933,24 @@ function Overview({ setPage }) {
         ))}
       </div>
 
-      {/* Add Funds + View Wallet buttons */}
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:16}}>
-        <button className="pn-btn pn-btn-primary pn-btn-full" style={{height:44,borderRadius:12,fontWeight:600}} onClick={()=>setPage('funds')}>
-          <i className="ti ti-plus" style={{fontSize:15}}/>Add Funds
-        </button>
-        <button className="pn-btn pn-btn-secondary pn-btn-full" style={{height:44,borderRadius:12,fontWeight:600}} onClick={()=>setPage('neworder')}>
-          New Order <i className="ti ti-arrow-right" style={{fontSize:15}}/>
-        </button>
+      {/* Add Funds — full width */}
+      <button className="pn-btn pn-btn-primary pn-btn-full" style={{height:44,borderRadius:12,fontWeight:600,marginBottom:10,width:'100%'}} onClick={()=>setPage('funds')}>
+        <i className="ti ti-plus" style={{fontSize:15}}/>Add Funds
+      </button>
+
+      {/* Service chips — 3 equal columns */}
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:16}}>
+        {[
+          {id:'smm',      icon:'ti-social',                label:'SMM Order',   color:'#6366F1', bg:'rgba(99,102,241,.12)'},
+          {id:'sms',      icon:'ti-device-mobile-message', label:'SMS Verify',  color:'#10B981', bg:'rgba(16,185,129,.12)'},
+          {id:'accounts', icon:'ti-shopping-bag',          label:'Buy Accounts',color:'#F59E0B', bg:'rgba(245,158,11,.12)'},
+        ].map(s=>(
+          <button key={s.id} onClick={()=>setPage(s.id)}
+            style={{display:'flex',flexDirection:'column',alignItems:'center',gap:5,padding:'10px 6px',background:s.bg,border:'none',borderRadius:12,cursor:'pointer',fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+            <i className={`ti ${s.icon}`} style={{fontSize:18,color:s.color}}/>
+            <span style={{fontSize:11,fontWeight:700,color:s.color,textAlign:'center',lineHeight:1.2}}>{s.label}</span>
+          </button>
+        ))}
       </div>
 
       {/* Refer & Earn card */}
@@ -1000,7 +1014,7 @@ function Overview({ setPage }) {
             const iconBg = isPending ? 'rgba(245,158,11,.1)' : isRejected ? 'rgba(248,113,113,.1)' : isCredit ? 'rgba(34,197,94,.1)' : 'rgba(248,113,113,.1)';
             const iconColor = isPending ? 'var(--accent)' : isRejected ? 'var(--danger)' : isCredit ? 'var(--success)' : 'var(--danger)';
             const icon = isPending ? 'ti-clock' : isRejected ? 'ti-x' : isCredit ? 'ti-arrow-down-left' : 'ti-arrow-up-right';
-            const amtColor = isCredit && !isRejected ? 'var(--success)' : 'var(--danger)';
+            const amtColor = isPending ? 'var(--accent)' : (isCredit && !isRejected ? 'var(--success)' : 'var(--danger)');
             const amtPrefix = isCredit && !isRejected ? '+' : '-';
             return (
               <div
@@ -1126,11 +1140,28 @@ function ServiceDropdown({ services, value, onChange }) {
 }
 
 // ─── PAGE: NEW ORDER ──────────────────────────────────────────────────────────
-function NewOrder() {
+const PRIORITY_PLATFORMS = ['Instagram','TikTok','YouTube','Facebook','Twitter','WhatsApp','Telegram','Spotify'];
+const PLATFORM_PLACEHOLDER = {
+  Instagram: 'https://instagram.com/username',
+  TikTok: 'https://tiktok.com/@username',
+  YouTube: 'https://youtube.com/channel/UCxxxxxxxx',
+  Facebook: 'https://facebook.com/username',
+  Twitter: 'https://twitter.com/username',
+  WhatsApp: '+2348012345678',
+  Telegram: 'https://t.me/username',
+  Spotify: 'https://open.spotify.com/artist/...',
+  SoundCloud: 'https://soundcloud.com/username',
+  LinkedIn: 'https://linkedin.com/in/username',
+  Pinterest: 'https://pinterest.com/username',
+  Snapchat: 'https://snapchat.com/add/username',
+};
+
+function NewOrder({ setPage }) {
   const user = useContext(UserCtx);
   const [allServices, setAllServices] = useState([]);
   const [loadingSvc, setLoadingSvc] = useState(true);
   const [platform, setPlatform] = useState('All');
+  const [search, setSearch] = useState('');
   const [serviceId, setServiceId] = useState('');
   const [link, setLink] = useState('');
   const [qty, setQty] = useState(1000);
@@ -1145,10 +1176,35 @@ function NewOrder() {
       .finally(() => setLoadingSvc(false));
   }, []);
 
-  const platforms = ['All', ...Array.from(new Set(allServices.map(s => s.platform).filter(Boolean))).sort()];
-  const services = platform === 'All' ? allServices : allServices.filter(s => s.platform === platform);
+  // Hide website/web traffic services except USA and Europe ones
+  const displayServices = allServices.filter(s => {
+    const p = (s.platform || '').toLowerCase();
+    const isTraffic = p.includes('website') || p.includes('web traffic') || p.includes('traffic');
+    if (!isTraffic) return true;
+    return p.includes('usa') || p.includes('us ') || p.includes('u.s') || p.includes('europe') || p.includes('eu ');
+  });
+
+  const platforms = ['All', ...Array.from(new Set(displayServices.map(s => s.platform).filter(Boolean))).sort((a, b) => {
+    const ai = PRIORITY_PLATFORMS.indexOf(a), bi = PRIORITY_PLATFORMS.indexOf(b);
+    if (ai >= 0 && bi >= 0) return ai - bi;
+    if (ai >= 0) return -1;
+    if (bi >= 0) return 1;
+    return a.localeCompare(b);
+  })];
+  const byPlatform = platform === 'All' ? displayServices : displayServices.filter(s => s.platform === platform);
+  const services = search.trim()
+    ? byPlatform.filter(s => {
+        const q = search.toLowerCase();
+        return s.name.toLowerCase().includes(q) || (s.platform || '').toLowerCase().includes(q);
+      })
+    : byPlatform;
   const selected = allServices.find(s => s.id === serviceId);
   const cost = selected && qty > 0 ? parseFloat(((selected.sell_price * qty) / 1000).toFixed(2)) : 0;
+  const balance = user?.balance || 0;
+  const insufficient = cost > 0 && balance < cost;
+  const linkPlaceholder = selected
+    ? (PLATFORM_PLACEHOLDER[selected.platform] || `https://${(selected.platform||'').toLowerCase()}.com/username`)
+    : 'Enter link or username';
 
   const handlePlace = async () => {
     if (!serviceId || !link || qty < 1) return;
@@ -1185,27 +1241,52 @@ function NewOrder() {
         <>
           <div className="pn-chips-scroll">
             {platforms.map(p => (
-              <button key={p} className={`pn-pchip${platform===p?' active':''}`} onClick={()=>{setPlatform(p);setServiceId('');}}>
+              <button key={p} className={`pn-pchip${platform===p?' active':''}`} onClick={()=>{setPlatform(p);setServiceId('');setSearch('');}}>
                 {p!=='All'&&<PlatformIcon name={p} size={14}/>}{p}
               </button>
             ))}
           </div>
+          <div className="pn-input-with-icon" style={{marginBottom:12}}>
+            <i className="ti ti-search pn-input-icon" style={{fontSize:15}}/>
+            <input
+              className="pn-input"
+              placeholder="Search services… e.g. followers, likes, views"
+              value={search}
+              onChange={e=>setSearch(e.target.value)}
+              style={{paddingRight:search?36:undefined,fontSize:16}}
+            />
+            {search && (
+              <button type="button" onClick={()=>setSearch('')} style={{position:'absolute',right:10,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:'var(--text-muted)',display:'flex',alignItems:'center',padding:2}}>
+                <i className="ti ti-x" style={{fontSize:13}}/>
+              </button>
+            )}
+          </div>
+          {search && (
+            <div style={{fontSize:11,color:'var(--text-muted)',marginBottom:8,marginTop:-6}}>
+              {services.length} result{services.length!==1?'s':''} for "{search}"
+            </div>
+          )}
           <div className="pn-card">
             <div className="pn-input-wrap">
               <label className="pn-input-label">Service</label>
-              <ServiceDropdown services={services} value={serviceId} onChange={setServiceId}/>
+              <ServiceDropdown services={services} value={serviceId} onChange={(id)=>{setServiceId(id);setQty(allServices.find(s=>s.id===id)?.min_quantity||1000);}}/>
             </div>
+            {selected && (
+              <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:4,marginTop:-4}}>
+                <span style={{fontSize:11,color:'var(--text-muted)',background:'var(--bg-input)',borderRadius:6,padding:'3px 8px'}}>Min: {selected.min_quantity?.toLocaleString()}</span>
+                <span style={{fontSize:11,color:'var(--text-muted)',background:'var(--bg-input)',borderRadius:6,padding:'3px 8px'}}>Max: {selected.max_quantity?.toLocaleString()}</span>
+                <span style={{fontSize:11,color:'var(--accent)',background:'rgba(99,102,241,.1)',borderRadius:6,padding:'3px 8px',fontWeight:600}}>₦{selected.sell_price}/1k</span>
+              </div>
+            )}
             <div className="pn-input-wrap">
               <label className="pn-input-label">Target Link or Username</label>
               <div className="pn-input-with-icon">
                 <i className="ti ti-link pn-input-icon"/>
-                <input className="pn-input" placeholder="https://instagram.com/yourpage" value={link} onChange={e=>setLink(e.target.value)}/>
+                <input className="pn-input" placeholder={linkPlaceholder} value={link} onChange={e=>setLink(e.target.value)}/>
               </div>
             </div>
             <div className="pn-input-wrap">
-              <label className="pn-input-label">
-                Quantity {selected && <span style={{color:'var(--text-muted)',fontWeight:400}}> ({selected.min_quantity?.toLocaleString()} – {selected.max_quantity?.toLocaleString()})</span>}
-              </label>
+              <label className="pn-input-label">Quantity</label>
               <div className="pn-qty">
                 <button className="pn-qty-btn" onClick={()=>setQty(q=>Math.max(selected?.min_quantity||1,q-100))}>−</button>
                 <input className="pn-qty-input" type="number" value={qty} onChange={e=>setQty(Number(e.target.value)||0)} min={selected?.min_quantity||1} max={selected?.max_quantity||9999999}/>
@@ -1226,7 +1307,17 @@ function NewOrder() {
                 </div>
               </>
             )}
-            <button className="pn-btn pn-btn-primary pn-btn-full" onClick={handlePlace} disabled={!serviceId||!link||qty<1||placing} style={{opacity:(!serviceId||!link||qty<1)?.5:1}}>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 14px',borderRadius:10,background:'var(--bg-input)',border:`1px solid ${insufficient?'rgba(248,113,113,.35)':'var(--border)'}`,marginBottom:12}}>
+              <span style={{fontSize:12,color:'var(--text-muted)'}}>Wallet Balance</span>
+              <span style={{fontWeight:700,fontSize:14,color:insufficient?'var(--danger)':'var(--success)'}}>{fmt(balance)}</span>
+            </div>
+            {insufficient && (
+              <div style={{background:'rgba(248,113,113,.08)',border:'1px solid rgba(248,113,113,.2)',borderRadius:10,padding:'10px 14px',marginBottom:12,display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,fontSize:12}}>
+                <span style={{color:'var(--danger)'}}>Need {fmt(cost - balance)} more to place this order.</span>
+                {setPage && <button className="pn-btn pn-btn-primary pn-btn-sm" onClick={()=>setPage('funds')} style={{fontSize:11,padding:'4px 10px',height:'auto'}}>Add Funds</button>}
+              </div>
+            )}
+            <button className="pn-btn pn-btn-primary pn-btn-full" onClick={handlePlace} disabled={!serviceId||!link||qty<1||placing||insufficient} style={{opacity:(!serviceId||!link||qty<1||insufficient)?.6:1}}>
               {placing ? <><i className="ti ti-loader-2" style={{animation:'pn-spin 1s linear infinite'}}/>Placing…</> : <><i className="ti ti-shopping-cart"/>Place Order →</>}
             </button>
           </div>
@@ -1258,8 +1349,10 @@ function SmsVerify() {
   const [activeOrderId, setActiveOrderId] = useState(null);
   const [code, setCode] = useState('');
   const [polling, setPolling] = useState(false);
+  const [pollTimedOut, setPollTimedOut] = useState(false);
   const [copied, setCopied] = useState(false);
   const pollRef = useRef(null);
+  const pollCountRef = useRef(0);
 
   useEffect(() => {
     api.get('/sms/services')
@@ -1280,7 +1373,16 @@ function SmsVerify() {
   useEffect(() => {
     if (!activeOrderId || code) return;
     setPolling(true);
+    setPollTimedOut(false);
+    pollCountRef.current = 0;
     pollRef.current = setInterval(async () => {
+      pollCountRef.current += 1;
+      if (pollCountRef.current >= 24) {
+        clearInterval(pollRef.current);
+        setPolling(false);
+        setPollTimedOut(true);
+        return;
+      }
       try {
         const res = await api.get(`/sms/check/${activeOrderId}`);
         if (res.data.smsCode) {
@@ -1326,7 +1428,7 @@ function SmsVerify() {
     if (activeOrderId) {
       try { await api.post(`/sms/finish/${activeOrderId}`); } catch (_) {}
     }
-    setActive(null); setActiveOrderId(null); setCode(''); setPolling(false);
+    setActive(null); setActiveOrderId(null); setCode(''); setPolling(false); setPollTimedOut(false);
     clearInterval(pollRef.current);
   };
 
@@ -1353,6 +1455,14 @@ function SmsVerify() {
                 <div className="pn-mono" style={{fontSize:36,color:'var(--text-primary)',letterSpacing:'0.12em'}}>{code}</div>
                 <button className="pn-btn pn-btn-primary pn-btn-sm" onClick={()=>handleCopy(code)}><i className={`ti ${copied?'ti-check':'ti-copy'}`}/>Copy</button>
               </div>
+            </div>
+          ) : pollTimedOut ? (
+            <div style={{marginBottom:16,padding:'12px 14px',background:'rgba(245,158,11,.08)',border:'1px solid rgba(245,158,11,.25)',borderRadius:10}}>
+              <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
+                <i className="ti ti-clock-x" style={{color:'var(--accent)',fontSize:16}}/>
+                <span style={{fontSize:13,fontWeight:600,color:'var(--accent)'}}>No code received (2 min timeout)</span>
+              </div>
+              <div style={{fontSize:12,color:'var(--text-secondary)',marginBottom:10}}>The number may have expired or the SMS was not sent. You can try cancelling and getting a new number.</div>
             </div>
           ) : (
             <div style={{display:'flex',alignItems:'center',gap:10,color:'var(--text-secondary)',fontSize:13,marginBottom:16}}>
@@ -1469,21 +1579,29 @@ function OrderHistory() {
   const fetchOrders = async () => {
     setLoading(true);
     try {
-      const [stdRes, accRes] = await Promise.all([
+      const fetchAccs = tab === 'all' || tab === 'accounts';
+      const [stdRes, accRes] = await Promise.allSettled([
         api.get('/orders', { params: { limit: 50, ...(tab !== 'all' && tab !== 'accounts' ? { type: tab } : {}) } }),
-        (tab === 'all' || tab === 'accounts') ? api.get('/accszone/orders') : Promise.resolve({ data: [] }),
+        fetchAccs ? api.get('/accszone/orders') : Promise.resolve({ data: [] }),
       ]);
-      const std = (stdRes.data.orders || []).map(o => ({
-        ...o,
-        amount: o.amount_paid || o.total_cost || 0,
-        phone: o.phone_number,
-      }));
-      const accs = (Array.isArray(accRes.data) ? accRes.data : []).map(o => ({
+
+      const std = stdRes.status === 'fulfilled'
+        ? (stdRes.value.data.orders || []).map(o => ({
+            ...o,
+            amount: o.amount_paid || o.total_cost || 0,
+            phone: o.phone_number,
+          }))
+        : [];
+
+      const accsRaw = accRes.status === 'fulfilled' ? accRes.value.data : [];
+      if (accRes.status === 'rejected') console.error('[orders] accszone fetch failed:', accRes.reason);
+      const accs = (Array.isArray(accsRaw) ? accsRaw : []).map(o => ({
         ...o,
         type: 'accounts',
         platform: o.platform,
         amount: o.total_cost,
       }));
+
       const merged = tab === 'accounts' ? accs
         : tab !== 'all' ? std
         : [...std, ...accs].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
@@ -1631,17 +1749,36 @@ function OrderHistory() {
                   {!detail.credLoading && !detail.credError && (detail.accounts||[]).length === 0 && (
                     <div style={{textAlign:'center',padding:'20px 0',fontSize:12,color:'var(--text-muted)'}}>No credential data stored for this order.</div>
                   )}
-                  {!detail.credLoading && !detail.credError && (detail.accounts||[]).map((acc, i) => (
-                    <div key={i} style={{marginBottom:12}}>
-                      <div style={{fontSize:10,fontWeight:700,letterSpacing:'1px',textTransform:'uppercase',color:'var(--accent)',marginBottom:6}}>Account {i + 1}</div>
-                      <div style={{background:'var(--bg-raised)',border:'1px solid var(--border)',borderRadius:10,padding:'2px 12px'}}>
-                        {typeof acc === 'string'
-                          ? <CredHistoryRow label="credentials" value={acc}/>
-                          : Object.entries(acc).map(([k, v]) => <CredHistoryRow key={k} label={k} value={String(v)}/>)
-                        }
+                  {!detail.credLoading && !detail.credError && (detail.accounts||[]).map((raw, i) => {
+                    // Handle both new format (clean string) and old format (metadata object with accounts field)
+                    const AZ_META = new Set(['order_id','listing','quantity','amount','discount','new_balance','purchased_at']);
+                    const cred = (typeof raw === 'object' && raw?.accounts != null) ? raw.accounts : raw;
+                    let fields;
+                    if (typeof cred === 'string') {
+                      const idx = cred.indexOf(':');
+                      fields = idx > 0
+                        ? [['Username', cred.slice(0, idx)], ['Password', cred.slice(idx + 1)]]
+                        : [['Credentials', cred]];
+                    } else {
+                      fields = Object.entries(cred).filter(([k]) => !AZ_META.has(k));
+                    }
+                    return (
+                      <div key={i} style={{marginBottom:12}}>
+                        <div style={{fontSize:10,fontWeight:700,letterSpacing:'1px',textTransform:'uppercase',color:'var(--accent)',marginBottom:6}}>Account {i + 1}</div>
+                        <div style={{background:'var(--bg-raised)',border:'1px solid var(--border)',borderRadius:10,padding:'2px 12px'}}>
+                          {fields.map(([k, v]) => <CredHistoryRow key={k} label={k} value={String(v)}/>)}
+                        </div>
                       </div>
+                    );
+                  })}
+                  {!detail.credLoading && !detail.credError && (detail.accounts||[]).length > 0 && (
+                    <div style={{background:'rgba(220,38,38,.06)',border:'1px solid rgba(220,38,38,.2)',borderRadius:10,padding:'10px 14px',marginTop:8}}>
+                      <p style={{fontSize:11,color:'var(--danger)',lineHeight:1.7,margin:0}}>
+                        <i className="ti ti-shield-off" style={{marginRight:5}}/>
+                        <strong>No Refunds.</strong> All sales are final once credentials are delivered. PanelNG is a reseller only — we are not liable for account bans, restrictions, or any consequences resulting from misuse after delivery.
+                      </p>
                     </div>
-                  ))}
+                  )}
                 </>
               )}
             </div>
@@ -1698,7 +1835,7 @@ function AddFunds() {
   const [txLoading, setTxLoading] = useState(true);
   const flwResult = useRef(null);
   const verifyStarted = useRef(false);
-  const QUICK = [500, 1000, 2000, 5000, 10000, 20000];
+  const QUICK = [1000, 2000, 5000, 10000, 20000, 50000];
   const [bankDetails, setBankDetails] = useState([]);
   const [refCode, setRefCode] = useState('');
   const [submitLoading, setSubmitLoading] = useState(false);
@@ -1762,7 +1899,7 @@ function AddFunds() {
 
   const handlePayWith = async (paymentOption) => {
     const amt = parseFloat(amount);
-    if (!amt || amt < 100) return;
+    if (!amt || amt < 1000) return;
     setErrorMsg('');
     setLoadingPayment(true);
     try {
@@ -1853,9 +1990,9 @@ function AddFunds() {
               <label className="pn-input-label">Amount (₦)</label>
               <div className="pn-input-with-icon">
                 <span className="pn-input-icon pn-mono" style={{fontWeight:500}}>₦</span>
-                <input className="pn-input pn-mono" style={{paddingLeft:30,fontSize:18}} type="number" placeholder="0.00" value={amount} onChange={e=>{setAmount(e.target.value);setSelectedAmt(null);setErrorMsg('');}} min={100}/>
+                <input className="pn-input pn-mono" style={{paddingLeft:30,fontSize:18}} type="number" placeholder="0.00" value={amount} onChange={e=>{setAmount(e.target.value);setSelectedAmt(null);setErrorMsg('');}} min={1000}/>
               </div>
-              <div style={{fontSize:11,color:'var(--text-muted)',marginTop:4}}>Minimum: ₦100</div>
+              <div style={{fontSize:11,color:'var(--text-muted)',marginTop:4}}>Minimum: ₦1,000</div>
             </div>
             <label className="pn-input-label">Quick Amounts</label>
             <div className="pn-amount-chips">
@@ -1868,7 +2005,7 @@ function AddFunds() {
                 <i className="ti ti-alert-circle" style={{marginRight:6}}/>{errorMsg}
               </div>
             )}
-            <button className="pn-btn pn-btn-primary pn-btn-full" onClick={()=>{if(parseFloat(amount)>=100){setErrorMsg('');setStep('method');}}} disabled={!amount||parseFloat(amount)<100} style={{opacity:(!amount||parseFloat(amount)<100)?.5:1}}>
+            <button className="pn-btn pn-btn-primary pn-btn-full" onClick={()=>{if(parseFloat(amount)>=1000){setErrorMsg('');setStep('method');}}} disabled={!amount||parseFloat(amount)<1000} style={{opacity:(!amount||parseFloat(amount)<1000)?.5:1}}>
               Continue <i className="ti ti-arrow-right"/>
             </button>
           </>
@@ -2057,14 +2194,36 @@ function AddFunds() {
 function TransactionHistory() {
   const [txns, setTxns] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [offset, setOffset] = useState(0);
   const [selected, setSelected] = useState(null);
+  const PAGE_SIZE = 30;
 
   useEffect(() => {
-    api.get('/wallet/transactions', { params: { limit: 100 } })
-      .then(r => setTxns(Array.isArray(r.data?.transactions) ? r.data.transactions : []))
+    api.get('/wallet/transactions', { params: { limit: PAGE_SIZE + 1, offset: 0 } })
+      .then(r => {
+        const rows = Array.isArray(r.data?.transactions) ? r.data.transactions : [];
+        setHasMore(rows.length > PAGE_SIZE);
+        setTxns(rows.slice(0, PAGE_SIZE));
+        setOffset(PAGE_SIZE);
+      })
       .catch(() => setTxns([]))
       .finally(() => setLoading(false));
   }, []);
+
+  const loadMore = () => {
+    setLoadingMore(true);
+    api.get('/wallet/transactions', { params: { limit: PAGE_SIZE + 1, offset } })
+      .then(r => {
+        const rows = Array.isArray(r.data?.transactions) ? r.data.transactions : [];
+        setHasMore(rows.length > PAGE_SIZE);
+        setTxns(prev => [...prev, ...rows.slice(0, PAGE_SIZE)]);
+        setOffset(prev => prev + PAGE_SIZE);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingMore(false));
+  };
 
   const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString('en-NG',{day:'numeric',month:'short',year:'numeric'}) : '';
 
@@ -2115,6 +2274,19 @@ function TransactionHistory() {
           );
         })}
       </div>
+
+      {hasMore && (
+        <div style={{textAlign:'center',marginTop:12}}>
+          <button
+            className="pn-btn pn-btn-secondary"
+            onClick={loadMore}
+            disabled={loadingMore}
+            style={{minWidth:140}}
+          >
+            {loadingMore ? <><i className="ti ti-loader-2" style={{animation:'pn-spin 1s linear infinite'}}/>Loading…</> : <><i className="ti ti-chevrons-down"/>Load more</>}
+          </button>
+        </div>
+      )}
 
       {selected && <TxDetailSheet tx={selected} onClose={() => setSelected(null)}/>}
     </div>
@@ -2253,237 +2425,687 @@ function ProfileSettings() {
   );
 }
 
+// ─── WALLET PAGE ──────────────────────────────────────────────────────────────
+function WalletPage({ setPage }) {
+  const fmtN = (n) => '₦' + Number(n || 0).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  const [stats, setStats] = useState({ balance: 0, total_funded: 0, total_spent: 0 });
+  const [va, setVa] = useState(null);
+  const [vaLoading, setVaLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [transactions, setTransactions] = useState([]);
+  const [txLoading, setTxLoading] = useState(true);
+  const [copied, setCopied] = useState(false);
+  const [vaError, setVaError] = useState('');
+  const [showBvnForm, setShowBvnForm] = useState(false);
+  const [bvnType, setBvnType] = useState('bvn'); // 'bvn' | 'nin'
+  const [bvnInput, setBvnInput] = useState('');
+
+  useEffect(() => {
+    api.get('/wallet/balance').then(r => setStats(r.data)).catch(() => {});
+    api.get('/wallet/virtual-account')
+      .then(r => setVa(r.data || false))
+      .catch(() => setVa(false))
+      .finally(() => setVaLoading(false));
+    api.get('/wallet/transactions', { params: { limit: 8 } })
+      .then(r => setTransactions(r.data.transactions || []))
+      .catch(() => {})
+      .finally(() => setTxLoading(false));
+  }, []);
+
+  const generateVA = async () => {
+    const val = bvnInput.trim();
+    if (val.length !== 11 || !/^\d{11}$/.test(val)) {
+      setVaError(`Enter a valid 11-digit ${bvnType.toUpperCase()}.`);
+      return;
+    }
+    setGenerating(true);
+    setVaError('');
+    try {
+      const { data } = await api.post('/wallet/virtual-account', { bvn: val, bvn_type: bvnType });
+      setVa(data);
+      setShowBvnForm(false);
+      setBvnInput('');
+    } catch (err) {
+      setVaError(err.response?.data?.error || 'Failed to generate. Please try again.');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const copyAccNo = () => {
+    if (!va?.account_number) return;
+    navigator.clipboard.writeText(va.account_number).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  const txIcon = (tx) => {
+    if (tx.type === 'credit') return { icon: 'ti-arrow-down-left', color: 'var(--success)', bg: 'rgba(34,197,94,.1)' };
+    return { icon: 'ti-arrow-up-right', color: 'var(--red)', bg: 'rgba(240,68,56,.1)' };
+  };
+
+  return (
+    <div className="pn-page">
+      <div className="pn-page-title">Wallet</div>
+      <div className="pn-page-sub">Manage your balance and funding options.</div>
+
+      <div style={{ background: 'linear-gradient(135deg, rgba(245,158,11,.15) 0%, rgba(245,158,11,.05) 100%)', border: '1px solid rgba(245,158,11,.25)', borderRadius: 16, padding: '20px 20px 16px', marginBottom: 20 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 6 }}>Available Balance</div>
+        <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--accent)', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.03em', marginBottom: 16 }}>{fmtN(stats.balance)}</div>
+        <div style={{ display: 'flex', gap: 16, marginBottom: 18 }}>
+          <div>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Total Funded</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>{fmtN(stats.total_funded)}</div>
+          </div>
+          <div style={{ width: 1, background: 'var(--border)' }} />
+          <div>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Total Spent</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>{fmtN(stats.total_spent)}</div>
+          </div>
+        </div>
+        <button className="pn-btn pn-btn-primary" style={{ width: '100%', height: 44, borderRadius: 12, fontWeight: 700, fontSize: 14 }} onClick={() => setPage('funds')}>
+          <i className="ti ti-plus" style={{ marginRight: 6 }} />Fund Wallet
+        </button>
+      </div>
+
+      <div className="pn-card" style={{ marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Instant Funding</div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Transfer &rarr; instant credit</div>
+        </div>
+
+        {vaLoading ? (
+          <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-muted)', fontSize: 13 }}>
+            <i className="ti ti-loader-2" style={{ fontSize: 20, animation: 'pn-spin 1s linear infinite', display: 'block', marginBottom: 6 }} />Loading…
+          </div>
+        ) : va ? (
+          <div style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', borderRadius: 12, padding: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(245,158,11,.12)', border: '1px solid rgba(245,158,11,.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <i className="ti ti-building-bank" style={{ fontSize: 18, color: 'var(--accent)' }} />
+              </div>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{va.bank_name}</div>
+                <div style={{ fontSize: 11, color: 'var(--success)', fontWeight: 600 }}>Active virtual account</div>
+              </div>
+            </div>
+            <div style={{ marginBottom: 8 }}>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Account Number</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: '0.06em', color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums', fontFamily: "'Geist Mono','Courier New',monospace" }}>{va.account_number}</div>
+                <button onClick={copyAccNo} style={{ background: copied ? 'rgba(34,197,94,.1)' : 'var(--bg-surface)', border: `1px solid ${copied ? 'rgba(34,197,94,.3)' : 'var(--border)'}`, borderRadius: 8, padding: '4px 10px', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: copied ? 'var(--success)' : 'var(--text-secondary)', transition: 'all 150ms' }}>
+                  <i className={`ti ${copied ? 'ti-check' : 'ti-copy'}`} style={{ marginRight: 4 }} />{copied ? 'Copied' : 'Copy'}
+                </button>
+              </div>
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{va.account_name}</div>
+            <div style={{ marginTop: 10, fontSize: 11, color: 'var(--text-muted)', background: 'rgba(34,197,94,.06)', border: '1px solid rgba(34,197,94,.15)', borderRadius: 8, padding: '6px 10px' }}>
+              <i className="ti ti-info-circle" style={{ marginRight: 5 }} />Transfer any amount to this account — your wallet is credited instantly.
+            </div>
+          </div>
+        ) : (
+          <div style={{ padding: '4px 0' }}>
+            {!showBvnForm ? (
+              <div style={{ textAlign: 'center', padding: '4px 0' }}>
+                <div style={{ width: 52, height: 52, borderRadius: 14, background: 'var(--bg-raised)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
+                  <i className="ti ti-building-bank" style={{ fontSize: 26, color: 'var(--text-muted)' }} />
+                </div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>No Virtual Account Yet</div>
+                <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16, lineHeight: 1.5 }}>Generate a dedicated account number to receive instant transfers and auto-fund your wallet.</div>
+                <button className="pn-btn pn-btn-primary pn-btn-full" onClick={() => setShowBvnForm(true)} style={{ height: 44, borderRadius: 12, fontWeight: 700 }}>
+                  <i className="ti ti-plus" style={{ marginRight: 6 }} />Generate Virtual Account
+                </button>
+              </div>
+            ) : (
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 12 }}>Verify your identity to generate a virtual account</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 14, lineHeight: 1.5 }}>Required by CBN regulations. Your number is sent directly to our payment provider and is never stored on PanelNG.</div>
+
+                {/* BVN / NIN toggle */}
+                <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+                  {['bvn', 'nin'].map(t => (
+                    <button key={t} onClick={() => { setBvnType(t); setBvnInput(''); setVaError(''); }}
+                      style={{ flex: 1, padding: '9px 0', borderRadius: 10, border: `1px solid ${bvnType === t ? 'var(--accent)' : 'var(--border)'}`, background: bvnType === t ? 'rgba(245,158,11,.1)' : 'var(--bg-raised)', color: bvnType === t ? 'var(--accent)' : 'var(--text-secondary)', fontWeight: 600, fontSize: 13, cursor: 'pointer', transition: 'all 150ms', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
+                      {t.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="pn-input-wrap" style={{ marginBottom: 14 }}>
+                  <label className="pn-input-label">{bvnType === 'bvn' ? 'Bank Verification Number (BVN)' : 'National Identification Number (NIN)'}</label>
+                  <input
+                    className="pn-input pn-mono"
+                    type="tel"
+                    inputMode="numeric"
+                    maxLength={11}
+                    placeholder="11-digit number"
+                    value={bvnInput}
+                    onChange={e => { setBvnInput(e.target.value.replace(/\D/g, '').slice(0, 11)); setVaError(''); }}
+                  />
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{bvnInput.length}/11 digits</div>
+                </div>
+
+                {vaError && (
+                  <div style={{ fontSize: 12, color: 'var(--red)', marginBottom: 12, background: 'rgba(240,68,56,.06)', border: '1px solid rgba(240,68,56,.15)', borderRadius: 8, padding: '8px 12px' }}>{vaError}</div>
+                )}
+
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="pn-btn pn-btn-ghost" style={{ flex: 1, height: 44, borderRadius: 12 }} onClick={() => { setShowBvnForm(false); setBvnInput(''); setVaError(''); }}>
+                    Cancel
+                  </button>
+                  <button className="pn-btn pn-btn-primary" style={{ flex: 2, height: 44, borderRadius: 12, fontWeight: 700 }} onClick={generateVA} disabled={generating || bvnInput.length !== 11}>
+                    {generating ? <><i className="ti ti-loader-2" style={{ marginRight: 6, animation: 'pn-spin 1s linear infinite' }} />Generating…</> : 'Generate Account'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="pn-card">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Recent Transactions</div>
+          <button className="pn-btn pn-btn-ghost pn-btn-sm" onClick={() => setPage('transactions')}>
+            View all <i className="ti ti-arrow-right" />
+          </button>
+        </div>
+        {txLoading ? (
+          <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--text-muted)', fontSize: 13 }}>
+            <i className="ti ti-loader-2" style={{ fontSize: 18, animation: 'pn-spin 1s linear infinite' }} />
+          </div>
+        ) : transactions.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--text-muted)', fontSize: 13 }}>No transactions yet.</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {transactions.map(tx => {
+              const ico = txIcon(tx);
+              const isCredit = tx.type === 'credit';
+              const isPending = tx.status === 'pending';
+              const isRejected = tx.status === 'rejected';
+              const amtColor = isPending ? 'var(--text-muted)' : isRejected ? 'var(--red)' : isCredit ? 'var(--success)' : 'var(--text-primary)';
+              return (
+                <div key={tx.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
+                  <div style={{ width: 34, height: 34, borderRadius: 10, background: ico.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <i className={`ti ${ico.icon}`} style={{ fontSize: 15, color: ico.color }} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tx.description}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{new Date(tx.created_at).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+                  </div>
+                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: amtColor, fontVariantNumeric: 'tabular-nums' }}>
+                      {isCredit && !isRejected ? '+' : '-'}&#x20A6;{Number(tx.amount).toLocaleString('en-NG', { minimumFractionDigits: 2 })}
+                    </div>
+                    {isPending && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Pending</div>}
+                    {isRejected && <div style={{ fontSize: 10, color: 'var(--red)' }}>Rejected</div>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── SUPPORT CHAT ─────────────────────────────────────────────────────────────
-const BOT_TOPICS = [
-  { id:'funding',  icon:'ti-wallet',         label:'Wallet & Funding',    reply:"To fund your wallet: Add Funds → Bank Transfer → enter amount → get unique reference code → send exact amount to our bank account → click \"I Have Made This Transfer\". Wallet is credited within minutes during business hours (8am–9pm WAT)." },
-  { id:'order',    icon:'ti-package',         label:'Order Not Delivered', reply:"Orders usually process within seconds. If your order shows \"pending\" after 5 minutes, check Order History for status updates. If it's been over 30 minutes and still pending, tap \"I still need help\" so a support agent can investigate." },
-  { id:'payment',  icon:'ti-clock',           label:'Payment Not Confirmed',reply:"Bank transfers are confirmed manually. If you submitted a request during business hours (8am–9pm WAT) and haven't been credited after 2 hours, please escalate. Make sure you used the exact reference code as the transfer narration." },
-  { id:'refund',   icon:'ti-receipt-refund',  label:'Refund / Dispute',    reply:"Refunds are handled case-by-case. Accounts suspended due to third-party policy violations are not eligible. For valid delivery issues, escalate below and include your Order ID." },
+const FALLBACK_TOPICS = [
+  { id:'funding',  icon:'ti-wallet',         label:'Wallet & Funding',    reply:"To fund your wallet: go to Add Funds → Bank Transfer, follow the steps, and your wallet will be credited within minutes during business hours." },
+  { id:'order',    icon:'ti-package',         label:'Order Not Delivered', reply:"Orders usually process within seconds. Check Order History for status. If still pending after 30 minutes, tap \"I still need help\"." },
   { id:'other',    icon:'ti-help-circle',     label:'Something Else',      reply:null, escalate:true },
 ];
 
 function SupportChat() {
   const user = useContext(UserCtx);
   const [open, setOpen] = useState(false);
-  const [phase, setPhase] = useState('greeting'); // greeting | topics | bot-reply | escalating | human
-  const [selectedTopic, setSelectedTopic] = useState(null);
-  const [convId, setConvId] = useState(null);
+  const [botTopics, setBotTopics] = useState(FALLBACK_TOPICS);
+  const [mode, setMode] = useState('greeting'); // greeting | topics | answering | followup | escalating | human | resolved
   const [messages, setMessages] = useState([]);
+  const [convId, setConvId] = useState(null);
+  const convIdRef = useRef(null);
   const [input, setInput] = useState('');
+  const [attachment, setAttachment] = useState(null); // { dataUrl, name }
   const [sending, setSending] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const [lastTopic, setLastTopic] = useState(null);
+  const [adminTyping, setAdminTyping] = useState(false);
+  const adminTypingTimer = useRef(null);
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const btnRef = useRef(null);
+
+  const BTN = 52;
+  const [pos, setPos] = useState(() => {
+    if (typeof window === 'undefined') return { left: 0, top: 0 };
+    const mob = window.innerWidth <= 768;
+    return {
+      left: window.innerWidth - BTN - (mob ? 12 : 24),
+      top: window.innerHeight - BTN - (mob ? 76 : 24),
+    };
+  });
+
+  const PANEL_W = typeof window !== 'undefined' ? Math.min(360, window.innerWidth - 24) : 360;
+  const PANEL_H = 480;
+  const panelTop = pos.top >= PANEL_H + 12 ? pos.top - PANEL_H - 12 : pos.top + BTN + 12;
+  const panelLeft = typeof window !== 'undefined'
+    ? Math.max(8, Math.min(window.innerWidth - PANEL_W - 8, pos.left + BTN - PANEL_W))
+    : pos.left;
 
   const scrollBottom = () => setTimeout(() => bottomRef.current?.scrollIntoView({ behavior:'smooth' }), 60);
 
-  // Poll messages while in human phase and chat is open
+  useEffect(() => { convIdRef.current = convId; }, [convId]);
+
+  // Re-fetch bot topics every time chat opens
   useEffect(() => {
-    if (phase !== 'human' || !convId || !open) return;
+    if (!open) return;
+    api.get('/support/bot-topics')
+      .then(r => { if (Array.isArray(r.data) && r.data.length > 0) setBotTopics(r.data); })
+      .catch(() => {});
+  }, [open]);
+
+  // Poll messages while in human phase
+  useEffect(() => {
+    if (mode !== 'human' || !convId || !open) return;
     const poll = async () => {
       try {
         const { data } = await api.get(`/support/${convId}/messages`);
-        setMessages(data.messages || []);
+        if (data.conversation?.status === 'resolved') { setMode('resolved'); return; }
+        const fresh = data.messages || [];
+        setMessages(prev => {
+          const temps = prev.filter(m => m.isTemp);
+          const freshIds = new Set(fresh.map(m => m.id));
+          return [...fresh, ...temps.filter(t => !freshIds.has(t.id))];
+        });
+        if (data.admin_is_typing) {
+          setAdminTyping(true);
+          clearTimeout(adminTypingTimer.current);
+          adminTypingTimer.current = setTimeout(() => setAdminTyping(false), 4000);
+        } else {
+          setAdminTyping(false);
+        }
         scrollBottom();
       } catch (_) {}
     };
     poll();
     const id = setInterval(poll, 4000);
     return () => clearInterval(id);
-  }, [phase, convId, open]);
+  }, [mode, convId, open]);
 
-  const handleOpen = () => { setOpen(true); };
-  const handleClose = () => setOpen(false);
+  const ensureConv = async () => {
+    if (convIdRef.current) return convIdRef.current;
+    const { data: conv } = await api.post('/support/start');
+    setConvId(conv.id);
+    convIdRef.current = conv.id;
+    return conv.id;
+  };
 
-  const handleTopic = async (topic) => {
-    setSelectedTopic(topic);
-    if (topic.escalate) {
-      await escalate(topic.label);
-    } else {
-      setPhase('bot-reply');
+  const handleTopicSelect = async (topic) => {
+    setLastTopic(topic);
+    const botReply = topic.reply || 'Let me connect you with our support team.';
+    const tempUser = { id:`tu-${Date.now()}`, sender_type:'user', body:topic.label, created_at:new Date().toISOString(), isTemp:true };
+    const tempBot = !topic.escalate ? { id:`tb-${Date.now()}`, sender_type:'bot', body:botReply, created_at:new Date().toISOString(), isTemp:true } : null;
+    setMessages(prev => tempBot ? [...prev, tempUser, tempBot] : [...prev, tempUser]);
+    setMode(topic.escalate ? 'escalating' : 'answering');
+    scrollBottom();
+    try {
+      const id = await ensureConv();
+      if (topic.escalate) {
+        await api.patch(`/support/${id}/escalate`, { subject: topic.label });
+        const { data } = await api.get(`/support/${id}/messages`);
+        setMessages(data.messages || []);
+        setMode('human');
+        scrollBottom();
+        setTimeout(() => inputRef.current?.focus(), 100);
+      } else {
+        const { data } = await api.post(`/support/${id}/bot-exchange`, { userLabel: topic.label, botReply });
+        setMessages(prev => {
+          const without = prev.filter(m => m.id !== tempUser.id && (!tempBot || m.id !== tempBot.id));
+          return [...without, data.userMsg, data.botMsg];
+        });
+        scrollBottom();
+      }
+    } catch (err) {
+      console.error('topic select error:', err);
+      if (topic.escalate) setMode('topics');
     }
   };
 
-  const escalate = async (subject) => {
-    setPhase('escalating');
+  const handleEscalate = async () => {
+    setMode('escalating');
     try {
-      let id = convId;
-      if (!id) {
-        const { data: conv } = await api.post('/support/start');
-        id = conv.id;
-        setConvId(id);
-      }
-      await api.patch(`/support/${id}/escalate`, { subject });
-      setMessages([]);
-      setPhase('human');
+      const id = await ensureConv();
+      await api.patch(`/support/${id}/escalate`, { subject: lastTopic?.label || 'Support Request' });
+      const { data } = await api.get(`/support/${id}/messages`);
+      setMessages(data.messages || []);
+      setMode('human');
       scrollBottom();
       setTimeout(() => inputRef.current?.focus(), 100);
     } catch {
-      setPhase('topics');
+      setMode(lastTopic ? 'followup' : 'topics');
     }
   };
 
+  const handleYesHelped = async () => {
+    const farewell = 'Glad I could help! Feel free to reach out anytime.';
+    setMessages(prev => [...prev, { id:`tf-${Date.now()}`, sender_type:'bot', body:farewell, created_at:new Date().toISOString(), isTemp:true }]);
+    setMode('resolved');
+    scrollBottom();
+    const cid = convIdRef.current;
+    if (cid) { try { await api.patch(`/support/${cid}/close`); } catch (_) {} }
+  };
+
   const sendMessage = async () => {
-    if (!input.trim() || !convId || sending) return;
+    if ((!input.trim() && !attachment) || !convId || sending) return;
     const body = input.trim();
+    const att = attachment;
     setInput('');
+    setAttachment(null);
     setSending(true);
-    const temp = { id:`t-${Date.now()}`, sender_type:'user', body, created_at:new Date().toISOString() };
+    const temp = { id:`t-${Date.now()}`, sender_type:'user', body, attachment_url:att?.dataUrl||null, created_at:new Date().toISOString(), isTemp:true };
     setMessages(prev => [...prev, temp]);
     scrollBottom();
     try {
-      const { data } = await api.post(`/support/${convId}/message`, { body });
+      const { data } = await api.post(`/support/${convId}/message`, { body, attachment_url: att?.dataUrl||null });
       setMessages(prev => prev.map(m => m.id === temp.id ? data : m));
     } catch (_) {
       setMessages(prev => prev.filter(m => m.id !== temp.id));
       setInput(body);
+      setAttachment(att);
     }
     setSending(false);
   };
 
+  const handleAttach = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 4 * 1024 * 1024) { alert('Image must be under 4 MB'); return; }
+    const reader = new FileReader();
+    reader.onload = (ev) => setAttachment({ dataUrl: ev.target.result, name: file.name });
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
   const handleKey = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } };
+  const reset = () => { setMode('greeting'); setMessages([]); setConvId(null); convIdRef.current=null; setInput(''); setAttachment(null); setLastTopic(null); };
 
-  const reset = () => { setPhase('greeting'); setSelectedTopic(null); setConvId(null); setMessages([]); setInput(''); };
+  useEffect(() => {
+    const btn = btnRef.current;
+    if (!btn) return;
+    let drag = null;
 
-  const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
-  const panelBottom = isMobile ? 76 : 24;
+    // All listeners on window — events bubble here from any element.
+    // No setPointerCapture (broken on some Android), no preventDefault
+    // (blocks events on iOS), no passive:false (Chrome intervention).
+    // touch-action:none CSS on the button prevents browser scroll for
+    // this touch sequence so we never need to call preventDefault.
+    const onDown = (e) => {
+      if (!btn.contains(e.target)) return;
+      drag = { pid: e.pointerId, sx: e.clientX, sy: e.clientY,
+               baseRect: btn.getBoundingClientRect(), moved: false, lastX: 0, lastY: 0 };
+    };
+
+    const onMove = (e) => {
+      if (!drag || e.pointerId !== drag.pid) return;
+      const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
+      if (!drag.moved && (Math.abs(dx) > 4 || Math.abs(dy) > 4)) drag.moved = true;
+      if (drag.moved) {
+        const r = drag.baseRect;
+        const cx = Math.max(-r.left, Math.min(window.innerWidth  - BTN - r.left, dx));
+        const cy = Math.max(-r.top,  Math.min(window.innerHeight - BTN - r.top,  dy));
+        btn.style.transform = `translate(${cx}px,${cy}px)`;
+        drag.lastX = cx;
+        drag.lastY = cy;
+      }
+    };
+
+    const onUp = (e) => {
+      if (!drag) return;
+      if (e.type !== 'pointercancel' && e.pointerId !== drag.pid) return;
+      const { moved, baseRect, lastX, lastY } = drag;
+      drag = null;
+      if (e.type === 'pointercancel') { btn.style.transform = ''; return; }
+      if (moved) {
+        btn.style.left      = (baseRect.left + lastX) + 'px';
+        btn.style.top       = (baseRect.top  + lastY) + 'px';
+        btn.style.transform = '';
+        setPos({ left: baseRect.left + lastX, top: baseRect.top + lastY });
+      } else {
+        btn.style.transform = '';
+        setOpen(v => !v);
+      }
+    };
+
+    window.addEventListener('pointerdown',   onDown, { passive: true });
+    window.addEventListener('pointermove',   onMove, { passive: true });
+    window.addEventListener('pointerup',     onUp,   { passive: true });
+    window.addEventListener('pointercancel', onUp,   { passive: true });
+
+    return () => {
+      window.removeEventListener('pointerdown',   onDown);
+      window.removeEventListener('pointermove',   onMove);
+      window.removeEventListener('pointerup',     onUp);
+      window.removeEventListener('pointercancel', onUp);
+    };
+  }, []);
+
+  // Renders a single saved message bubble
+  const renderMsg = (m, i) => {
+    if (m.sender_type === 'system') return (
+      <div key={m.id||i} style={{textAlign:'center',margin:'8px 0'}}>
+        <span style={{fontSize:11,color:'var(--text-muted)',background:'var(--bg-raised)',border:'1px solid var(--border)',borderRadius:20,padding:'3px 10px',display:'inline-block'}}>{m.body}</span>
+      </div>
+    );
+    const isUser = m.sender_type === 'user';
+    const isBot  = m.sender_type === 'bot';
+    const senderLabel = isBot ? 'PanelNG Bot' : 'Customer Support';
+    return (
+      <div key={m.id||i} style={{display:'flex',justifyContent:isUser?'flex-end':'flex-start',marginBottom:10,alignItems:'flex-end',gap:6}}>
+        {!isUser && (isBot ? (
+          <div style={{width:28,height:28,borderRadius:8,background:'rgba(245,158,11,.15)',border:'1px solid rgba(245,158,11,.3)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+            <i className="ti ti-robot" style={{fontSize:13,color:'var(--accent)'}}/>
+          </div>
+        ) : (
+          <div style={{width:28,height:28,borderRadius:'50%',background:'linear-gradient(135deg,#7c3aed,#4f46e5)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:10,fontWeight:800,color:'#fff',letterSpacing:'-0.02em'}}>CS</div>
+        ))}
+        <div style={{maxWidth:'76%'}}>
+          {!isUser&&<div style={{fontSize:10,color:isBot?'var(--accent)':'#8b5cf6',fontWeight:600,marginBottom:3,paddingLeft:2}}>{senderLabel}</div>}
+          <div style={{padding:'9px 12px',borderRadius:isUser?'12px 4px 12px 12px':'4px 12px 12px 12px',background:isUser?'var(--accent)':'var(--bg-raised)',border:isUser?'none':'1px solid var(--border)',color:isUser?'var(--accent-text)':'var(--text-primary)',fontSize:13,lineHeight:1.55,wordBreak:'break-word'}}>
+            {m.body&&<div>{m.body}</div>}
+            {m.attachment_url&&<img src={m.attachment_url} alt="attachment" style={{marginTop:m.body?8:0,maxWidth:'100%',borderRadius:8,display:'block',cursor:'pointer'}} onClick={()=>window.open(m.attachment_url,'_blank')}/>}
+          </div>
+          <div style={{fontSize:10,color:'var(--text-muted)',marginTop:3,textAlign:isUser?'right':'left'}}>{new Date(m.created_at).toLocaleTimeString('en-NG',{hour:'2-digit',minute:'2-digit'})}</div>
+        </div>
+      </div>
+    );
+  };
+
+  // Bot bubble helper
+  const botBubble = (text) => (
+    <div style={{display:'flex',alignItems:'flex-end',gap:6,marginBottom:10}}>
+      <div style={{width:28,height:28,borderRadius:8,background:'rgba(245,158,11,.15)',border:'1px solid rgba(245,158,11,.3)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+        <i className="ti ti-robot" style={{fontSize:13,color:'var(--accent)'}}/>
+      </div>
+      <div style={{maxWidth:'80%'}}>
+        <div style={{fontSize:10,color:'var(--accent)',fontWeight:600,marginBottom:3,paddingLeft:2}}>PanelNG Bot</div>
+        <div style={{background:'var(--bg-raised)',border:'1px solid var(--border)',borderRadius:'4px 12px 12px 12px',padding:'9px 12px',fontSize:13,color:'var(--text-primary)',lineHeight:1.55}}>{text}</div>
+      </div>
+    </div>
+  );
+
+  // Topic chips list
+  const topicChips = () => (
+    <div style={{display:'flex',flexDirection:'column',gap:6}}>
+      {botTopics.map(t=>(
+        <button key={t.id||t.label} onClick={()=>handleTopicSelect(t)}
+          style={{display:'flex',alignItems:'center',gap:10,padding:'9px 13px',background:'var(--bg-raised)',border:'1px solid var(--border)',borderRadius:10,cursor:'pointer',color:'var(--text-primary)',fontSize:13,fontWeight:500,textAlign:'left',transition:'all 120ms',fontFamily:"'Plus Jakarta Sans',sans-serif"}}
+          onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--accent)';e.currentTarget.style.background='rgba(245,158,11,.08)'}}
+          onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--border)';e.currentTarget.style.background='var(--bg-raised)'}}>
+          <i className={`ti ${t.icon}`} style={{fontSize:15,color:'var(--accent)',flexShrink:0}}/>{t.label}
+          <i className="ti ti-chevron-right" style={{fontSize:11,color:'var(--text-muted)',marginLeft:'auto'}}/>
+        </button>
+      ))}
+      <button onClick={handleEscalate}
+        style={{display:'flex',alignItems:'center',gap:10,padding:'9px 13px',background:'rgba(139,92,246,.06)',border:'1px solid rgba(139,92,246,.25)',borderRadius:10,cursor:'pointer',color:'#8b5cf6',fontSize:13,fontWeight:600,textAlign:'left',fontFamily:"'Plus Jakarta Sans',sans-serif"}}
+        onMouseEnter={e=>{e.currentTarget.style.background='rgba(139,92,246,.12)'}}
+        onMouseLeave={e=>{e.currentTarget.style.background='rgba(139,92,246,.06)'}}>
+        <i className="ti ti-headset" style={{fontSize:15,flexShrink:0}}/>Speak to an Agent
+        <i className="ti ti-chevron-right" style={{fontSize:11,marginLeft:'auto'}}/>
+      </button>
+      <a href="https://t.me/panelng" target="_blank" rel="noopener noreferrer"
+        style={{display:'flex',alignItems:'center',gap:8,padding:'7px 13px',background:'rgba(34,158,217,.06)',border:'1px solid rgba(34,158,217,.2)',borderRadius:10,color:'#229ED9',fontSize:12,fontWeight:500,textDecoration:'none',fontFamily:"'Plus Jakarta Sans',sans-serif",transition:'background 120ms'}}
+        onMouseEnter={e=>e.currentTarget.style.background='rgba(34,158,217,.12)'}
+        onMouseLeave={e=>e.currentTarget.style.background='rgba(34,158,217,.06)'}>
+        <i className="ti ti-brand-telegram" style={{fontSize:15,flexShrink:0}}/>
+        Prefer Telegram? Chat us at <strong style={{marginLeft:2}}>@panelng</strong>
+        <i className="ti ti-external-link" style={{fontSize:11,marginLeft:'auto',opacity:.6}}/>
+      </a>
+    </div>
+  );
 
   return (
     <>
-      {/* Chat panel */}
       {open && (
-        <div style={{position:'fixed',bottom:panelBottom+64,right:isMobile?12:24,width:isMobile?'calc(100vw - 24px)':'360px',maxWidth:360,height:480,background:'var(--bg-surface)',border:'1px solid var(--border)',borderRadius:16,boxShadow:'0 8px 40px rgba(0,0,0,.28)',display:'flex',flexDirection:'column',zIndex:9998,overflow:'hidden',fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+        <div style={{position:'fixed',top:panelTop,left:panelLeft,width:PANEL_W,height:PANEL_H,background:'var(--bg-surface)',border:'1px solid var(--border)',borderRadius:16,boxShadow:'0 8px 40px rgba(0,0,0,.28)',display:'flex',flexDirection:'column',zIndex:9998,overflow:'hidden',fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
 
           {/* Header */}
           <div style={{padding:'14px 16px',borderBottom:'1px solid var(--border)',display:'flex',alignItems:'center',gap:10,flexShrink:0,background:'var(--bg-surface)'}}>
-            <div style={{width:36,height:36,borderRadius:10,background:'rgba(245,158,11,.15)',border:'1px solid rgba(245,158,11,.3)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
-              <i className="ti ti-headset" style={{fontSize:18,color:'var(--accent)'}}/>
-            </div>
+            {mode === 'human' ? (
+              <div style={{width:36,height:36,borderRadius:'50%',background:'linear-gradient(135deg,#7c3aed,#4f46e5)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:13,fontWeight:800,color:'#fff',letterSpacing:'-0.02em',position:'relative'}}>
+                CS
+                <span style={{position:'absolute',bottom:0,right:0,width:9,height:9,borderRadius:'50%',background:'var(--success)',border:'2px solid var(--bg-surface)'}}/>
+              </div>
+            ) : (
+              <div style={{width:36,height:36,borderRadius:10,background:'rgba(245,158,11,.15)',border:'1px solid rgba(245,158,11,.3)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                <i className="ti ti-headset" style={{fontSize:18,color:'var(--accent)'}}/>
+              </div>
+            )}
             <div style={{flex:1,minWidth:0}}>
-              <div style={{fontSize:14,fontWeight:700,color:'var(--text-primary)',lineHeight:1.2}}>PanelNG Support</div>
-              <div style={{fontSize:11,color:'var(--success)',display:'flex',alignItems:'center',gap:4,marginTop:2}}>
-                <span style={{width:6,height:6,borderRadius:'50%',background:'var(--success)',display:'inline-block'}}/>
-                {phase==='human'?'Connected to support':'Typically replies within minutes'}
+              <div style={{fontSize:14,fontWeight:700,color:'var(--text-primary)',lineHeight:1.2}}>{mode === 'human' ? 'Customer Support' : 'PanelNG Support'}</div>
+              <div style={{fontSize:11,color:mode==='human'?'var(--success)':'var(--text-muted)',display:'flex',alignItems:'center',gap:4,marginTop:2}}>
+                {mode==='human'&&<span style={{width:6,height:6,borderRadius:'50%',background:'var(--success)',display:'inline-block'}}/>}
+                {mode==='human'?'Online — typically replies in minutes':mode==='resolved'?'Conversation resolved':'Typically replies within minutes'}
               </div>
             </div>
-            {phase!=='greeting'&&phase!=='escalating'&&(
-              <button onClick={reset} style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-muted)',fontSize:12,padding:'4px 8px',borderRadius:6}}>
+            {mode!=='greeting'&&mode!=='escalating'&&mode!=='resolved'&&(
+              <button onClick={reset} title="Start over" style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-muted)',padding:'4px 8px',borderRadius:6}}>
                 <i className="ti ti-refresh" style={{fontSize:14}}/>
               </button>
             )}
-            <button onClick={handleClose} style={{width:28,height:28,background:'var(--bg-raised)',border:'none',borderRadius:8,cursor:'pointer',color:'var(--text-secondary)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+            <button onClick={()=>setOpen(false)} style={{width:28,height:28,background:'var(--bg-raised)',border:'none',borderRadius:8,cursor:'pointer',color:'var(--text-secondary)',display:'flex',alignItems:'center',justifyContent:'center'}}>
               <i className="ti ti-x" style={{fontSize:14}}/>
             </button>
           </div>
 
-          {/* Body */}
-          <div style={{flex:1,overflowY:'auto',overflowX:'hidden',minHeight:0,padding:'16px 14px'}}>
+          {/* Message thread */}
+          <div style={{flex:1,overflowY:'auto',overflowX:'hidden',minHeight:0,padding:'14px'}}>
 
-            {/* GREETING */}
-            {phase==='greeting'&&(
-              <div style={{display:'flex',flexDirection:'column',gap:12}}>
-                <div style={{display:'flex',gap:10,alignItems:'flex-start'}}>
-                  <div style={{width:30,height:30,borderRadius:10,background:'var(--accent)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginTop:2}}>
-                    <i className="ti ti-robot" style={{fontSize:15,color:'var(--accent-text)'}}/>
-                  </div>
-                  <div style={{background:'var(--bg-raised)',border:'1px solid var(--border)',borderRadius:'4px 12px 12px 12px',padding:'10px 14px',fontSize:13,color:'var(--text-primary)',lineHeight:1.6,maxWidth:'85%'}}>
-                    Hi <strong>{user?.name?.split(' ')[0]||'there'}</strong>! How can we help you today?
-                  </div>
-                </div>
-                <button onClick={()=>setPhase('topics')} style={{alignSelf:'flex-start',marginLeft:40,padding:'8px 14px',background:'var(--accent)',color:'var(--accent-text)',border:'none',borderRadius:20,fontSize:12,fontWeight:600,cursor:'pointer'}}>
+            {/* Always-visible greeting */}
+            {botBubble(`Hi ${user?.name?.split(' ')[0]||'there'}! How can we help you today?`)}
+
+            {/* GREETING: get help button */}
+            {mode==='greeting'&&(
+              <div style={{marginLeft:34,marginTop:-4,marginBottom:8}}>
+                <button onClick={()=>setMode('topics')} style={{padding:'8px 16px',background:'var(--accent)',color:'var(--accent-text)',border:'none',borderRadius:20,fontSize:12,fontWeight:600,cursor:'pointer'}}>
                   Get Help <i className="ti ti-arrow-right" style={{fontSize:11,marginLeft:4}}/>
                 </button>
               </div>
             )}
 
-            {/* TOPICS */}
-            {phase==='topics'&&(
-              <div style={{display:'flex',flexDirection:'column',gap:8}}>
-                <div style={{display:'flex',gap:10,alignItems:'flex-start',marginBottom:4}}>
-                  <div style={{width:30,height:30,borderRadius:10,background:'var(--accent)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginTop:2}}>
-                    <i className="ti ti-robot" style={{fontSize:15,color:'var(--accent-text)'}}/>
-                  </div>
-                  <div style={{background:'var(--bg-raised)',border:'1px solid var(--border)',borderRadius:'4px 12px 12px 12px',padding:'10px 14px',fontSize:13,color:'var(--text-primary)',lineHeight:1.6,maxWidth:'85%'}}>
-                    Select a topic below and I'll help right away:
-                  </div>
-                </div>
-                {BOT_TOPICS.map(t=>(
-                  <button key={t.id} onClick={()=>handleTopic(t)} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',background:'var(--bg-raised)',border:'1px solid var(--border)',borderRadius:10,cursor:'pointer',color:'var(--text-primary)',fontSize:13,fontWeight:500,textAlign:'left',transition:'all 120ms ease',fontFamily:"'Plus Jakarta Sans',sans-serif"}}
-                    onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--accent)';e.currentTarget.style.background='rgba(245,158,11,.08)'}}
-                    onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--border)';e.currentTarget.style.background='var(--bg-raised)'}}>
-                    <i className={`ti ${t.icon}`} style={{fontSize:16,color:'var(--accent)',flexShrink:0}}/>
-                    {t.label}
-                    <i className="ti ti-chevron-right" style={{fontSize:12,color:'var(--text-muted)',marginLeft:'auto'}}/>
-                  </button>
-                ))}
-              </div>
+            {/* TOPICS: topic selection */}
+            {mode==='topics'&&(
+              <>
+                {botBubble('What can I help you with?')}
+                {topicChips()}
+              </>
             )}
 
-            {/* BOT REPLY */}
-            {phase==='bot-reply'&&selectedTopic&&(
-              <div style={{display:'flex',flexDirection:'column',gap:12}}>
-                <div style={{display:'flex',gap:10,alignItems:'flex-start'}}>
-                  <div style={{width:30,height:30,borderRadius:10,background:'var(--accent)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginTop:2}}>
-                    <i className="ti ti-robot" style={{fontSize:15,color:'var(--accent-text)'}}/>
-                  </div>
-                  <div style={{background:'var(--bg-raised)',border:'1px solid var(--border)',borderRadius:'4px 12px 12px 12px',padding:'12px 14px',fontSize:13,color:'var(--text-primary)',lineHeight:1.7,maxWidth:'90%'}}>
-                    {selectedTopic.reply}
-                  </div>
-                </div>
-                <div style={{marginLeft:40,fontSize:12,color:'var(--text-muted)',marginTop:4}}>Did that help?</div>
-                <div style={{marginLeft:40,display:'flex',gap:8,flexWrap:'wrap'}}>
-                  <button onClick={handleClose} style={{padding:'7px 14px',background:'rgba(34,197,94,.1)',border:'1px solid rgba(34,197,94,.25)',borderRadius:20,fontSize:12,fontWeight:600,color:'var(--success)',cursor:'pointer'}}>
+            {/* Saved messages (all DB-synced + temp) */}
+            {messages.map((m,i)=>renderMsg(m,i))}
+
+            {/* ANSWERING: "Was that helpful?" */}
+            {mode==='answering'&&(
+              <>
+                {botBubble('Was that helpful?')}
+                <div style={{marginLeft:34,display:'flex',gap:8,flexWrap:'wrap',marginBottom:10}}>
+                  <button onClick={handleYesHelped} style={{padding:'7px 14px',background:'rgba(34,197,94,.1)',border:'1px solid rgba(34,197,94,.25)',borderRadius:20,fontSize:12,fontWeight:600,color:'var(--success)',cursor:'pointer'}}>
                     <i className="ti ti-thumb-up" style={{marginRight:5,fontSize:12}}/>Yes, thanks!
                   </button>
-                  <button onClick={()=>escalate(selectedTopic.label)} style={{padding:'7px 14px',background:'rgba(245,158,11,.1)',border:'1px solid rgba(245,158,11,.25)',borderRadius:20,fontSize:12,fontWeight:600,color:'var(--accent)',cursor:'pointer'}}>
-                    <i className="ti ti-headset" style={{marginRight:5,fontSize:12}}/>I still need help
+                  <button onClick={()=>setMode('followup')} style={{padding:'7px 14px',background:'rgba(245,158,11,.1)',border:'1px solid rgba(245,158,11,.25)',borderRadius:20,fontSize:12,fontWeight:600,color:'var(--accent)',cursor:'pointer'}}>
+                    <i className="ti ti-help" style={{marginRight:5,fontSize:12}}/>Need more help
                   </button>
                 </div>
-              </div>
+              </>
+            )}
+
+            {/* FOLLOWUP: pick another topic */}
+            {mode==='followup'&&(
+              <>
+                {botBubble('No problem! Pick another topic or speak to an agent:')}
+                {topicChips()}
+              </>
             )}
 
             {/* ESCALATING */}
-            {phase==='escalating'&&(
-              <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',gap:10,color:'var(--text-secondary)',fontSize:13}}>
+            {mode==='escalating'&&(
+              <div style={{display:'flex',flexDirection:'column',alignItems:'center',padding:'20px 0',gap:10,color:'var(--text-secondary)',fontSize:13}}>
                 <i className="ti ti-loader-2" style={{fontSize:26,color:'var(--accent)',animation:'pn-spin 1s linear infinite'}}/>
                 Connecting you to support…
               </div>
             )}
 
-            {/* HUMAN CHAT */}
-            {phase==='human'&&(
-              <div style={{display:'flex',flexDirection:'column',gap:2}}>
-                <div style={{textAlign:'center',marginBottom:12}}>
-                  <span style={{fontSize:11,color:'var(--text-muted)',background:'var(--bg-raised)',border:'1px solid var(--border)',borderRadius:20,padding:'3px 10px',display:'inline-block'}}>
-                    You're connected — a team member will be with you shortly
-                  </span>
-                </div>
-                {messages.length===0&&(
-                  <div style={{textAlign:'center',padding:'20px 0',fontSize:13,color:'var(--text-muted)'}}>
-                    Send a message to start the conversation.
-                  </div>
-                )}
-                {messages.map(m=>(
-                  <div key={m.id} style={{display:'flex',justifyContent:m.sender_type==='user'?'flex-end':'flex-start',marginBottom:6}}>
-                    {m.sender_type!=='user'&&(
-                      <div style={{width:26,height:26,borderRadius:8,background:'var(--accent)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginRight:6,alignSelf:'flex-end'}}>
-                        <i className="ti ti-headset" style={{fontSize:13,color:'var(--accent-text)'}}/>
-                      </div>
-                    )}
-                    <div style={{maxWidth:'78%',padding:'9px 12px',borderRadius:m.sender_type==='user'?'12px 4px 12px 12px':'4px 12px 12px 12px',background:m.sender_type==='user'?'var(--accent)':'var(--bg-raised)',border:m.sender_type==='user'?'none':'1px solid var(--border)',color:m.sender_type==='user'?'var(--accent-text)':'var(--text-primary)',fontSize:13,lineHeight:1.55,wordBreak:'break-word'}}>
-                      {m.body}
-                    </div>
-                  </div>
-                ))}
-                <div ref={bottomRef}/>
+            {/* RESOLVED */}
+            {mode==='resolved'&&(
+              <div style={{textAlign:'center',margin:'12px 0'}}>
+                <span style={{fontSize:11,color:'var(--text-muted)',background:'var(--bg-raised)',border:'1px solid var(--border)',borderRadius:20,padding:'5px 14px',display:'inline-block'}}>
+                  <i className="ti ti-check" style={{marginRight:5}}/>Conversation resolved
+                </span>
               </div>
             )}
+
+            {/* Typing indicator — shown when admin is typing */}
+            {adminTyping && mode === 'human' && (
+              <div style={{display:'flex',alignItems:'flex-end',gap:6,marginBottom:10}}>
+                <div style={{width:28,height:28,borderRadius:'50%',background:'linear-gradient(135deg,#7c3aed,#4f46e5)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:10,fontWeight:800,color:'#fff',letterSpacing:'-0.02em'}}>CS</div>
+                <div>
+                  <div style={{fontSize:10,color:'#8b5cf6',fontWeight:600,marginBottom:3,paddingLeft:2}}>Customer Support</div>
+                  <div style={{background:'var(--bg-raised)',border:'1px solid var(--border)',borderRadius:'4px 12px 12px 12px',padding:'10px 14px',display:'flex',alignItems:'center',gap:4}}>
+                    <span className="pn-typing-dot"/><span className="pn-typing-dot"/><span className="pn-typing-dot"/>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div ref={bottomRef}/>
           </div>
 
+          {/* Attachment preview bar */}
+          {attachment&&mode==='human'&&(
+            <div style={{padding:'6px 12px',borderTop:'1px solid var(--border)',background:'var(--bg-raised)',display:'flex',alignItems:'center',gap:8}}>
+              <img src={attachment.dataUrl} alt="" style={{width:40,height:40,objectFit:'cover',borderRadius:6}}/>
+              <span style={{flex:1,fontSize:12,color:'var(--text-secondary)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{attachment.name}</span>
+              <button onClick={()=>setAttachment(null)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-muted)',padding:4}}>
+                <i className="ti ti-x" style={{fontSize:14}}/>
+              </button>
+            </div>
+          )}
+
           {/* Input bar — human phase only */}
-          {phase==='human'&&(
+          {mode==='human'&&(
             <div style={{padding:'10px 12px',borderTop:'1px solid var(--border)',display:'flex',gap:8,alignItems:'flex-end',flexShrink:0,background:'var(--bg-surface)'}}>
-              <textarea ref={inputRef} value={input} onChange={e=>setInput(e.target.value)} onKeyDown={handleKey} placeholder="Type a message…" rows={1} style={{flex:1,resize:'none',background:'var(--bg-raised)',border:'1px solid var(--border)',borderRadius:10,padding:'9px 12px',fontSize:13,color:'var(--text-primary)',fontFamily:"'Plus Jakarta Sans',sans-serif",outline:'none',lineHeight:1.5,maxHeight:80,overflowY:'auto'}}/>
-              <button onClick={sendMessage} disabled={!input.trim()||sending} style={{width:36,height:36,borderRadius:10,background:'var(--accent)',border:'none',cursor:!input.trim()||sending?'not-allowed':'pointer',opacity:!input.trim()||sending?.5:1,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,transition:'opacity 120ms'}}>
+              <input ref={fileInputRef} type="file" accept="image/*" style={{display:'none'}} onChange={handleAttach}/>
+              <button onClick={()=>fileInputRef.current?.click()} style={{width:34,height:34,borderRadius:9,background:'var(--bg-raised)',border:'1px solid var(--border)',cursor:'pointer',color:'var(--text-muted)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                <i className="ti ti-paperclip" style={{fontSize:15}}/>
+              </button>
+              <textarea ref={inputRef} value={input} onChange={e=>setInput(e.target.value)} onKeyDown={handleKey}
+                placeholder="Type a message…" rows={1}
+                style={{flex:1,resize:'none',background:'var(--bg-raised)',border:'1px solid var(--border)',borderRadius:10,padding:'8px 12px',fontSize:16,color:'var(--text-primary)',fontFamily:"'Plus Jakarta Sans',sans-serif",outline:'none',lineHeight:1.4,maxHeight:80,overflowY:'auto'}}/>
+              <button onClick={sendMessage} disabled={(!input.trim()&&!attachment)||sending}
+                style={{width:36,height:36,borderRadius:10,background:'var(--accent)',border:'none',cursor:(!input.trim()&&!attachment)||sending?'not-allowed':'pointer',opacity:(!input.trim()&&!attachment)||sending?0.5:1,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,transition:'opacity 120ms'}}>
                 <i className="ti ti-send" style={{fontSize:16,color:'var(--accent-text)'}}/>
               </button>
             </div>
@@ -2491,12 +3113,12 @@ function SupportChat() {
         </div>
       )}
 
-      {/* Floating button */}
+      {/* Floating button — draggable, tap to open/close */}
       <button
-        onClick={open?handleClose:handleOpen}
-        style={{position:'fixed',bottom:panelBottom,right:isMobile?12:24,width:52,height:52,borderRadius:'50%',background:'var(--accent)',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 4px 20px rgba(0,0,0,.25)',zIndex:9999,transition:'transform 180ms ease,box-shadow 180ms ease'}}
-        onMouseEnter={e=>{e.currentTarget.style.transform='scale(1.08)';e.currentTarget.style.boxShadow='0 6px 28px rgba(0,0,0,.35)'}}
-        onMouseLeave={e=>{e.currentTarget.style.transform='scale(1)';e.currentTarget.style.boxShadow='0 4px 20px rgba(0,0,0,.25)'}}
+        ref={btnRef}
+        onMouseEnter={()=>setHovered(true)}
+        onMouseLeave={()=>setHovered(false)}
+        style={{position:'fixed',left:pos.left,top:pos.top,width:BTN,height:BTN,borderRadius:'50%',background:'var(--accent)',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 4px 20px rgba(0,0,0,.25)',zIndex:9999,transition:'opacity 200ms ease, box-shadow 180ms ease',opacity:open||hovered?1:0.75,touchAction:'none',userSelect:'none',WebkitUserSelect:'none'}}
         aria-label={open?'Close support chat':'Open support chat'}
       >
         <i className={`ti ${open?'ti-x':'ti-message-circle'}`} style={{fontSize:22,color:'var(--accent-text)',transition:'all 180ms ease'}}/>
@@ -2514,7 +3136,7 @@ function NewOrderSelect({ setPage }) {
       label: 'SMM Order',
       desc: 'Boost followers, likes, views & more on any social platform',
       color: '#6366F1',
-      bg: '#EEF2FF',
+      bg: 'rgba(99,102,241,.12)',
     },
     {
       id: 'sms',
@@ -2522,7 +3144,7 @@ function NewOrderSelect({ setPage }) {
       label: 'SMS Verify',
       desc: 'Get virtual numbers to verify any app or service instantly',
       color: '#10B981',
-      bg: '#ECFDF5',
+      bg: 'rgba(16,185,129,.12)',
     },
     {
       id: 'accounts',
@@ -2530,33 +3152,27 @@ function NewOrderSelect({ setPage }) {
       label: 'Buy Accounts',
       desc: 'Purchase aged, verified social media accounts in bulk',
       color: '#F59E0B',
-      bg: '#FFFBEB',
+      bg: 'rgba(245,158,11,.12)',
     },
   ];
+
   return (
     <div style={{padding:'24px 16px',maxWidth:480,margin:'0 auto'}}>
-      <div style={{marginBottom:24}}>
+      <div style={{marginBottom:20}}>
         <h2 style={{margin:0,fontSize:20,fontWeight:700,color:'var(--text-primary)'}}>New Order</h2>
         <p style={{margin:'4px 0 0',fontSize:14,color:'var(--text-secondary)'}}>Choose a service to get started</p>
       </div>
+
       <div style={{display:'flex',flexDirection:'column',gap:14}}>
         {SERVICES.map(s => (
           <button
             key={s.id}
             onClick={() => setPage(s.id)}
-            style={{
-              display:'flex',alignItems:'center',gap:16,
-              background:'var(--bg-surface)',border:'1.5px solid var(--border)',
-              borderRadius:16,padding:'18px 20px',cursor:'pointer',
-              textAlign:'left',width:'100%',transition:'box-shadow 120ms',
-            }}
+            style={{display:'flex',alignItems:'center',gap:16,background:'var(--bg-surface)',border:'1.5px solid var(--border)',borderRadius:16,padding:'18px 20px',cursor:'pointer',textAlign:'left',width:'100%',transition:'box-shadow 120ms'}}
             onMouseEnter={e=>e.currentTarget.style.boxShadow='0 4px 16px rgba(0,0,0,0.08)'}
             onMouseLeave={e=>e.currentTarget.style.boxShadow='none'}
           >
-            <div style={{
-              width:52,height:52,borderRadius:14,
-              background:s.bg,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,
-            }}>
+            <div style={{width:52,height:52,borderRadius:14,background:s.bg,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
               <i className={`ti ${s.icon}`} style={{fontSize:26,color:s.color}}/>
             </div>
             <div style={{flex:1,minWidth:0}}>
@@ -2733,6 +3349,92 @@ function Referral() {
   );
 }
 
+// ─── PWA INSTALL BANNER ───────────────────────────────────────────────────────
+function InstallBanner() {
+  const [show, setShow]   = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
+  const prompt = useRef(null);
+
+  useEffect(() => {
+    // Already installed as standalone PWA — nothing to do
+    if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) return;
+
+    // Dismissed recently (7 days)
+    const ts = localStorage.getItem('pwa_install_dismissed');
+    if (ts && Date.now() - parseInt(ts) < 7 * 24 * 60 * 60 * 1000) return;
+
+    const ios       = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const iosSafari = ios && /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+
+    if (iosSafari) {
+      setIsIOS(true);
+      setTimeout(() => setShow(true), 3000); // slight delay so it doesn't open immediately
+      return;
+    }
+
+    const handler = (e) => {
+      e.preventDefault();
+      prompt.current = e;
+      setTimeout(() => setShow(true), 3000);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const dismiss = () => {
+    localStorage.setItem('pwa_install_dismissed', Date.now().toString());
+    setShow(false);
+  };
+
+  const install = async () => {
+    if (!prompt.current) return;
+    prompt.current.prompt();
+    const { outcome } = await prompt.current.userChoice;
+    prompt.current = null;
+    if (outcome === 'accepted') setShow(false);
+    else dismiss();
+  };
+
+  if (!show) return null;
+
+  return (
+    <div style={{
+      position:'fixed', bottom:72, left:12, right:12, zIndex:9997,
+      background:'var(--bg-surface)', border:'1px solid var(--border)',
+      borderRadius:16, padding:'14px 16px',
+      boxShadow:'0 8px 32px rgba(0,0,0,.4)',
+      display:'flex', alignItems:'center', gap:12,
+      fontFamily:"'Plus Jakarta Sans',sans-serif",
+    }}>
+      <div style={{width:44,height:44,borderRadius:12,background:'#F59E0B',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+        <i className="ti ti-bolt" style={{fontSize:22,color:'#fff'}}/>
+      </div>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:13,fontWeight:700,color:'var(--text-primary)',marginBottom:3}}>
+          Add PanelNG to Home Screen
+        </div>
+        {isIOS ? (
+          <div style={{fontSize:11,color:'var(--text-secondary)',lineHeight:1.55}}>
+            Tap <i className="ti ti-share" style={{fontSize:12,verticalAlign:'middle'}}/> <strong>Share</strong> at the bottom of Safari, then <strong>"Add to Home Screen"</strong>
+          </div>
+        ) : (
+          <div style={{fontSize:11,color:'var(--text-secondary)'}}>
+            Install for faster access, offline use, and no browser chrome
+          </div>
+        )}
+      </div>
+      {!isIOS && (
+        <button onClick={install} style={{background:'#F59E0B',color:'#0F0F0D',border:'none',borderRadius:8,padding:'8px 14px',fontSize:12,fontWeight:700,cursor:'pointer',flexShrink:0,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+          Install
+        </button>
+      )}
+      <button onClick={dismiss} style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-muted)',padding:'4px',display:'flex',alignItems:'center',flexShrink:0}}>
+        <i className="ti ti-x" style={{fontSize:16}}/>
+      </button>
+    </div>
+  );
+}
+
 // ─── APP ──────────────────────────────────────────────────────────────────────
 function App() {
   const { resolved } = useContext(ThemeCtx);
@@ -2745,7 +3447,7 @@ function App() {
     if (data?.new_balance != null) updateUser({ wallet_balance: data.new_balance });
     refreshUser();
   };
-  const PAGES = { overview: <Overview setPage={setPage}/>, neworder: <NewOrderSelect setPage={navigate}/>, smm: <NewOrder/>, sms: <SmsVerify/>, accounts: <BuyAccounts balance={user.balance} token={localStorage.getItem('panelng_token')} onNavigate={navigate} onPurchaseComplete={handlePurchaseComplete}/>, orders: <OrderHistory/>, funds: <AddFunds/>, transactions: <TransactionHistory/>, referral: <Referral/>, profile: <ProfileSettings/> };
+  const PAGES = { overview: <Overview setPage={setPage}/>, neworder: <NewOrderSelect setPage={navigate}/>, smm: <NewOrder setPage={navigate}/>, sms: <SmsVerify/>, accounts: <BuyAccounts balance={user.balance} token={localStorage.getItem('panelng_token')} onNavigate={navigate} onPurchaseComplete={handlePurchaseComplete}/>, orders: <OrderHistory/>, funds: <AddFunds/>, transactions: <TransactionHistory/>, wallet: <WalletPage setPage={navigate}/>, referral: <Referral/>, profile: <ProfileSettings/> };
   return (
     <div className="pn-root" data-theme={resolved}>
       <div className="pn-shell">
@@ -2758,6 +3460,7 @@ function App() {
         <BottomNav page={page} setPage={navigate}/>
       </div>
       <SupportChat/>
+      <InstallBanner/>
     </div>
   );
 }

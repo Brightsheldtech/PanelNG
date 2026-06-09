@@ -8,11 +8,11 @@ router.get('/balance', auth, async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('users')
-      .select('wallet_balance')
+      .select('wallet_balance, total_funded, total_spent')
       .eq('id', req.user.id)
       .single();
     if (error) throw error;
-    res.json({ balance: data.wallet_balance });
+    res.json({ balance: data.wallet_balance, total_funded: data.total_funded, total_spent: data.total_spent });
   } catch (err) {
     res.status(500).json({ error: 'Failed to get balance' });
   }
@@ -20,7 +20,10 @@ router.get('/balance', auth, async (req, res) => {
 
 // GET /api/wallet/transactions — unified feed: transactions + bank deposits + accszone orders
 router.get('/transactions', auth, async (req, res) => {
-  const limit = parseInt(req.query.limit) || 30;
+  const limit  = parseInt(req.query.limit)  || 30;
+  const offset = parseInt(req.query.offset) || 0;
+  // Fetch enough rows from each source to cover offset + limit after merge
+  const fetchSize = limit + offset;
 
   try {
     const userId = req.user.id;
@@ -29,10 +32,10 @@ router.get('/transactions', auth, async (req, res) => {
       // Core transactions (SMM debits, SMS debits, card credits, bank confirmations, referral credits)
       supabase
         .from('transactions')
-        .select('id, type, amount, description, reference, created_at')
+        .select('id, type, amount, description, reference, status, created_at')
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
-        .limit(limit),
+        .limit(fetchSize),
 
       // Bank deposit requests — only pending/rejected (confirmed ones are already in transactions)
       supabase
@@ -41,7 +44,7 @@ router.get('/transactions', auth, async (req, res) => {
         .eq('user_id', userId)
         .in('status', ['pending', 'rejected'])
         .order('created_at', { ascending: false })
-        .limit(limit),
+        .limit(fetchSize),
 
       // Accszone (Buy Accounts) orders
       supabase
@@ -49,7 +52,7 @@ router.get('/transactions', auth, async (req, res) => {
         .select('id, product_name, platform, quantity, total_cost, status, created_at')
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
-        .limit(limit),
+        .limit(fetchSize),
     ]);
 
     if (txRes.error) console.error('[wallet/tx] transactions error:', txRes.error.message);
@@ -104,10 +107,107 @@ router.get('/transactions', auth, async (req, res) => {
 
     unified.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
-    res.json({ transactions: unified.slice(0, limit), total: unified.length });
+    res.json({ transactions: unified.slice(offset, offset + limit), total: unified.length });
   } catch (err) {
     console.error('[wallet/transactions]:', err.message);
     res.status(500).json({ error: 'Failed to get transactions' });
+  }
+});
+
+router.get('/virtual-account', auth, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('user_virtual_accounts')
+      .select('account_number, account_name, bank_name, created_at')
+      .eq('user_id', req.user.id)
+      .maybeSingle();
+    if (error) {
+      console.error('[VA GET] DB error:', error.message, error.code);
+      return res.status(500).json({ error: 'Failed to fetch virtual account' });
+    }
+    res.json(data || null);
+  } catch (err) {
+    console.error('[VA GET] error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch virtual account' });
+  }
+});
+
+router.post('/virtual-account', auth, async (req, res) => {
+  try {
+    // Check DB first
+    const { data: existing, error: fetchErr } = await supabase
+      .from('user_virtual_accounts')
+      .select('account_number, account_name, bank_name')
+      .eq('user_id', req.user.id)
+      .maybeSingle();
+    if (fetchErr) console.error('[VA POST] fetch existing error:', fetchErr.message, fetchErr.code);
+    if (existing) return res.json(existing);
+
+    const { bvn } = req.body;
+    if (!bvn || !/^\d{11}$/.test(bvn)) {
+      return res.status(400).json({ error: 'A valid 11-digit BVN or NIN is required.' });
+    }
+
+    const { data: user } = await supabase
+      .from('users')
+      .select('email, full_name, phone')
+      .eq('id', req.user.id)
+      .single();
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    if (!process.env.FLW_SECRET_KEY) {
+      return res.status(503).json({ error: 'Payment service not configured' });
+    }
+
+    const flutterwave = require('../lib/flutterwave');
+    const nameParts = (user.full_name || 'Customer').split(' ');
+    const hex = req.user.id.replace(/-/g, '').toUpperCase();
+    const txRef = `VA-PNG-${hex}`;
+
+    const result = await flutterwave.createVirtualAccount({
+      email: user.email,
+      txRef,
+      bvn,
+      firstname: nameParts[0],
+      lastname: nameParts.slice(1).join(' ') || 'Customer',
+      phonenumber: user.phone || '08000000000',
+      narration: `PanelNG | ${user.full_name || user.email}`,
+    });
+
+    if (!result || result.status !== 'success') {
+      console.error('[VA POST] Flutterwave error:', result?.message);
+      return res.status(400).json({ error: result?.message || 'Virtual account creation failed' });
+    }
+
+    const va = result.data;
+
+    // Upsert — handles retry when Flutterwave already has the account but DB doesn't
+    const { error: upsertErr } = await supabase
+      .from('user_virtual_accounts')
+      .upsert({
+        user_id: req.user.id,
+        account_number: va.account_number,
+        account_name: va.account_name || null,
+        bank_name: va.bank_name || 'Wema Bank',
+        flw_order_ref: va.order_ref || null,
+      }, { onConflict: 'user_id' });
+
+    if (upsertErr) {
+      console.error('[VA POST] DB upsert failed:', upsertErr.message, upsertErr.code);
+      // VA exists in Flutterwave — return data but surface the DB error in logs
+      return res.status(500).json({
+        error: `Virtual account created but failed to save (${upsertErr.code}). Run the virtual_accounts migration in Supabase and try again.`,
+      });
+    }
+
+    res.status(201).json({
+      account_number: va.account_number,
+      account_name: va.account_name,
+      bank_name: va.bank_name,
+    });
+  } catch (err) {
+    console.error('VA create error:', err.message);
+    res.status(500).json({ error: err.response?.data?.message || 'Failed to generate virtual account' });
   }
 });
 

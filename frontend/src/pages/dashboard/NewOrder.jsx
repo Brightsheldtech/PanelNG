@@ -1,8 +1,22 @@
 import { useEffect, useState, useMemo } from 'react';
-import { ShoppingCart, Wallet, AlertCircle, CheckCircle, ArrowRight } from 'lucide-react';
+import { ShoppingCart, Wallet, AlertCircle, CheckCircle, ArrowRight, Search, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api from '../../lib/api';
 import toast from 'react-hot-toast';
+
+const LINK_PLACEHOLDERS = {
+  Instagram: 'https://instagram.com/yourpage',
+  TikTok: 'https://tiktok.com/@yourpage',
+  YouTube: 'https://youtube.com/channel/...',
+  Facebook: 'https://facebook.com/yourpage',
+  Twitter: 'https://twitter.com/yourpage',
+  WhatsApp: '+2348012345678',
+  Telegram: 'https://t.me/yourpage',
+  Spotify: 'https://open.spotify.com/artist/...',
+  LinkedIn: 'https://linkedin.com/in/yourprofile',
+  Snapchat: 'https://snapchat.com/add/username',
+  Pinterest: 'https://pinterest.com/yourpage',
+};
 
 export default function NewOrder() {
   const [services, setServices] = useState([]);
@@ -11,6 +25,7 @@ export default function NewOrder() {
   const [selectedService, setSelectedService] = useState(null);
   const [link, setLink] = useState('');
   const [quantity, setQuantity] = useState('');
+  const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(null);
@@ -35,14 +50,20 @@ export default function NewOrder() {
     [services, platform]
   );
 
+  const searchFiltered = useMemo(() => {
+    if (!search.trim()) return filtered;
+    const q = search.toLowerCase();
+    return filtered.filter((s) => s.name.toLowerCase().includes(q));
+  }, [filtered, search]);
+
   const grouped = useMemo(() => {
     const map = {};
-    filtered.forEach((s) => {
+    searchFiltered.forEach((s) => {
       if (!map[s.platform]) map[s.platform] = [];
       map[s.platform].push(s);
     });
     return map;
-  }, [filtered]);
+  }, [searchFiltered]);
 
   const qty = parseInt(quantity) || 0;
   const cost = selectedService && qty > 0
@@ -156,6 +177,35 @@ export default function NewOrder() {
         ))}
       </div>
 
+      {/* Search bar */}
+      <div style={{ position: 'relative', marginBottom: 16 }}>
+        <Search size={14} style={{
+          position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)',
+          color: 'var(--text3)', pointerEvents: 'none',
+        }} />
+        <input
+          type="text"
+          className="form-input"
+          placeholder="Search services… e.g. followers, likes, views"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          style={{ paddingLeft: 34, paddingRight: search ? 34 : 12, fontSize: 13 }}
+        />
+        {search && (
+          <button
+            type="button"
+            onClick={() => setSearch('')}
+            style={{
+              position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: 'var(--text3)', display: 'flex', alignItems: 'center', padding: 2,
+            }}
+          >
+            <X size={13} />
+          </button>
+        )}
+      </div>
+
       {/* Form card */}
       <div className="card">
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -186,16 +236,23 @@ export default function NewOrder() {
                     ))}
                   </optgroup>
                 ))
-                : filtered.map((s) => (
+                : searchFiltered.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name} — ₦{fmt(s.sell_price)}/1k
                   </option>
                 ))
               }
             </select>
-            {filtered.length === 0 && (
+            {search && (
+              <p style={{ fontSize: 11, color: 'var(--text3)', marginTop: 5, fontFamily: 'var(--font-body)' }}>
+                {searchFiltered.length} result{searchFiltered.length !== 1 ? 's' : ''} for "{search}"
+              </p>
+            )}
+            {searchFiltered.length === 0 && (
               <p style={{ fontSize: 12, color: 'var(--text3)', marginTop: 6, fontFamily: 'var(--font-body)' }}>
-                No services for {platform} yet — try "All" or another platform.
+                {search
+                  ? `No services match "${search}" — try a different keyword.`
+                  : `No services for ${platform} yet — try "All" or another platform.`}
               </p>
             )}
           </div>
@@ -238,7 +295,9 @@ export default function NewOrder() {
             <input
               type="text"
               className="form-input"
-              placeholder="https://instagram.com/yourpage"
+              placeholder={selectedService
+                ? (LINK_PLACEHOLDERS[selectedService.platform] || `Enter your ${selectedService.platform} link or username`)
+                : 'Enter link or username'}
               value={link}
               onChange={(e) => setLink(e.target.value)}
               required

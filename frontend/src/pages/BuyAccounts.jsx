@@ -533,13 +533,23 @@ function PurchaseModal({ listing, qty, balance, onClose, onSuccess, onAddFunds, 
     }
   };
 
+  const AZ_META = new Set(['order_id','listing','quantity','amount','discount','new_balance','purchased_at']);
+  const resolveCred = (raw) => (typeof raw === 'object' && raw?.accounts != null) ? raw.accounts : raw;
+  const credFields = (cred) => {
+    if (typeof cred === 'string') {
+      const i = cred.indexOf(':');
+      return i > 0 ? [['Username', cred.slice(0, i)], ['Password', cred.slice(i + 1)]] : [['Credentials', cred]];
+    }
+    return Object.entries(cred).filter(([k]) => !AZ_META.has(k));
+  };
+
   const buildAccountText = () => {
     const accs = result?.accounts || [];
     const list = Array.isArray(accs) ? accs : (accs ? [accs] : []);
-    const lines = list.map((acc, i) => {
-      const header = `Account ${i + 1}`;
-      if (typeof acc === 'string') return `${header}:\n  ${acc}`;
-      return `${header}:\n${Object.entries(acc).map(([k, v]) => `  ${k}: ${v}`).join('\n')}`;
+    const lines = list.map((raw, i) => {
+      const cred = resolveCred(raw);
+      const fields = credFields(cred);
+      return `Account ${i + 1}:\n${fields.map(([k, v]) => `  ${k}: ${v}`).join('\n')}`;
     });
     return [
       '='.repeat(50),
@@ -556,7 +566,12 @@ function PurchaseModal({ listing, qty, balance, onClose, onSuccess, onAddFunds, 
       ...lines,
       '',
       '='.repeat(50),
-      'Keep this file secure. PanelNG is not liable for misuse.',
+      'DISCLAIMER',
+      '='.repeat(50),
+      'All sales are final. No refunds are issued once credentials are delivered.',
+      'PanelNG is a reseller only and is not liable for account bans, restrictions,',
+      'or consequences arising from misuse after delivery.',
+      'Keep this file secure. Do not share your credentials.',
       '='.repeat(50),
     ].join('\n');
   };
@@ -648,13 +663,18 @@ function PurchaseModal({ listing, qty, balance, onClose, onSuccess, onAddFunds, 
             {/* Delivered accounts */}
             <div style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', borderRadius: 12, padding: '4px 16px', marginBottom: 16, maxHeight: 240, overflowY: 'auto' }}>
               {(result?.accounts || []).length > 0
-                ? (result.accounts.map((acc, i) => (
-                    <div key={i} style={{ padding: '10px 0', borderBottom: i < result.accounts.length - 1 ? '0.5px solid var(--border)' : 'none' }}>
-                      {typeof acc === 'string'
-                        ? <CredRow label="credentials" value={acc} />
-                        : Object.entries(acc).map(([k, v]) => <CredRow key={k} label={k} value={String(v)} />)}
-                    </div>
-                  )))
+                ? (() => {
+                    const list = Array.isArray(result.accounts) ? result.accounts : [result.accounts];
+                    return list.map((raw, i) => {
+                      const cred = resolveCred(raw);
+                      const fields = credFields(cred);
+                      return (
+                        <div key={i} style={{ padding: '10px 0', borderBottom: i < list.length - 1 ? '0.5px solid var(--border)' : 'none' }}>
+                          {fields.map(([k, v]) => <CredRow key={k} label={k} value={String(v)} />)}
+                        </div>
+                      );
+                    });
+                  })()
                 : <div style={{ padding: '16px 0', textAlign: 'center', fontSize: 13, color: 'var(--text-muted)' }}>Account data delivered. Check your email and order history for details.</div>
               }
             </div>
@@ -666,10 +686,10 @@ function PurchaseModal({ listing, qty, balance, onClose, onSuccess, onAddFunds, 
                 <i className="ti ti-download" />Download .txt
               </button>
             </div>
-            <div style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 14px', marginBottom: 12 }}>
-              <p style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.6, margin: 0 }}>
-                <i className="ti ti-info-circle" style={{ marginRight: 5 }} />
-                PanelNG is not liable for how these accounts are used. By receiving this purchase you agree to use them only for lawful purposes. Misuse, violation of platform terms, or any illegal activity is solely your responsibility.
+            <div style={{ background: 'rgba(220,38,38,.06)', border: '1px solid rgba(220,38,38,.2)', borderRadius: 10, padding: '10px 14px', marginBottom: 12 }}>
+              <p style={{ fontSize: 11, color: 'var(--danger)', lineHeight: 1.7, margin: 0 }}>
+                <i className="ti ti-shield-off" style={{ marginRight: 5 }} />
+                <strong>No Refunds.</strong> All sales are final once credentials are delivered. PanelNG is a reseller only — we are not liable for account bans, restrictions, or any consequences resulting from misuse after delivery. Use accounts responsibly and in accordance with platform terms.
               </p>
             </div>
             <button onClick={onClose} style={{ width: '100%', height: 40, background: 'var(--accent)', color: 'var(--accent-text)', border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>Done</button>
@@ -795,13 +815,6 @@ export default function BuyAccounts({ balance = 0, token = '', onNavigate, onPur
           <div>
             <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.5px', marginBottom: 4 }}>Buy Accounts</div>
             <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Instant delivery. Pre-verified. Ready to use.</div>
-          </div>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: 'rgba(245,158,11,.08)', border: '1px solid rgba(245,158,11,.25)', borderRadius: 10, padding: '6px 12px' }}>
-            <i className="ti ti-wallet" style={{ color: 'var(--accent)', fontSize: 14 }} />
-            <div>
-              <div style={{ fontFamily: "'Plus Jakarta Sans',sans-serif", fontSize: 8, textTransform: 'uppercase', letterSpacing: '1.2px', color: 'var(--accent)', lineHeight: 1, fontWeight: 600, opacity: .8 }}>Balance</div>
-              <div style={{ fontFamily: "'Plus Jakarta Sans',sans-serif", fontSize: 15, fontWeight: 700, color: 'var(--accent)', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>{fmt(balance)}</div>
-            </div>
           </div>
         </div>
       </div>

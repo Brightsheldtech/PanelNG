@@ -1,12 +1,14 @@
 const express = require('express');
 const supabase = require('../lib/supabase');
-const jap = require('../lib/jap');
+const { getProvider } = require('../lib/providers');
+const { getExchangeRate } = require('../lib/exchangeRate');
 const herosms = require('../lib/herosms');
 const auth = require('../middleware/auth');
 const adminOnly = require('../middleware/admin');
 const { sendPaymentConfirmed, sendPaymentRejected, sendRefundNotification } = require('../lib/mailer');
 const { handleFirstDeposit } = require('../lib/referralRewards');
 const { notify } = require('../lib/notify');
+const typingMap = require('../lib/typingMap');
 const router = express.Router();
 
 router.use(auth, adminOnly);
@@ -262,27 +264,32 @@ router.get('/users/:userId/adjustments', async (req, res) => {
   }
 });
 
-// GET /api/admin/orders — SMM + SMS combined
+// GET /api/admin/orders — SMM + SMS + Accounts combined
 router.get('/orders', async (req, res) => {
   const limit = parseInt(req.query.limit) || 50;
   const offset = parseInt(req.query.offset) || 0;
-  const type = req.query.type; // 'smm' | 'sms' | undefined = all
+  const type = req.query.type; // 'smm' | 'sms' | 'accounts' | undefined = all
 
-  const fetchSmm = !type || type === 'smm';
-  const fetchSms = !type || type === 'sms';
+  const fetchSmm      = !type || type === 'smm';
+  const fetchSms      = !type || type === 'sms';
+  const fetchAccounts = !type || type === 'accounts';
 
   try {
-    const [smmRes, smsRes] = await Promise.all([
+    const [smmRes, smsRes, azRes] = await Promise.all([
       fetchSmm
         ? supabase.from('orders').select('*, users(email, full_name)', { count: 'exact' }).order('created_at', { ascending: false })
         : Promise.resolve({ data: [], count: 0, error: null }),
       fetchSms
         ? supabase.from('sms_orders').select('*, users(email, full_name)', { count: 'exact' }).order('created_at', { ascending: false })
         : Promise.resolve({ data: [], count: 0, error: null }),
+      fetchAccounts
+        ? supabase.from('accszone_orders').select('id, user_id, product_name, platform, quantity, unit_price, total_cost, status, created_at, users(email, full_name)', { count: 'exact' }).order('created_at', { ascending: false })
+        : Promise.resolve({ data: [], count: 0, error: null }),
     ]);
 
     if (smmRes.error) throw smmRes.error;
     if (smsRes.error) throw smsRes.error;
+    if (azRes.error) throw azRes.error;
 
     const smmOrders = (smmRes.data || []).map((o) => ({ ...o, type: 'smm' }));
     const smsOrders = (smsRes.data || []).map((o) => ({
@@ -301,11 +308,24 @@ router.get('/orders', async (req, res) => {
       created_at: o.created_at,
       users: o.users,
     }));
+    const accsOrders = (azRes.data || []).map((o) => ({
+      id: o.id,
+      user_id: o.user_id,
+      type: 'accounts',
+      platform: o.platform,
+      service_name: o.product_name,
+      quantity: o.quantity,
+      unit_price: o.unit_price,
+      amount_paid: o.total_cost,
+      status: o.status,
+      created_at: o.created_at,
+      users: o.users,
+    }));
 
-    const merged = [...smmOrders, ...smsOrders]
+    const merged = [...smmOrders, ...smsOrders, ...accsOrders]
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
-    const total = (smmRes.count || 0) + (smsRes.count || 0);
+    const total = (smmRes.count || 0) + (smsRes.count || 0) + (azRes.count || 0);
     const paginated = merged.slice(offset, offset + limit);
 
     res.json({ orders: paginated, total });
@@ -317,42 +337,205 @@ router.get('/orders', async (req, res) => {
 
 // GET /api/admin/transactions
 router.get('/transactions', async (req, res) => {
-  const limit = parseInt(req.query.limit) || 50;
-  const offset = parseInt(req.query.offset) || 0;
+  const limit    = parseInt(req.query.limit)  || 50;
+  const offset   = parseInt(req.query.offset) || 0;
+  const category = req.query.category; // deposits | service_debits | bonuses | adjustments
 
   try {
-    const { data, error, count } = await supabase
-      .from('transactions')
-      .select('*, users(email, full_name)', { count: 'exact' })
-      .order('created_at', { ascending: false })
-      .range(offset, offset + limit - 1);
+    // For categories that can never include AccsZone debits, use the simple paginated path
+    if (category === 'deposits' || category === 'bonuses' || category === 'adjustments') {
+      let query = supabase
+        .from('transactions')
+        .select('*, users(email, full_name)', { count: 'exact' });
 
-    if (error) throw error;
-    res.json({ transactions: data, total: count });
+      if (category === 'deposits') {
+        query = query.eq('type', 'credit').or(
+          'description.ilike.%via card%,description.ilike.%via virtual account%,description.ilike.%Bank deposit confirmed%,description.ilike.%Admin top-up%'
+        );
+      } else if (category === 'bonuses') {
+        query = query.eq('type', 'credit').or(
+          'description.ilike.%welcome bonus%,description.ilike.%referral reward%'
+        );
+      } else if (category === 'adjustments') {
+        query = query.or(
+          'description.ilike.%Refund%,description.ilike.%Admin deduction%,description.ilike.%Admin top-up%'
+        );
+      }
+
+      const { data, error, count } = await query
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1);
+      if (error) throw error;
+      return res.json({ transactions: data || [], total: count || 0 });
+    }
+
+    // For 'all' and 'service_debits': merge the transactions table with accszone_orders so
+    // account purchases are always visible even if the transactions insert failed.
+    // Both queries fetch without a row limit and we paginate in-memory — acceptable for
+    // panels with thousands (not millions) of records.
+    let txQuery = supabase.from('transactions').select('*, users(email, full_name)');
+    if (category === 'service_debits') {
+      txQuery = txQuery.eq('type', 'debit').or('reference.like.SMM-%,reference.like.SMS-%,reference.like.ACCS-%');
+    }
+
+    const [txRes, azRes] = await Promise.all([
+      txQuery.order('created_at', { ascending: false }),
+      supabase
+        .from('accszone_orders')
+        .select('id, user_id, product_name, quantity, total_cost, status, created_at, users(email, full_name)')
+        .order('created_at', { ascending: false }),
+    ]);
+
+    if (txRes.error) throw txRes.error;
+
+    const txRows = txRes.data || [];
+
+    // Build a set of accszone order UUIDs that already have a transaction entry (ACCS-{uuid})
+    const coveredAccsIds = new Set(
+      txRows
+        .filter(t => t.reference && t.reference.startsWith('ACCS-'))
+        .map(t => t.reference.slice(5))
+    );
+
+    // Synthesize transaction-shaped rows for accszone orders not already in the transactions table
+    const orphans = (azRes.data || [])
+      .filter(o => !coveredAccsIds.has(String(o.id)))
+      .map(o => ({
+        id: `az_${o.id}`,
+        user_id: o.user_id,
+        type: 'debit',
+        amount: o.total_cost,
+        reference: `ACCS-${o.id}`,
+        description: `${o.product_name} × ${o.quantity}`,
+        status: o.status || 'completed',
+        created_at: o.created_at,
+        users: o.users,
+      }));
+
+    const merged = [...txRows, ...orphans]
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+    const total = merged.length;
+    const paginated = merged.slice(offset, offset + limit);
+
+    res.json({ transactions: paginated, total });
   } catch (err) {
+    console.error('[admin] transactions:', err.message);
     res.status(500).json({ error: 'Failed to get transactions' });
+  }
+});
+
+// GET /api/admin/finance-summary
+router.get('/finance-summary', async (req, res) => {
+  try {
+    const sum = (rows, field = 'amount') =>
+      parseFloat((rows || []).reduce((s, r) => s + parseFloat(r[field] || 0), 0).toFixed(2));
+
+    const [
+      cardRes, vaRes, bankRes, adminTopupRes,
+      welcomeRes, refundRes, adminDeductRes,
+      referralsRes, rejectedRes,
+      smmOrdersRes, smsOrdersRes, accsOrdersRes,
+    ] = await Promise.all([
+      supabase.from('transactions').select('amount').eq('type', 'credit').ilike('description', '%via card%'),
+      supabase.from('transactions').select('amount').eq('type', 'credit').ilike('description', '%via virtual account%'),
+      supabase.from('transactions').select('amount').eq('type', 'credit').ilike('description', '%Bank deposit confirmed%'),
+      supabase.from('transactions').select('amount').eq('type', 'credit').ilike('description', '%Admin top-up%'),
+      supabase.from('transactions').select('amount').eq('type', 'credit').ilike('description', '%welcome bonus%'),
+      supabase.from('transactions').select('amount').eq('type', 'credit').ilike('description', '%Refund%'),
+      supabase.from('transactions').select('amount').eq('type', 'debit').ilike('description', '%Admin deduction%'),
+      supabase.from('referrals').select('id, referee_bonus_paid').eq('status', 'completed'),
+      supabase.from('payment_requests').select('amount').eq('status', 'rejected'),
+      supabase.from('orders').select('amount_paid, api_cost'),
+      supabase.from('sms_orders').select('amount_paid'),
+      supabase.from('accszone_orders').select('total_cost').eq('status', 'completed'),
+    ]);
+
+    const smmOrders = smmOrdersRes.data || [];
+    const smmRevenue  = sum(smmOrders, 'amount_paid');
+    const smmApiCost  = parseFloat(smmOrders.reduce((s, o) => s + parseFloat(o.api_cost || 0), 0).toFixed(2));
+    const ordersWithCost = smmOrders.filter(o => parseFloat(o.api_cost || 0) > 0).length;
+
+    const referrals = referralsRes.data || [];
+    const completedReferrals  = referrals.length;
+    const smsRevenue  = sum(smsOrdersRes.data, 'amount_paid');
+    const accsRevenue = sum((accsOrdersRes.data || []).map(o => ({ amount: o.total_cost })));
+
+    const cardTotal       = sum(cardRes.data);
+    const vaTotal         = sum(vaRes.data);
+    const bankTotal       = sum(bankRes.data);
+    const adminTopupTotal = sum(adminTopupRes.data);
+    const welcomeTotal    = sum(welcomeRes.data);
+    const refundTotal     = sum(refundRes.data);
+    const adminDeductTotal = sum(adminDeductRes.data);
+    const referrerRewardsTotal = completedReferrals * 500;
+
+    res.json({
+      deposits: {
+        card:            { total: cardTotal,       count: (cardRes.data || []).length },
+        virtual_account: { total: vaTotal,         count: (vaRes.data || []).length },
+        bank:            { total: bankTotal,       count: (bankRes.data || []).length },
+        admin_topup:     { total: adminTopupTotal, count: (adminTopupRes.data || []).length },
+        total: parseFloat((cardTotal + vaTotal + bankTotal + adminTopupTotal).toFixed(2)),
+      },
+      service_revenue: {
+        smm:      { total: smmRevenue,  count: smmOrders.length },
+        sms:      { total: smsRevenue,  count: (smsOrdersRes.data || []).length },
+        accounts: { total: accsRevenue, count: (accsOrdersRes.data || []).length },
+        total: parseFloat((smmRevenue + smsRevenue + accsRevenue).toFixed(2)),
+      },
+      bonuses: {
+        welcome:          { total: welcomeTotal,          count: (welcomeRes.data || []).length },
+        referrer_rewards: { total: referrerRewardsTotal,  count: completedReferrals },
+        total: parseFloat((welcomeTotal + referrerRewardsTotal).toFixed(2)),
+      },
+      refunds:           { total: refundTotal,       count: (refundRes.data || []).length },
+      admin_deductions:  { total: adminDeductTotal,  count: (adminDeductRes.data || []).length },
+      rejected_deposits: { total: sum(rejectedRes.data), count: (rejectedRes.data || []).length },
+      margin: {
+        smm_revenue:           smmRevenue,
+        smm_api_cost:          smmApiCost,
+        smm_margin:            parseFloat((smmRevenue - smmApiCost).toFixed(2)),
+        orders_with_cost_data: ordersWithCost,
+        total_orders:          smmOrders.length,
+        note: ordersWithCost < smmOrders.length
+          ? `API cost tracked for ${ordersWithCost} of ${smmOrders.length} SMM orders`
+          : null,
+      },
+    });
+  } catch (err) {
+    console.error('[finance-summary]:', err.message);
+    res.status(500).json({ error: 'Failed to load finance summary' });
   }
 });
 
 // GET /api/admin/services — all services (including inactive)
 router.get('/services', async (req, res) => {
   try {
-    const { data, error } = await supabase
-      .from('services')
-      .select('*')
-      .order('platform')
-      .order('name');
-
-    if (error) throw error;
-    res.json(data);
+    const PAGE = 1000;
+    let all = [];
+    let from = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from('services')
+        .select('*')
+        .order('platform')
+        .order('name')
+        .range(from, from + PAGE - 1);
+      if (error) throw error;
+      all = all.concat(data || []);
+      if (!data || data.length < PAGE) break;
+      from += PAGE;
+    }
+    res.json(all);
   } catch (err) {
     res.status(500).json({ error: 'Failed to get services' });
   }
 });
 
-// PATCH /api/admin/services — update service pricing/status
+// PATCH /api/admin/services — update service pricing/status/manual_price
 router.patch('/services', async (req, res) => {
-  const { id, sell_price, is_active, min_quantity, max_quantity, sort_order } = req.body;
+  const { id, sell_price, is_active, min_quantity, max_quantity, sort_order, manual_price } = req.body;
   if (!id) return res.status(400).json({ error: 'Service id is required' });
 
   const updates = {};
@@ -361,6 +544,7 @@ router.patch('/services', async (req, res) => {
   if (min_quantity !== undefined) updates.min_quantity = parseInt(min_quantity);
   if (max_quantity !== undefined) updates.max_quantity = parseInt(max_quantity);
   if (sort_order !== undefined) updates.sort_order = parseInt(sort_order);
+  if (manual_price !== undefined) updates.manual_price = manual_price === null ? null : parseFloat(manual_price);
 
   try {
     const { data, error } = await supabase
@@ -379,7 +563,7 @@ router.patch('/services', async (req, res) => {
 
 // POST /api/admin/services — create a new service manually
 router.post('/services', async (req, res) => {
-  const { platform, name, panel_service_id, cost_price, sell_price, min_quantity, max_quantity } = req.body;
+  const { platform, name, panel_service_id, cost_price, sell_price, min_quantity, max_quantity, provider } = req.body;
   if (!platform || !name || !panel_service_id || !sell_price) {
     return res.status(400).json({ error: 'platform, name, panel_service_id, and sell_price are required' });
   }
@@ -391,6 +575,7 @@ router.post('/services', async (req, res) => {
         platform,
         name,
         panel_service_id: panel_service_id.toString(),
+        provider: provider || 'jap',
         cost_price: parseFloat(cost_price) || 0,
         sell_price: parseFloat(sell_price),
         min_quantity: parseInt(min_quantity) || 100,
@@ -407,38 +592,68 @@ router.post('/services', async (req, res) => {
   }
 });
 
-// POST /api/admin/sync-services — import from JAP and upsert into DB
+// POST /api/admin/sync-services — import from a provider and upsert into DB
+// Body: { provider: 'jap' | 'smmraja' }  (defaults to 'jap')
 router.post('/sync-services', async (req, res) => {
+  const providerName = (req.body.provider || 'jap').toLowerCase();
+  const allowedProviders = ['jap', 'smmraja'];
+  if (!allowedProviders.includes(providerName)) {
+    return res.status(400).json({ error: `Unknown provider. Must be one of: ${allowedProviders.join(', ')}` });
+  }
+
   try {
-    const japServices = await jap.getServices();
-    if (!Array.isArray(japServices)) {
-      return res.status(502).json({ error: 'JAP returned unexpected data' });
+    const providerClient = getProvider(providerName);
+    const services = await providerClient.getServices();
+    if (!Array.isArray(services)) {
+      return res.status(502).json({ error: 'Provider returned unexpected data' });
     }
+
+    const MARKUP = 1.3;
+    const CHUNK = 500;
+
+    const rows = services.map((svc) => ({
+      panel_service_id: svc.service.toString(),
+      provider: providerName,
+      platform: svc.category || 'Other',
+      name: svc.name,
+      cost_price: parseFloat(svc.rate) || 0,
+      sell_price: parseFloat((parseFloat(svc.rate) * MARKUP).toFixed(4)),
+      min_quantity: parseInt(svc.min) || 10,
+      max_quantity: parseInt(svc.max) || 100000,
+      // is_active intentionally omitted: new rows use DB default (false);
+      // existing rows keep their current is_active value on upsert conflict
+    }));
 
     let synced = 0;
-    const MARKUP = 1.3; // 30% default markup
-
-    for (const svc of japServices) {
-      const { error } = await supabase.from('services').upsert(
-        {
-          panel_service_id: svc.service.toString(),
-          platform: svc.category || 'Other',
-          name: svc.name,
-          cost_price: parseFloat(svc.rate) || 0,
-          sell_price: parseFloat((parseFloat(svc.rate) * MARKUP).toFixed(4)),
-          min_quantity: parseInt(svc.min) || 10,
-          max_quantity: parseInt(svc.max) || 100000,
-          is_active: true,
-        },
-        { onConflict: 'panel_service_id' }
-      );
-      if (!error) synced++;
+    for (let i = 0; i < rows.length; i += CHUNK) {
+      const { error } = await supabase
+        .from('services')
+        .upsert(rows.slice(i, i + CHUNK), { onConflict: 'panel_service_id,provider' });
+      if (!error) synced += Math.min(CHUNK, rows.length - i);
     }
 
-    res.json({ synced, total: japServices.length });
+    res.json({ synced, total: services.length, provider: providerName });
   } catch (err) {
     console.error('Sync error:', err.message);
-    res.status(500).json({ error: 'Failed to sync services from JAP' });
+    res.status(500).json({ error: 'Failed to sync services' });
+  }
+});
+
+// POST /api/admin/services/bulk-toggle — activate or deactivate a set of services
+router.post('/services/bulk-toggle', async (req, res) => {
+  const { ids, is_active } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids array is required' });
+  if (typeof is_active !== 'boolean') return res.status(400).json({ error: 'is_active must be a boolean' });
+  try {
+    const { error } = await supabase
+      .from('services')
+      .update({ is_active })
+      .in('id', ids);
+    if (error) throw error;
+    res.json({ updated: ids.length, is_active });
+  } catch (err) {
+    console.error('bulk-toggle error:', err.message);
+    res.status(500).json({ error: 'Bulk toggle failed' });
   }
 });
 
@@ -808,6 +1023,7 @@ router.get('/sms-prices/:product', async (req, res) => {
         is_hidden: s?.is_hidden || false,
         sort_order: s?.sort_order ?? 999,
         custom_price: s?.custom_price ?? null,
+        manual_price_ngn: s?.manual_price_ngn ?? null,
       };
     });
 
@@ -820,7 +1036,7 @@ router.get('/sms-prices/:product', async (req, res) => {
 
 // PUT /api/admin/sms-country-settings — upsert a country setting
 router.put('/sms-country-settings', async (req, res) => {
-  const { service_code, country_id, country_name, is_hidden, sort_order, custom_price } = req.body;
+  const { service_code, country_id, country_name, is_hidden, sort_order, custom_price, manual_price_ngn } = req.body;
   if (!service_code || country_id === undefined) {
     return res.status(400).json({ error: 'service_code and country_id are required' });
   }
@@ -831,6 +1047,7 @@ router.put('/sms-country-settings', async (req, res) => {
     is_hidden: Boolean(is_hidden),
     sort_order: parseInt(sort_order) || 999,
     custom_price: custom_price !== null && custom_price !== undefined && custom_price !== '' ? parseFloat(custom_price) : null,
+    manual_price_ngn: manual_price_ngn !== null && manual_price_ngn !== undefined && manual_price_ngn !== '' ? parseFloat(manual_price_ngn) : null,
   };
   try {
     const { data, error } = await supabase
@@ -870,6 +1087,18 @@ router.post('/refund', async (req, res) => {
   if (!parsedAmount || parsedAmount <= 0) return res.status(400).json({ error: 'Amount must be greater than 0' });
 
   try {
+    // Idempotency: if an order_id is provided, reject if already refunded
+    if (order_id && order_type) {
+      const tableMap = { smm: 'orders', sms: 'sms_orders', accounts: 'accszone_orders' };
+      const table = tableMap[order_type];
+      if (table) {
+        const { data: existingOrder } = await supabase.from(table).select('status').eq('id', order_id).single();
+        if (existingOrder?.status === 'refunded') {
+          return res.status(409).json({ error: 'This order has already been refunded' });
+        }
+      }
+    }
+
     const { data: userRow, error: userErr } = await supabase
       .from('users')
       .select('id, email, full_name, wallet_balance')
@@ -923,6 +1152,87 @@ router.post('/refund', async (req, res) => {
 // SUPPORT / LIVE CHAT
 // ============================================================
 
+// ─── BOT TOPICS CRUD ──────────────────────────────────────────────────────────
+
+// GET /api/admin/support/bot-topics
+router.get('/support/bot-topics', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('support_bot_topics')
+      .select('*')
+      .order('sort_order', { ascending: true });
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch bot topics' });
+  }
+});
+
+// POST /api/admin/support/bot-topics
+router.post('/support/bot-topics', async (req, res) => {
+  const { icon, label, reply, escalate, sort_order } = req.body;
+  if (!label?.trim()) return res.status(400).json({ error: 'Label is required' });
+  try {
+    const { data, error } = await supabase
+      .from('support_bot_topics')
+      .insert({
+        icon: icon?.trim() || 'ti-help-circle',
+        label: label.trim(),
+        reply: reply?.trim() || null,
+        escalate: !!escalate,
+        sort_order: parseInt(sort_order) || 0,
+        active: true,
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    res.status(201).json(data);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to create bot topic' });
+  }
+});
+
+// PATCH /api/admin/support/bot-topics/:id
+router.patch('/support/bot-topics/:id', async (req, res) => {
+  const { id } = req.params;
+  const { icon, label, reply, escalate, sort_order, active } = req.body;
+  const updates = { updated_at: new Date().toISOString() };
+  if (icon      !== undefined) updates.icon       = icon?.trim() || 'ti-help-circle';
+  if (label     !== undefined) updates.label      = label.trim();
+  if (reply     !== undefined) updates.reply      = reply?.trim() || null;
+  if (escalate  !== undefined) updates.escalate   = !!escalate;
+  if (sort_order!== undefined) updates.sort_order = parseInt(sort_order) || 0;
+  if (active    !== undefined) updates.active     = !!active;
+  try {
+    const { data, error } = await supabase
+      .from('support_bot_topics')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: 'Not found' });
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update bot topic' });
+  }
+});
+
+// DELETE /api/admin/support/bot-topics/:id
+router.delete('/support/bot-topics/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const { error } = await supabase
+      .from('support_bot_topics')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete bot topic' });
+  }
+});
+
 // GET /api/admin/support — list conversations (open + resolved, not bot-phase)
 router.get('/support', async (req, res) => {
   const { status } = req.query;
@@ -957,7 +1267,7 @@ router.get('/support/:id', async (req, res) => {
         .single(),
       supabase
         .from('support_messages')
-        .select('id, sender_type, body, created_at')
+        .select('id, sender_type, body, attachment_url, created_at')
         .eq('conversation_id', id)
         .order('created_at', { ascending: true })
         .limit(200),
@@ -978,7 +1288,7 @@ router.post('/support/:id/reply', async (req, res) => {
     const { data, error } = await supabase
       .from('support_messages')
       .insert({ conversation_id: id, sender_type: 'admin', sender_id: req.user.id, body: body.trim() })
-      .select('id, sender_type, body, created_at')
+      .select('id, sender_type, body, attachment_url, created_at')
       .single();
     if (error) throw error;
     await supabase
@@ -989,6 +1299,12 @@ router.post('/support/:id/reply', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: 'Failed to send reply' });
   }
+});
+
+// PATCH /api/admin/support/:id/typing — signal admin is typing (in-memory, no DB)
+router.patch('/support/:id/typing', async (req, res) => {
+  typingMap.set(req.params.id);
+  res.sendStatus(200);
 });
 
 // PATCH /api/admin/support/:id/resolve — mark conversation as resolved
@@ -1022,6 +1338,206 @@ router.patch('/support/:id/reopen', async (req, res) => {
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: 'Failed to reopen conversation' });
+  }
+});
+
+// POST /api/admin/flw-recover — verify a Flutterwave transaction by ID and credit the user
+// Use this to manually recover payments that slipped through (e.g. bank transfers with
+// Flutterwave-generated tx_refs that the webhook couldn't match before the fix).
+router.post('/flw-recover', async (req, res) => {
+  const { transaction_id } = req.body;
+  if (!transaction_id) return res.status(400).json({ error: 'transaction_id required' });
+
+  try {
+    const flutterwave = require('../lib/flutterwave');
+    const result = await flutterwave.verifyById(String(transaction_id).trim());
+
+    if (!result || result.status !== 'success' || result.data?.status !== 'successful') {
+      return res.status(400).json({ error: 'Transaction not successful on Flutterwave', details: result?.message });
+    }
+
+    const flwData = result.data;
+    const txId = String(flwData.id);
+    const amount = parseFloat(flwData.amount);
+    if (!amount || !isFinite(amount) || amount <= 0) {
+      return res.status(400).json({ error: 'Invalid or zero amount in Flutterwave response' });
+    }
+    const txRef = flwData.tx_ref || '';
+    const paymentType = flwData.payment_type || '';
+
+    // Idempotency
+    const { data: existing } = await supabase
+      .from('transactions')
+      .select('id, amount')
+      .eq('reference', txId)
+      .maybeSingle();
+    if (existing) return res.json({ message: 'Already credited', amount: existing.amount, already_processed: true });
+
+    // Identify user
+    let userId;
+    let channelLabel = 'bank transfer';
+
+    if (txRef.startsWith('FLW-PNG-')) {
+      const hex = txRef.split('-')[2].toLowerCase();
+      userId = `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+      channelLabel = 'card';
+    } else if (txRef.startsWith('VA-PNG-')) {
+      const hex = txRef.slice(7).toLowerCase();
+      userId = `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+      channelLabel = 'virtual account';
+    } else {
+      // Bank transfer — try account number then email
+      const acctNum = flwData.meta?.account_number || flwData.account_id;
+      const customerEmail = flwData.customer?.email;
+
+      if (acctNum) {
+        const { data: va } = await supabase
+          .from('user_virtual_accounts')
+          .select('user_id')
+          .eq('account_number', String(acctNum))
+          .maybeSingle();
+        if (va) userId = va.user_id;
+      }
+      if (!userId && customerEmail) {
+        const { data: u } = await supabase
+          .from('users')
+          .select('id')
+          .ilike('email', customerEmail)
+          .maybeSingle();
+        if (u) userId = u.id;
+      }
+    }
+
+    if (!userId) {
+      return res.status(404).json({
+        error: 'Cannot identify user for this transaction',
+        hint: 'Check Flutterwave dashboard for customer email or account number, then credit manually via wallet-adjust.',
+        flw_customer: flwData.customer,
+        flw_meta: flwData.meta,
+      });
+    }
+
+    const { data: user } = await supabase
+      .from('users')
+      .select('id, wallet_balance, total_funded, email, full_name')
+      .eq('id', userId)
+      .maybeSingle();
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const newBalance = parseFloat((parseFloat(user.wallet_balance || 0) + amount).toFixed(2));
+    const newFunded  = parseFloat((parseFloat(user.total_funded  || 0) + amount).toFixed(2));
+    const { error: walletErr } = await supabase.from('users').update({ wallet_balance: newBalance, total_funded: newFunded }).eq('id', user.id);
+    if (walletErr) throw walletErr;
+    await supabase.from('transactions').insert({
+      user_id: user.id,
+      type: 'credit',
+      amount,
+      reference: txId,
+      description: `Wallet funding via ${channelLabel} — ₦${amount.toLocaleString('en-NG')}`,
+    });
+
+    handleFirstDeposit(user.id);
+    notify(user.id, {
+      type: 'wallet_credit',
+      title: 'Wallet Funded',
+      message: `₦${amount.toLocaleString('en-NG')} has been added to your wallet.`,
+    });
+
+    console.log(`[flw-recover] credited ₦${amount} to user ${user.id.slice(0,8)} (${user.email})`);
+    res.json({ message: 'Payment recovered and wallet credited', user_id: user.id, user_email: user.email, amount, new_balance: newBalance });
+  } catch (err) {
+    console.error('[flw-recover]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/services/bulk-price — apply % change to manual_price of multiple services
+router.post('/services/bulk-price', async (req, res) => {
+  const { ids, percent } = req.body;
+  if (!Array.isArray(ids) || !ids.length || percent === undefined) {
+    return res.status(400).json({ error: 'ids (array) and percent are required' });
+  }
+  const pct = parseFloat(percent);
+  if (isNaN(pct)) return res.status(400).json({ error: 'percent must be a number' });
+
+  try {
+    const rate = await getExchangeRate();
+    const { data: svcs, error } = await supabase
+      .from('services')
+      .select('id, sell_price, manual_price')
+      .in('id', ids);
+    if (error) throw error;
+
+    const results = await Promise.all(
+      svcs.map((s) => {
+        const baseNGN = s.manual_price != null ? s.manual_price : s.sell_price * rate;
+        const newPrice = parseFloat((baseNGN * (1 + pct / 100)).toFixed(2));
+        return supabase.from('services').update({ manual_price: newPrice }).eq('id', s.id).select().single();
+      })
+    );
+    const failed = results.filter((r) => r.error).length;
+    res.json({ updated: results.length - failed, failed });
+  } catch (err) {
+    res.status(500).json({ error: 'Bulk price update failed' });
+  }
+});
+
+// GET /api/admin/sms-settings — all sms_country_settings rows for unified manager
+router.get('/sms-settings', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('sms_country_settings')
+      .select('*')
+      .order('service_code')
+      .order('country_name');
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch SMS settings' });
+  }
+});
+
+// GET /api/admin/accszone-overrides — all AccsZone price overrides
+router.get('/accszone-overrides', async (req, res) => {
+  try {
+    const { data, error } = await supabase.from('accszone_price_overrides').select('*').order('slug');
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch AccsZone overrides' });
+  }
+});
+
+// PUT /api/admin/accszone-overrides/:slug — set or update NGN price override for a slug
+router.put('/accszone-overrides/:slug', async (req, res) => {
+  const { custom_price_ngn } = req.body;
+  if (custom_price_ngn === undefined || custom_price_ngn === null || custom_price_ngn === '') {
+    return res.status(400).json({ error: 'custom_price_ngn is required' });
+  }
+  try {
+    const { data, error } = await supabase
+      .from('accszone_price_overrides')
+      .upsert({ slug: req.params.slug, custom_price_ngn: parseFloat(custom_price_ngn) }, { onConflict: 'slug' })
+      .select()
+      .single();
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to save override' });
+  }
+});
+
+// DELETE /api/admin/accszone-overrides/:slug — clear override for a slug
+router.delete('/accszone-overrides/:slug', async (req, res) => {
+  try {
+    const { error } = await supabase
+      .from('accszone_price_overrides')
+      .delete()
+      .eq('slug', req.params.slug);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete override' });
   }
 });
 

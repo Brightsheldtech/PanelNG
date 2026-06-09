@@ -6,6 +6,7 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const path = require('path');
 const fs = require('fs');
+const { rateLimit } = require('express-rate-limit');
 
 const authRoutes = require('./routes/auth');
 const smmRoutes = require('./routes/smm');
@@ -38,7 +39,7 @@ app.use(
       if (!origin || allowed.includes(origin) || /^http:\/\/192\.168\.\d+\.\d+/.test(origin) || /^http:\/\/10\.\d+\.\d+\.\d+/.test(origin)) {
         cb(null, true);
       } else {
-        cb(null, true); // In dev, allow all — tighten in production
+        cb(new Error(`CORS: origin ${origin} not allowed`));
       }
     },
     credentials: true,
@@ -46,6 +47,27 @@ app.use(
 );
 app.use(morgan('dev'));
 app.use(express.json({ limit: '5mb' }));
+
+// General API rate limit — 200 req/15 min per IP
+app.use('/api/', rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' },
+}));
+
+// Tighter limits on auth endpoints to block brute-force
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many attempts, please wait 15 minutes and try again.' },
+});
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/register', authLimiter);
+app.use('/api/auth/reset-password', authLimiter);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/smm', smmRoutes);

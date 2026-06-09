@@ -63,11 +63,17 @@ router.get('/prices/:product', auth, async (req, res) => {
       .filter((p) => !settings[p.countryId]?.is_hidden)
       .map((p) => {
         const s = settings[p.countryId];
-        // custom_price is admin-set in USD; raw p.price is also USD — both multiply by rate
-        const baseUSD = s?.custom_price != null ? parseFloat(s.custom_price) : p.price;
+        let priceNGN;
+        if (s?.manual_price_ngn != null) {
+          // admin NGN override takes highest priority
+          priceNGN = parseFloat(s.manual_price_ngn.toFixed(2));
+        } else {
+          const baseUSD = s?.custom_price != null ? parseFloat(s.custom_price) : p.price;
+          priceNGN = parseFloat((baseUSD * exchangeRate).toFixed(2));
+        }
         return {
           ...p,
-          price: parseFloat((baseUSD * exchangeRate).toFixed(2)),
+          price: priceNGN,
           _sortOrder: s?.sort_order ?? 999,
         };
       });
@@ -112,8 +118,13 @@ router.post('/buy-number', auth, async (req, res) => {
     if (!countryEntry) return res.status(400).json({ error: 'Country not available for this service' });
 
     const s = settings[countryEntry.countryId];
-    const baseUSD = s?.custom_price != null ? parseFloat(s.custom_price) : countryEntry.price;
-    const cost = parseFloat((baseUSD * exchangeRate).toFixed(2));
+    let cost;
+    if (s?.manual_price_ngn != null) {
+      cost = parseFloat(parseFloat(s.manual_price_ngn).toFixed(2));
+    } else {
+      const baseUSD = s?.custom_price != null ? parseFloat(s.custom_price) : countryEntry.price;
+      cost = parseFloat((baseUSD * exchangeRate).toFixed(2));
+    }
 
     const { data: userData } = await supabase
       .from('users')
@@ -136,12 +147,21 @@ router.post('/buy-number', auth, async (req, res) => {
       return res.status(502).json({ error: 'No numbers available right now. Try again.' });
     }
 
-    // Deduct wallet — number is now purchased on HeroSMS side
+    // Atomic deduct — only succeeds if balance hasn't been reduced by a concurrent request
     const newBalance = parseFloat((userData.wallet_balance - cost).toFixed(2));
-    await supabase
+    const { data: deducted } = await supabase
       .from('users')
       .update({ wallet_balance: newBalance })
-      .eq('id', userId);
+      .eq('id', userId)
+      .gte('wallet_balance', cost)
+      .select('wallet_balance');
+
+    if (!deducted || deducted.length === 0) {
+      try { await herosms.cancelOrder(numberData.orderId); } catch (cancelErr) {
+        console.error('[sms] HeroSMS cancel failed after deduction race — number may be wasted:', numberData.orderId, cancelErr.message);
+      }
+      return res.status(400).json({ error: 'Insufficient wallet balance', required: cost, balance: userData.wallet_balance });
+    }
 
     // Create SMS order record
     const { data: smsOrder, error: insertErr } = await supabase
@@ -161,7 +181,7 @@ router.post('/buy-number', auth, async (req, res) => {
     if (insertErr) {
       // Wallet was debited but we couldn't record the order — refund immediately
       console.error('sms_orders insert failed, refunding wallet:', insertErr.message);
-      await supabase.from('users').update({ wallet_balance: userData.wallet_balance }).eq('id', userId);
+      await supabase.from('users').update({ wallet_balance: parseFloat((newBalance + cost).toFixed(2)) }).eq('id', userId);
       try { await herosms.cancelOrder(numberData.orderId); } catch (_) {}
       return res.status(500).json({ error: 'Order recording failed. Your wallet has been refunded.' });
     }

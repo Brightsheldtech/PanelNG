@@ -1,10 +1,14 @@
 const { Resend } = require('resend');
 const supabase = require('./supabase');
 
-const FROM = 'PanelNG <onboarding@resend.dev>';
+// Use a verified Resend domain sender via RESEND_FROM env var.
+// The default onboarding@resend.dev only delivers to the Resend account owner's email.
+// Set RESEND_FROM=PanelNG <noreply@yourdomain.com> after verifying your domain in Resend.
+const FROM = process.env.RESEND_FROM || 'PanelNG <onboarding@resend.dev>';
+const getResend = () => new Resend(process.env.RESEND_API_KEY);
 
-function getResend() {
-  return new Resend(process.env.RESEND_API_KEY);
+if (!process.env.RESEND_FROM) {
+  console.warn('[mailer] RESEND_FROM not set — using sandbox sender. Emails will only deliver to the Resend account owner. Set RESEND_FROM to a verified domain address to send to all users.');
 }
 
 async function getEmailConfig() {
@@ -74,14 +78,31 @@ async function sendPaymentNotification({ fullName, email, amount, reference, cre
   }
 }
 
+// Fields ACCSZONE includes in their response that are not useful to the end user
+const ACCSZONE_META = new Set(['order_id','listing','quantity','amount','discount','new_balance','purchased_at']);
+
+function resolveCredential(acc) {
+  // Old stored format: object with nested 'accounts' field (metadata blob)
+  if (typeof acc === 'object' && acc !== null && acc.accounts != null) return acc.accounts;
+  return acc;
+}
+
+function parseCredFields(cred) {
+  if (typeof cred === 'string') {
+    const i = cred.indexOf(':');
+    if (i > 0) return [['Username', cred.slice(0, i)], ['Password', cred.slice(i + 1)]];
+    return [['Credentials', cred]];
+  }
+  return Object.entries(cred).filter(([k]) => !ACCSZONE_META.has(k));
+}
+
 function formatAccountsText(accounts) {
   if (!accounts) return 'No account data returned.';
-  if (typeof accounts === 'string') return accounts;
   const list = Array.isArray(accounts) ? accounts : [accounts];
-  return list.map((acc, i) => {
-    const header = `Account ${i + 1}`;
-    if (typeof acc === 'string') return `${header}:\n  ${acc}`;
-    return `${header}:\n${Object.entries(acc).map(([k, v]) => `  ${k}: ${v}`).join('\n')}`;
+  return list.map((raw, i) => {
+    const cred = resolveCredential(raw);
+    const fields = parseCredFields(cred);
+    return `Account ${i + 1}:\n${fields.map(([k, v]) => `  ${k}: ${v}`).join('\n')}`;
   }).join('\n\n');
 }
 
@@ -95,8 +116,9 @@ async function sendOrderDelivery({ toEmail, toName, productName, quantity, total
     });
     const accountList = Array.isArray(accounts) ? accounts : (accounts ? [accounts] : []);
 
-    const accountRows = accountList.map((acc, i) => {
-      const fields = typeof acc === 'string' ? [['credentials', acc]] : Object.entries(acc);
+    const accountRows = accountList.map((raw, i) => {
+      const cred = resolveCredential(raw);
+      const fields = parseCredFields(cred);
       return `
         <div style="background:#0B0E18;border:1px solid #1A1D2E;border-radius:8px;padding:14px 18px;margin-bottom:10px;">
           <div style="font-size:11px;font-weight:700;color:#F0A500;letter-spacing:0.08em;margin-bottom:10px;text-transform:uppercase;">Account ${i + 1}</div>
@@ -135,8 +157,9 @@ async function sendOrderDelivery({ toEmail, toName, productName, quantity, total
               ? '<p style="color:#A0A0B8;font-size:13px;">Your order was processed. Please check your order history in the dashboard for full details.</p>'
               : accountRows}
           </div>
-          <div style="background:#0B0E18;border:1px solid #1A1D2E;border-radius:8px;padding:14px 18px;font-size:12px;color:#A0A0B8;line-height:1.7;">
-            PanelNG acts solely as a reseller of third-party digital accounts. We are not responsible for how purchased accounts are used after delivery.
+          <div style="background:#1A0505;border:1px solid #4A1515;border-radius:8px;padding:14px 18px;font-size:12px;color:#F87171;line-height:1.8;">
+            <strong style="display:block;margin-bottom:6px;font-size:13px;">⚠ No Refunds &amp; Liability Disclaimer</strong>
+            All sales are final. No refunds are issued once credentials have been delivered. PanelNG acts solely as a reseller of third-party digital accounts and is not liable for any account bans, restrictions, or consequences arising from misuse after delivery. By completing this purchase you agree to use the accounts responsibly and in accordance with platform terms.
           </div>
         </div>
       `,

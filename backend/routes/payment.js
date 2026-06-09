@@ -14,8 +14,8 @@ router.post('/flutterwave/init', auth, async (req, res) => {
   const { amount } = req.body;
   const naira = parseFloat(amount);
 
-  if (!naira || naira < 100) {
-    return res.status(400).json({ error: 'Minimum deposit is ₦100' });
+  if (!naira || naira < 1000) {
+    return res.status(400).json({ error: 'Minimum deposit is ₦1,000' });
   }
   if (!process.env.FLW_PUBLIC_KEY || !process.env.FLW_SECRET_KEY) {
     return res.status(503).json({ error: 'Payment not configured. Contact support.' });
@@ -51,18 +51,7 @@ router.post('/flutterwave/verify', auth, async (req, res) => {
   if (!transaction_id) return res.status(400).json({ error: 'transaction_id is required' });
 
   try {
-    // Idempotency — don't credit twice
-    const { data: existing } = await supabase
-      .from('transactions')
-      .select('id, amount')
-      .eq('reference', String(transaction_id))
-      .maybeSingle();
-
-    if (existing) {
-      return res.json({ message: 'Already processed', amount: existing.amount, already_processed: true });
-    }
-
-    // Verify with Flutterwave
+    // Verify with Flutterwave first
     const result = await flutterwave.verifyById(transaction_id);
     if (!result || result.status !== 'success' || result.data?.status !== 'successful') {
       return res.status(400).json({ error: 'Payment not successful' });
@@ -76,8 +65,10 @@ router.post('/flutterwave/verify', auth, async (req, res) => {
     }
 
     const amount = parseFloat(flwData.amount);
+    if (!amount || !isFinite(amount) || amount <= 0) {
+      return res.status(400).json({ error: 'Invalid payment amount from Flutterwave' });
+    }
 
-    // Credit wallet + update total_funded
     const { data: userRow } = await supabase
       .from('users')
       .select('wallet_balance, total_funded')
@@ -87,15 +78,34 @@ router.post('/flutterwave/verify', auth, async (req, res) => {
     const newBalance = parseFloat((parseFloat(userRow.wallet_balance || 0) + amount).toFixed(2));
     const newFunded = parseFloat((parseFloat(userRow.total_funded || 0) + amount).toFixed(2));
 
-    await supabase.from('users').update({ wallet_balance: newBalance, total_funded: newFunded }).eq('id', req.user.id);
+    // Insert transaction FIRST — unique index on reference prevents double-credit races.
+    // If the webhook already processed this payment, the insert will fail with code 23505.
+    const { data: inserted, error: insertErr } = await supabase
+      .from('transactions')
+      .insert({
+        user_id: req.user.id,
+        type: 'credit',
+        amount,
+        reference: String(transaction_id),
+        description: `Wallet funding via card — ₦${amount.toLocaleString('en-NG')}`,
+      })
+      .select('id')
+      .single();
 
-    await supabase.from('transactions').insert({
-      user_id: req.user.id,
-      type: 'credit',
-      amount,
-      reference: String(transaction_id),
-      description: `Wallet funding via card — ₦${amount.toLocaleString('en-NG')}`,
-    });
+    if (insertErr) {
+      if (insertErr.code === '23505') {
+        // Already credited by webhook — return success so frontend knows payment is good
+        return res.json({ message: 'Already processed', amount, already_processed: true });
+      }
+      throw insertErr;
+    }
+
+    // Only credit wallet after the transaction record is safely committed
+    const { error: walletErr } = await supabase
+      .from('users')
+      .update({ wallet_balance: newBalance, total_funded: newFunded })
+      .eq('id', req.user.id);
+    if (walletErr) throw walletErr;
 
     // Non-blocking welcome bonus check
     handleFirstDeposit(req.user.id);
@@ -135,28 +145,53 @@ router.post('/flutterwave/webhook', express.raw({ type: '*/*' }), async (req, re
   const flwData = payload.data;
   const transactionId = String(flwData.id);
   const amount = parseFloat(flwData.amount);
+  if (!amount || !isFinite(amount) || amount <= 0) return res.sendStatus(200);
 
   try {
-    // Idempotency — skip if already credited
-    const { data: existing } = await supabase
-      .from('transactions')
-      .select('id')
-      .eq('reference', transactionId)
-      .maybeSingle();
-
-    if (existing) return res.sendStatus(200);
-
-    // Extract user_id from tx_ref: FLW-PNG-{USER_ID_SLICE}-{timestamp}
     const txRef = flwData.tx_ref || '';
-    const refParts = txRef.split('-');
-    // refParts: ['FLW', 'PNG', '{fullUUID32hexNoDashes}', '{timestamp}']
-    if (refParts.length < 3 || refParts[0] !== 'FLW' || refParts[1] !== 'PNG') {
+    const paymentType = flwData.payment_type || '';
+    let userId;
+    let channelLabel = 'card';
+
+    if (txRef.startsWith('FLW-PNG-')) {
+      const hex = txRef.split('-')[2].toLowerCase();
+      userId = `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+      channelLabel = 'card';
+    } else if (txRef.startsWith('VA-PNG-')) {
+      const hex = txRef.slice(7).toLowerCase();
+      userId = `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+      channelLabel = 'virtual account';
+    } else if (paymentType === 'bank_transfer') {
+      channelLabel = 'bank transfer';
+      const acctNum = flwData.meta?.account_number || flwData.account_id;
+      const customerEmail = flwData.customer?.email;
+
+      if (acctNum) {
+        const { data: va } = await supabase
+          .from('user_virtual_accounts')
+          .select('user_id')
+          .eq('account_number', String(acctNum))
+          .maybeSingle();
+        if (va) userId = va.user_id;
+      }
+
+      if (!userId && customerEmail) {
+        const { data: u } = await supabase
+          .from('users')
+          .select('id')
+          .ilike('email', customerEmail)
+          .maybeSingle();
+        if (u) userId = u.id;
+      }
+
+      if (!userId) {
+        console.warn(`[webhook] bank_transfer unmatched — txRef=${txRef} acct=${acctNum} email=${customerEmail}`);
+        return res.sendStatus(200);
+      }
+    } else {
+      console.warn(`[webhook] unhandled tx_ref pattern — txRef=${txRef} type=${paymentType}`);
       return res.sendStatus(200);
     }
-
-    // Reconstruct UUID with dashes from the 32-char hex string stored in tx_ref
-    const hex = refParts[2].toLowerCase();
-    const userId = `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
 
     const { data: user } = await supabase
       .from('users')
@@ -168,22 +203,39 @@ router.post('/flutterwave/webhook', express.raw({ type: '*/*' }), async (req, re
 
     const newBalance = parseFloat((parseFloat(user.wallet_balance || 0) + amount).toFixed(2));
     const newFunded = parseFloat((parseFloat(user.total_funded || 0) + amount).toFixed(2));
-    await supabase.from('users').update({ wallet_balance: newBalance, total_funded: newFunded }).eq('id', user.id);
-    await supabase.from('transactions').insert({
+
+    // Insert transaction FIRST — unique index on reference is the real lock.
+    // If /verify already processed this, the insert fails with 23505 and we skip.
+    const { error: insertErr } = await supabase.from('transactions').insert({
       user_id: user.id,
       type: 'credit',
       amount,
       reference: transactionId,
-      description: `Wallet funding via card — ₦${amount.toLocaleString('en-NG')}`,
+      description: `Wallet funding via ${channelLabel} — ₦${amount.toLocaleString('en-NG')}`,
     });
+
+    if (insertErr) {
+      if (insertErr.code === '23505') {
+        console.log(`[webhook] duplicate skipped — txId=${transactionId}`);
+        return res.sendStatus(200);
+      }
+      throw insertErr;
+    }
+
+    // Only update wallet after transaction record is committed
+    const { error: walletErr } = await supabase
+      .from('users')
+      .update({ wallet_balance: newBalance, total_funded: newFunded })
+      .eq('id', user.id);
+    if (walletErr) throw walletErr;
 
     handleFirstDeposit(user.id);
     notify(user.id, {
       type: 'wallet_credit',
       title: 'Wallet Funded',
-      message: `₦${amount.toLocaleString('en-NG')} has been added to your wallet via card payment.`,
+      message: `₦${amount.toLocaleString('en-NG')} has been added to your wallet via ${channelLabel}.`,
     });
-    console.log(`[webhook] FLW credited ₦${amount} to user ${user.id.slice(0, 8)}`);
+    console.log(`[webhook] FLW credited ₦${amount} to user ${user.id.slice(0, 8)} via ${channelLabel}`);
   } catch (err) {
     console.error('[webhook] FLW error:', err.message);
   }

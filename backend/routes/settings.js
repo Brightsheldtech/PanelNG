@@ -2,6 +2,7 @@ const express = require('express');
 const supabase = require('../lib/supabase');
 const auth = require('../middleware/auth');
 const adminOnly = require('../middleware/admin');
+const { invalidateCache } = require('../lib/exchangeRate');
 
 const router = express.Router();
 
@@ -76,6 +77,7 @@ router.put('/:key', auth, adminOnly, async (req, res) => {
       .select()
       .single();
     if (error) throw error;
+    if (req.params.key === 'exchange-rate') invalidateCache();
     res.json({ key: data.key, value: data.value, updated_at: data.updated_at });
   } catch (err) {
     console.error('[settings] upsert:', err.message);

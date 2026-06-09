@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Users, ShoppingCart, TrendingUp, MessageSquare, RefreshCw, Zap, AlertCircle, DollarSign } from 'lucide-react';
+import { Users, ShoppingCart, TrendingUp, MessageSquare, RefreshCw, Zap, AlertCircle, DollarSign, Crown } from 'lucide-react';
 import api from '../../lib/api';
 
 export default function AdminOverview() {
@@ -8,7 +8,7 @@ export default function AdminOverview() {
   const [recentSms, setRecentSms] = useState([]);
   const [recentUsers, setRecentUsers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [apiBalances, setApiBalances] = useState({ jap: null, herosms: null });
+  const [apiBalances, setApiBalances] = useState({ jap: null, smmraja: null, herosms: null });
   const [balancesLoading, setBalancesLoading] = useState(true);
   const [rate, setRate] = useState('');
   const [rateSaved, setRateSaved] = useState(false);
@@ -17,12 +17,14 @@ export default function AdminOverview() {
 
   const loadBalances = async () => {
     setBalancesLoading(true);
-    const [japRes, smsRes] = await Promise.allSettled([
+    const [japRes, smmrajaRes, smsRes] = await Promise.allSettled([
       api.get('/smm/balance'),
+      api.get('/smm/balance?provider=smmraja'),
       api.get('/sms/balance'),
     ]);
     setApiBalances({
       jap: japRes.status === 'fulfilled' ? japRes.value.data : null,
+      smmraja: smmrajaRes.status === 'fulfilled' ? smmrajaRes.value.data : null,
       herosms: smsRes.status === 'fulfilled' ? smsRes.value.data : null,
     });
     setBalancesLoading(false);
@@ -114,7 +116,7 @@ export default function AdminOverview() {
       </div>
 
       {/* API Balances */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 24 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 24 }}>
         {/* JAP Balance */}
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
           <div style={{ width: 38, height: 38, borderRadius: 8, background: 'rgba(99,102,241,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -134,6 +136,28 @@ export default function AdminOverview() {
               </div>
             )}
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>justanotherpanel.com</div>
+          </div>
+        </div>
+
+        {/* SMMRaja Balance */}
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ width: 38, height: 38, borderRadius: 8, background: 'rgba(245,101,101,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Crown size={17} color="#F56565" />
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 3 }}>SMMRaja Balance</div>
+            {balancesLoading ? (
+              <span className="spinner" style={{ width: 14, height: 14 }} />
+            ) : apiBalances.smmraja ? (
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 20, fontWeight: 800, color: 'var(--text)' }}>
+                ${Number(apiBalances.smmraja.balance ?? 0).toFixed(2)}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: 'var(--red)', fontSize: 12 }}>
+                <AlertCircle size={13} /> Failed to fetch
+              </div>
+            )}
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>smmraja.com</div>
           </div>
         </div>
 
