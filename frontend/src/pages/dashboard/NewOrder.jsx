@@ -67,7 +67,7 @@ export default function NewOrder() {
 
   const qty = parseInt(quantity) || 0;
   const cost = selectedService && qty > 0
-    ? parseFloat(((selectedService.sell_price * qty) / 1000).toFixed(2))
+    ? parseFloat(((selectedService.final_price_ngn * qty) / 1000).toFixed(2))
     : 0;
   const canAfford = balance >= cost && cost > 0;
 
@@ -231,14 +231,14 @@ export default function NewOrder() {
                   <optgroup key={plat} label={plat}>
                     {svcs.map((s) => (
                       <option key={s.id} value={s.id}>
-                        {s.name} — ₦{fmt(s.sell_price)}/1k
+                        {s.name} — ₦{fmt(s.final_price_ngn)}/1k
                       </option>
                     ))}
                   </optgroup>
                 ))
                 : searchFiltered.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.name} — ₦{fmt(s.sell_price)}/1k
+                    {s.name} — ₦{fmt(s.final_price_ngn)}/1k
                   </option>
                 ))
               }
@@ -264,7 +264,7 @@ export default function NewOrder() {
               gap: 1, background: 'var(--border)', borderRadius: 10, overflow: 'hidden',
             }}>
               {[
-                { label: 'Rate', value: `₦${fmt(selectedService.sell_price)}/1k` },
+                { label: 'Rate', value: `₦${fmt(selectedService.final_price_ngn)}/1k` },
                 { label: 'Min', value: selectedService.min_quantity.toLocaleString() },
                 { label: 'Max', value: selectedService.max_quantity.toLocaleString() },
               ].map(({ label, value }) => (
@@ -339,7 +339,7 @@ export default function NewOrder() {
               borderRadius: 10, padding: '12px 14px', gap: 12, flexWrap: 'wrap',
             }}>
               <div style={{ fontSize: 12, color: 'var(--text3)', fontFamily: 'var(--font-body)' }}>
-                {qty.toLocaleString()} × ₦{fmt(selectedService?.sell_price)}/1k
+                {qty.toLocaleString()} × ₦{fmt(selectedService?.final_price_ngn)}/1k
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
                 <div>
