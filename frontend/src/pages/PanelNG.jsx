@@ -1113,7 +1113,7 @@ function ServiceDropdown({ services, value, onChange }) {
           <>
             <PlatformIcon name={selected.platform || 'Other'} size={18}/>
             <span style={{flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{selected.name}</span>
-            <span className="pn-mono" style={{fontSize:12,color:'var(--accent)',flexShrink:0}}>₦{selected.sell_price}/1k</span>
+            <span className="pn-mono" style={{fontSize:12,color:'var(--accent)',flexShrink:0}}>₦{selected.final_price_ngn}/1k</span>
           </>
         ) : (
           <span style={{color:'var(--text-muted)',flex:1}}>— Choose a service —</span>
@@ -1129,7 +1129,7 @@ function ServiceDropdown({ services, value, onChange }) {
                 <div className="pn-dd-item-name">{s.name}</div>
                 <div className="pn-dd-tags"><span className="pn-tag">{s.min_quantity?.toLocaleString()} – {s.max_quantity?.toLocaleString()}</span></div>
               </div>
-              <div className="pn-dd-price">₦{s.sell_price}/1k</div>
+              <div className="pn-dd-price">₦{s.final_price_ngn}/1k</div>
               {value===s.id && <i className="ti ti-check" style={{color:'var(--accent)',fontSize:14}}/>}
             </div>
           ))}
@@ -1199,7 +1199,7 @@ function NewOrder({ setPage }) {
       })
     : byPlatform;
   const selected = allServices.find(s => s.id === serviceId);
-  const cost = selected && qty > 0 ? parseFloat(((selected.sell_price * qty) / 1000).toFixed(2)) : 0;
+  const cost = selected && qty > 0 ? parseFloat(((selected.final_price_ngn * qty) / 1000).toFixed(2)) : 0;
   const balance = user?.balance || 0;
   const insufficient = cost > 0 && balance < cost;
   const linkPlaceholder = selected
@@ -1275,7 +1275,7 @@ function NewOrder({ setPage }) {
               <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:4,marginTop:-4}}>
                 <span style={{fontSize:11,color:'var(--text-muted)',background:'var(--bg-input)',borderRadius:6,padding:'3px 8px'}}>Min: {selected.min_quantity?.toLocaleString()}</span>
                 <span style={{fontSize:11,color:'var(--text-muted)',background:'var(--bg-input)',borderRadius:6,padding:'3px 8px'}}>Max: {selected.max_quantity?.toLocaleString()}</span>
-                <span style={{fontSize:11,color:'var(--accent)',background:'rgba(99,102,241,.1)',borderRadius:6,padding:'3px 8px',fontWeight:600}}>₦{selected.sell_price}/1k</span>
+                <span style={{fontSize:11,color:'var(--accent)',background:'rgba(99,102,241,.1)',borderRadius:6,padding:'3px 8px',fontWeight:600}}>₦{selected.final_price_ngn}/1k</span>
               </div>
             )}
             <div className="pn-input-wrap">
@@ -1302,7 +1302,7 @@ function NewOrder({ setPage }) {
                 <div className="pn-summary">
                   <div className="pn-summary-row"><span className="pn-summary-label">Service</span><span className="pn-summary-value" style={{maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{selected?.name}</span></div>
                   <div className="pn-summary-row"><span className="pn-summary-label">Quantity</span><span className="pn-summary-value pn-mono">{qty.toLocaleString()}</span></div>
-                  <div className="pn-summary-row"><span className="pn-summary-label">Rate</span><span className="pn-summary-value pn-mono">₦{selected?.sell_price}/1k</span></div>
+                  <div className="pn-summary-row"><span className="pn-summary-label">Rate</span><span className="pn-summary-value pn-mono">₦{selected?.final_price_ngn}/1k</span></div>
                   <div className="pn-summary-row pn-summary-total"><span className="pn-summary-label">Total</span><span className="pn-summary-value">{fmt(cost)}</span></div>
                 </div>
               </>
